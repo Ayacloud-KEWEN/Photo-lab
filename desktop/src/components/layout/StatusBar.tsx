@@ -15,7 +15,17 @@ export function StatusBar() {
   const running = tasks.data?.find((task) => task.status === "running") ?? tasks.data?.[0];
   const rootName = roots.data?.find((root) => root.id === running?.storage_root_id)?.display_name;
   let taskLabel: string | null = null;
-  if (running && rootName) {
+  if (running?.kind === "ai_download_model") {
+    taskLabel = t("status.taskAiDownload", {
+      done: (running.progress_current / 1024 ** 3).toFixed(1),
+      total: ((running.progress_total ?? 0) / 1024 ** 3).toFixed(1),
+    });
+  } else if (running?.kind === "ai_index_assets") {
+    taskLabel = t("status.taskAiIndex", {
+      current: running.progress_current,
+      total: running.progress_total ?? 0,
+    });
+  } else if (running && rootName) {
     if (running.status === "pending") taskLabel = t("status.taskQueued", { name: rootName });
     else if (running.kind === "scan_storage_root")
       taskLabel = t("status.taskScanning", { name: rootName, count: running.progress_current });

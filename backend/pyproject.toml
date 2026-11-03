@@ -18,9 +18,24 @@ dependencies = [
     "rawpy>=0.24",
     "xxhash>=3.5",
     "pyexiftool>=0.5.6",
+    "numpy>=2.0",
+    "keyring>=25",
 ]
 
 [project.optional-dependencies]
+# Local AI. Install PyTorch with CUDA from the PyTorch index, e.g.:
+#   pip install -e .[ai] --extra-index-url https://download.pytorch.org/whl/cu130
+ai = [
+    "torch>=2.8",
+    "torchvision>=0.23",
+    "transformers>=5.0",
+    "huggingface_hub>=0.30",
+    "safetensors>=0.5",
+    "sentencepiece>=0.2",
+    "protobuf>=5",
+]
+# OpenCLIP models for comparison experiments (python -m lumen.ai.bench).
+bench = ["open_clip_torch>=3.0"]
 dev = [
     "pytest>=8.3",
     "httpx2>=2.16",
@@ -48,6 +63,10 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 
+[tool.ruff.lint.per-file-ignores]
+# Tests use Chinese text, where full-width punctuation is intended.
+"tests/*" = ["RUF001"]
+
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Query", "fastapi.Path"]
 
@@ -57,5 +76,13 @@ strict = true
 packages = ["lumen"]
 
 [[tool.mypy.overrides]]
-module = ["rawpy.*", "exiftool.*", "pillow_heif.*"]
+module = [
+    "rawpy.*", "exiftool.*", "pillow_heif.*", "torch.*", "transformers.*", "open_clip.*",
+    "huggingface_hub.*", "keyring.*",
+]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# transformers / open_clip ship partial type information.
+module = ["lumen.ai.encoders"]
+disallow_untyped_calls = false

@@ -2,13 +2,15 @@
 
 本地优先的个人摄影与视频资产管理工作站（Windows 桌面应用）。
 
-当前进度：**Phase 3 — 摄影图库**（见 [docs/phases.md](docs/phases.md)）。
+当前进度：**Phase 4 — AI 集成**（见 [docs/phases.md](docs/phases.md)）。
 
 - Phase 1：桌面外壳、界面框架、本地后端、SQLite 数据库与迁移、照片文件夹登记。
 - Phase 2：文件夹扫描、RAW/JPEG/HEIC/PNG/TIFF/视频识别、EXIF 与视频元数据、内容指纹、
   RAW+JPEG 配对、缩略图与预览图、文件移动与重复检测、可断点续跑的后台任务、缩略图网格。
 - Phase 3：等高行照片墙与多选批量操作、全屏浏览与视频播放、时间轴、地图（离线底图，可选在线）、
   星级/收藏/标签/备注、全文搜索（支持中文）与元数据筛选、只读导入 XMP/EXIF 关键词与星级。
+- Phase 4：本机 GPU 上的 SigLIP2 语义搜索（中文可直接搜索）、相似照片、自动场景标签；
+  OpenCLIP 模型对照实验工具；DeepSeek 云端分析（描述、点评、选片、旅行故事，逐次确认后才上传）。
 
 - 产品需求：[docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md)
 - 架构决策：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
@@ -19,6 +21,7 @@
 |---|---|
 | 界面 | React 19 · TypeScript 5.9（strict）· Vite · Tailwind CSS 4 · shadcn/ui · i18next |
 | 地图 | MapLibre GL · Supercluster · Natural Earth（离线底图）· OpenFreeMap（可选在线） |
+| AI | PyTorch（CUDA）· transformers · SigLIP2 · OpenCLIP（对照）· DeepSeek API（可选） |
 | 桌面运行时 | Tauri 2（Rust）· tauri-plugin-dialog |
 | 本地服务 | Python 3.12+ · FastAPI · Pydantic 2 · uvicorn |
 | 媒体处理 | ExifTool · FFmpeg/FFprobe · Pillow · pillow-heif · rawpy（LibRaw）· xxHash |
@@ -29,7 +32,7 @@
 ```
 Photo-lab/
 ├─ docs/                    需求、阶段规划、架构决策
-├─ scripts/                 setup.ps1 / dev.ps1 / test.ps1
+├─ scripts/                 setup.ps1 / dev.ps1 / test.ps1 / launch.ps1（启动程序）
 ├─ backend/                 Python 本地服务
 │  ├─ lumen/
 │  │  ├─ __main__.py        进程入口与启动握手
@@ -39,6 +42,7 @@ Photo-lab/
 │  │  ├─ media/             媒体引擎：格式、目录遍历、指纹、元数据、缩略图（不访问数据库）
 │  │  ├─ library/           扫描与入库流水线、全文索引、标签（文件系统 ⇄ 数据库）
 │  │  ├─ tasks/             持久化任务队列与后台执行器
+│  │  ├─ ai/                AI 引擎：模型注册、编码器、向量索引、标签、云端分析、对照工具
 │  │  ├─ schemas/           Pydantic 请求/响应模型
 │  │  ├─ db/                连接、事务、迁移器、migrations/*.sql
 │  │  ├─ core/              配置、结构化日志、令牌鉴权、卷信息
@@ -48,9 +52,10 @@ Photo-lab/
    ├─ src/
    │  ├─ api/               API 客户端、React Query hooks、生成的 schema.d.ts
    │  ├─ components/        layout/（顶栏、侧栏、检查器、状态栏）、library/（照片墙、筛选栏、
-   │  │                     批量操作条、星级、标签输入）、viewer/（全屏浏览）、ui/
+   │  │                     批量操作条、星级、标签输入）、viewer/（全屏浏览）、
+   │  │                     ai/（云端分析确认框）、settings/（AI 设置）、ui/
    │  ├─ library/           布局算法、多选、共享筛选状态、照片墙逻辑
-   │  ├─ pages/             图库、时间轴、地图、设置、占位页
+   │  ├─ pages/             图库、时间轴、地图、AI 搜索、设置、占位页
    │  ├─ i18n/              zh-CN / en / fr
    │  └─ lib/               后端连接、原生对话框、工具函数
    └─ src-tauri/
@@ -78,7 +83,23 @@ ExifTool 和 FFmpeg 需要在 `PATH` 中，或用下文的环境变量指定路�
 powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
 ```
 
+如需本地 AI（AI 搜索、相似照片、自动标签），加上 `-WithAI`：会安装 CUDA 版 PyTorch 等（约 3 GB）。
+模型（SigLIP2 so400m，约 4.5 GB）在应用里启用 AI 时自动下载到 HuggingFace 缓存
+（`%USERPROFILE%\.cache\huggingface`）。需要 NVIDIA 显卡和较新的驱动；没有 GPU 时会用 CPU，但很慢。
+
 它会创建 `backend\.venv` 并安装后端依赖，再安装前端 npm 依赖。
+
+## 试用（启动程序）
+
+在项目文件夹中双击 **`启动 LUMEN Studio.cmd`**：
+
+- 首次运行会自动准备环境（等同 `scripts\setup.ps1`），并构建优化后的发布版（需几分钟）；
+- 之后只有前端或桌面端源码有改动时才会重新构建，否则几秒内启动；
+- 发布版没有控制台窗口；后端使用 `backend\.venv` 中的 Python（正式安装包会内置后端，属于后续打包工作）。
+
+强制重新构建：`powershell -ExecutionPolicy Bypass -File scripts\launch.ps1 -Rebuild`
+
+照片库数据位于 `%LOCALAPPDATA%\LUMEN Studio`，与开发模式共用。
 
 ## 开发
 
@@ -127,6 +148,9 @@ VITE_LUMEN_API_TOKEN=<令牌>
 | `LUMEN_EXIFTOOL_PATH` | 在 `PATH` 中查找 | ExifTool 可执行文件 |
 | `LUMEN_FFMPEG_PATH` / `LUMEN_FFPROBE_PATH` | 在 `PATH` 中查找 | FFmpeg / FFprobe 可执行文件 |
 | `LUMEN_INGEST_WORKERS` | CPU 核数，最多 4 | 并行处理文件的线程数 |
+| `LUMEN_AI_DEVICE` | `auto` | `auto` / `cuda` / `cpu` |
+| `LUMEN_AI_IDLE_UNLOAD_S` | `600` | AI 模型空闲多少秒后从显存卸载 |
+| `HF_HOME` | HuggingFace 默认 | 模型缓存位置 |
 | `LUMEN_BACKEND_PYTHON` | — | （Tauri 侧）用指定的 Python 启动后端 |
 
 ### 更新前端 API 类型
@@ -180,7 +204,16 @@ cd backend
 | GET | `/api/v1/timeline?granularity=year\|month\|day&…` | 按时间段统计数量 |
 | GET | `/api/v1/map/points?…` | 带位置的资产坐标 |
 | GET/POST | `/api/v1/tags` · PATCH/DELETE `/api/v1/tags/{id}` | 标签列表、新建、重命名、删除 |
-| GET/PATCH | `/api/v1/settings` | 应用设置（如是否使用在线地图） |
+| GET/PATCH | `/api/v1/settings` | 应用设置（在线地图、AI、云端） |
+| GET | `/api/v1/ai/status` | 本地 AI（GPU、模型、已分析数量）与云端配置状态 |
+| POST | `/api/v1/ai/model/download` · `/api/v1/ai/index` | 下载模型 / 分析照片（后台任务） |
+| GET | `/api/v1/ai/search?text=&…` | 语义搜索（可叠加筛选条件），返回相似度和明显相关的数量 |
+| GET | `/api/v1/assets/{id}/similar` | 相似照片 |
+| PUT/DELETE | `/api/v1/ai/cloud/key` | 保存 / 删除 DeepSeek API 密钥（Windows 凭据管理器） |
+| POST | `/api/v1/ai/cloud/test` | 测试密钥并检查模型能否识别图片 |
+| POST | `/api/v1/ai/cloud/preview` | 列出将要发送的内容（图片、字段、目标），不联网 |
+| POST | `/api/v1/ai/cloud/analyze` | 云端分析，必须带 `confirmed: true`；结果按内容缓存 |
+| GET | `/api/v1/assets/{id}/analyses` | 该照片以往的云端分析 |
 | GET | `/api/v1/duplicates` | 内容完全相同的文件分组（只报告，不合并、不删除） |
 | GET | `/api/v1/openapi.json` | OpenAPI 文档 |
 
@@ -207,5 +240,20 @@ cd backend
 - 缩略图和预览图只写入 `cache\`，删除后会按需重新生成。
 - 星级、收藏、标签、备注只存在数据库中；XMP/EXIF 中的关键词和星级只读导入，从不写回文件。
 - 地图默认完全离线；只有在设置中开启在线地图后，才会向 OpenFreeMap 请求地图图块（不上传照片）。
+- 本地 AI 完全在本机运行；云端分析默认关闭，每次都先显示将上传的内容（缩小后的图片和字段），
+  确认后才发送；GPS 默认不发送；API 密钥只保存在 Windows 凭据管理器中。
 - 后端只监听 `127.0.0.1`，每次启动使用随机端口和随机令牌。
 - 升级数据库结构前，自动将旧数据库备份到 `backups\`。
+
+## AI 模型对照实验
+
+`python -m lumen.ai.bench` 比较不同模型的文字搜图效果（Recall@1/5/10、mAP、速度）。
+OpenCLIP 模型需要先安装：`pip install -e .[bench]`。
+
+```powershell
+cd backend
+# 用你自己的照片库：手动或导入的标签作为查询，带该标签的照片作为正确答案
+.\.venv\Scripts\python.exe -m lumen.ai.bench --library --models siglip2-so400m-patch14-384 openclip-xlm-roberta-large-vit-h-14
+# 或：一个图片文件夹 + {"查询": ["文件名", ...]} 的 JSON
+.\.venv\Scripts\python.exe -m lumen.ai.bench --folder D:\eval --queries D:\eval\queries.json --output result.json
+```

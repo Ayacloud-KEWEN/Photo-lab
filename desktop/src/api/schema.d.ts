@@ -389,10 +389,246 @@ export interface paths {
         patch: operations["updateSettings"];
         trace?: never;
     };
+    "/api/v1/ai/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Status */
+        get: operations["getAiStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/model/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download Model
+         * @description Download the active (or given) model into the HuggingFace cache, then index.
+         */
+        post: operations["downloadAiModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Index Assets */
+        post: operations["indexAiAssets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ai Search
+         * @description Photos best matching a natural-language description (Chinese works directly).
+         */
+        get: operations["aiSearch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{asset_id}/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Similar Assets */
+        get: operations["similarAssets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/cloud/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Key
+         * @description Store the DeepSeek API key in the Windows Credential Manager (never in the database).
+         */
+        put: operations["saveCloudKey"];
+        post?: never;
+        /** Delete Key */
+        delete: operations["deleteCloudKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/cloud/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Cloud
+         * @description Check the saved key and whether the configured model accepts images.
+         */
+        post: operations["testCloud"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/cloud/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Cloud
+         * @description Exactly what would be sent for this request (shown to the user for consent).
+         */
+        post: operations["previewCloudRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/cloud/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze Cloud
+         * @description Run (or reuse a cached) cloud analysis. Requires ``confirmed: true``.
+         */
+        post: operations["analyzeWithCloud"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{asset_id}/analyses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Analyses */
+        get: operations["listAssetAnalyses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AIStatus */
+        AIStatus: {
+            local: components["schemas"]["LocalAIStatus"];
+            cloud: components["schemas"]["CloudStatus"];
+        };
+        /** AnalysisResult */
+        AnalysisResult: {
+            /** Id */
+            id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "describe" | "critique" | "select_best" | "story";
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Language */
+            language: string;
+            /** Vision */
+            vision: boolean;
+            /** Cached */
+            cached: boolean;
+            /**
+             * Result
+             * @description Markdown
+             */
+            result: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            } | null;
+            /** Asset Ids */
+            asset_ids: number[];
+            /** Input Tokens */
+            input_tokens: number | null;
+            /** Output Tokens */
+            output_tokens: number | null;
+            /** Created At */
+            created_at: string;
+        };
+        /** ApiKey */
+        ApiKey: {
+            /** Api Key */
+            api_key: string;
+        };
         /** AppSettings */
         AppSettings: {
             /**
@@ -401,11 +637,57 @@ export interface components {
              * @default false
              */
             map_online_tiles: boolean;
+            /**
+             * Ai Enabled
+             * @description Index photos with the local AI model
+             * @default false
+             */
+            ai_enabled: boolean;
+            /**
+             * Ai Model
+             * @description Local embedding model id
+             * @default siglip2-so400m-patch14-384
+             */
+            ai_model: string;
+            /**
+             * Cloud Enabled
+             * @description Allow (confirmed) cloud analysis
+             * @default false
+             */
+            cloud_enabled: boolean;
+            /**
+             * Cloud Model
+             * @default deepseek-flash
+             */
+            cloud_model: string;
+            /**
+             * Cloud Base Url
+             * @default https://api.deepseek.com
+             */
+            cloud_base_url: string;
+            /**
+             * Cloud Include Location
+             * @description Default for sending GPS coordinates with a cloud request
+             * @default false
+             */
+            cloud_include_location: boolean;
         };
         /** AppSettingsUpdate */
         AppSettingsUpdate: {
             /** Map Online Tiles */
             map_online_tiles?: boolean | null;
+            /** Ai Enabled */
+            ai_enabled?: boolean | null;
+            /** Ai Model */
+            ai_model?: string | null;
+            /** Cloud Enabled */
+            cloud_enabled?: boolean | null;
+            /** Cloud Model */
+            cloud_model?: string | null;
+            /** Cloud Base Url */
+            cloud_base_url?: string | null;
+            /** Cloud Include Location */
+            cloud_include_location?: boolean | null;
         };
         /** AssetBatchUpdate */
         AssetBatchUpdate: {
@@ -623,7 +905,12 @@ export interface components {
              * Source
              * @enum {string}
              */
-            source: "user" | "import";
+            source: "user" | "import" | "ai";
+            /**
+             * Confidence
+             * @description For AI labels (0-1)
+             */
+            confidence?: number | null;
         };
         /** AssetUpdate */
         AssetUpdate: {
@@ -641,6 +928,136 @@ export interface components {
         BatchResult: {
             /** Updated */
             updated: number;
+        };
+        /** CloudAnalyzeRequest */
+        CloudAnalyzeRequest: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "describe" | "critique" | "select_best" | "story";
+            /** Asset Ids */
+            asset_ids: number[];
+            /**
+             * Include Location
+             * @default false
+             */
+            include_location: boolean;
+            /**
+             * Text Only
+             * @description Send metadata and local AI labels only, no images (fallback)
+             * @default false
+             */
+            text_only: boolean;
+            /**
+             * Language
+             * @default zh-CN
+             * @enum {string}
+             */
+            language: "zh-CN" | "en" | "fr";
+            /**
+             * Confirmed
+             * @description Must be true: the user reviewed exactly what will be sent
+             * @constant
+             */
+            confirmed: true;
+        };
+        /** CloudPreview */
+        CloudPreview: {
+            /**
+             * Provider
+             * @constant
+             */
+            provider: "deepseek";
+            /** Model */
+            model: string;
+            /** Host */
+            host: string;
+            /** Items */
+            items: components["schemas"]["CloudPreviewItem"][];
+            /**
+             * Image Max Edge
+             * @description Long edge of uploaded images; None = no images
+             */
+            image_max_edge: number | null;
+            /**
+             * Cached
+             * @description A cached result exists: nothing will be uploaded
+             */
+            cached: boolean;
+        };
+        /** CloudPreviewItem */
+        CloudPreviewItem: {
+            /** Asset Id */
+            asset_id: number;
+            /** Rendition Version */
+            rendition_version: string;
+            /**
+             * Fields
+             * @description Metadata sent with the image
+             */
+            fields: {
+                [key: string]: string;
+            };
+        };
+        /** CloudRequest */
+        CloudRequest: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "describe" | "critique" | "select_best" | "story";
+            /** Asset Ids */
+            asset_ids: number[];
+            /**
+             * Include Location
+             * @default false
+             */
+            include_location: boolean;
+            /**
+             * Text Only
+             * @description Send metadata and local AI labels only, no images (fallback)
+             * @default false
+             */
+            text_only: boolean;
+            /**
+             * Language
+             * @default zh-CN
+             * @enum {string}
+             */
+            language: "zh-CN" | "en" | "fr";
+        };
+        /** CloudStatus */
+        CloudStatus: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Provider
+             * @constant
+             */
+            provider: "deepseek";
+            /** Model */
+            model: string;
+            /** Base Url */
+            base_url: string;
+            /** Has Key */
+            has_key: boolean;
+            /** Include Location Default */
+            include_location_default: boolean;
+        };
+        /** CloudTestResult */
+        CloudTestResult: {
+            /** Ok */
+            ok: boolean;
+            /** Message */
+            message: string;
+            /** Models */
+            models?: string[];
+            /**
+             * Vision
+             * @description Whether the model accepted an image (None: not tested)
+             */
+            vision: boolean | null;
         };
         /** DatabaseHealth */
         DatabaseHealth: {
@@ -732,6 +1149,43 @@ export interface components {
             uptime_seconds: number;
             database: components["schemas"]["DatabaseHealth"];
         };
+        /** LocalAIStatus */
+        LocalAIStatus: {
+            /**
+             * Installed
+             * @description AI components (PyTorch) are installed
+             */
+            installed: boolean;
+            /**
+             * Device
+             * @enum {string}
+             */
+            device: "cuda" | "cpu";
+            /** Device Name */
+            device_name: string | null;
+            /** Memory Gb */
+            memory_gb: number | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Model Id */
+            model_id: string;
+            /** Model Downloaded */
+            model_downloaded: boolean;
+            /** Model Loaded */
+            model_loaded: boolean;
+            /**
+             * Indexed
+             * @description Assets with an embedding for the active model
+             */
+            indexed: number;
+            /**
+             * Total
+             * @description Assets that can be indexed
+             */
+            total: number;
+            /** Models */
+            models: components["schemas"]["ModelInfo"][];
+        };
         /** MapPoint */
         MapPoint: {
             /** Id */
@@ -750,6 +1204,46 @@ export interface components {
         MapPoints: {
             /** Points */
             points: components["schemas"]["MapPoint"][];
+        };
+        /** ModelDownload */
+        ModelDownload: {
+            /** Model Id */
+            model_id?: string | null;
+        };
+        /** ModelInfo */
+        ModelInfo: {
+            /** Id */
+            id: string;
+            /** Display Name */
+            display_name: string;
+            /**
+             * Backend
+             * @enum {string}
+             */
+            backend: "siglip2" | "open_clip";
+            /** Multilingual */
+            multilingual: boolean;
+            /** Approx Download Gb */
+            approx_download_gb: number;
+            /** Downloaded */
+            downloaded: boolean;
+        };
+        /**
+         * SemanticPage
+         * @description Assets ranked by similarity; ``scores[i]`` (cosine) belongs to ``items[i]``.
+         */
+        SemanticPage: {
+            /** Items */
+            items: components["schemas"]["AssetSummary"][];
+            /** Scores */
+            scores: number[];
+            /**
+             * Relevant Count
+             * @description How many leading items are likely matches; the rest are weaker candidates
+             */
+            relevant_count: number;
+            /** Model Id */
+            model_id: string;
         };
         /** StorageRoot */
         StorageRoot: {
@@ -1916,6 +2410,457 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AppSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getAiStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIStatus"];
+                };
+            };
+        };
+    };
+    downloadAiModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelDownload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    indexAiAssets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+        };
+    };
+    aiSearch: {
+        parameters: {
+            query: {
+                /** @description Text search (substring) */
+                q?: string | null;
+                media_type?: ("photo" | "video") | null;
+                min_rating?: number | null;
+                favorite?: boolean | null;
+                /** @description Camera model */
+                camera?: string | null;
+                lens?: string | null;
+                /** @description File extension, e.g. CR3 */
+                format?: string | null;
+                storage_root_id?: number | null;
+                /** @description Assets having all these tags */
+                tag_id?: number[];
+                /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
+                date_from?: string | null;
+                /** @description Exclusive, YYYY-MM-DD[THH:MM:SS] */
+                date_to?: string | null;
+                has_location?: boolean | null;
+                sort?: "capture_desc" | "capture_asc" | "added_desc";
+                /** @description What to look for */
+                text: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticPage"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    similarAssets: {
+        parameters: {
+            query?: {
+                /** @description Text search (substring) */
+                q?: string | null;
+                media_type?: ("photo" | "video") | null;
+                min_rating?: number | null;
+                favorite?: boolean | null;
+                /** @description Camera model */
+                camera?: string | null;
+                lens?: string | null;
+                /** @description File extension, e.g. CR3 */
+                format?: string | null;
+                storage_root_id?: number | null;
+                /** @description Assets having all these tags */
+                tag_id?: number[];
+                /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
+                date_from?: string | null;
+                /** @description Exclusive, YYYY-MM-DD[THH:MM:SS] */
+                date_to?: string | null;
+                has_location?: boolean | null;
+                sort?: "capture_desc" | "capture_asc" | "added_desc";
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticPage"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    saveCloudKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiKey"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteCloudKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    testCloud: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudTestResult"];
+                };
+            };
+        };
+    };
+    previewCloudRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudPreview"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    analyzeWithCloud: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudAnalyzeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisResult"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listAssetAnalyses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisResult"][];
                 };
             };
             /** @description Validation Error */

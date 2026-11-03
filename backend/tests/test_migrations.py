@@ -20,6 +20,9 @@ EXPECTED_TABLES = {
     "tags",
     "media_tags",
     "asset_search",
+    "embeddings",
+    "ai_analysis",
+    "ai_analysis_assets",
     "schema_migrations",
 }
 

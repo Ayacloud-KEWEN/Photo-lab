@@ -131,6 +131,57 @@ def _decode_cursor(cursor: str, sort: str) -> list[object]:
     return list(key)
 
 
+_SUMMARY_COLUMNS = """
+    a.id, a.media_type, a.capture_time, a.rating, a.is_favorite,
+    c.file_name, c.extension, c.fingerprint, m.width, m.height, m.duration_ms,
+    (SELECT GROUP_CONCAT(ext, ',') FROM (
+         SELECT DISTINCT UPPER(f.extension) AS ext FROM media_files f
+         WHERE f.asset_id = a.id AND f.file_role != 'sidecar' ORDER BY ext
+    )) AS formats
+"""
+
+
+def _summary(row: sqlite3.Row) -> AssetSummary:
+    return AssetSummary(
+        id=row["id"],
+        media_type=row["media_type"],
+        capture_time=row["capture_time"],
+        rating=row["rating"],
+        is_favorite=bool(row["is_favorite"]),
+        file_name=row["file_name"],
+        formats=row["formats"].split(",") if row["formats"] else [],
+        width=row["width"],
+        height=row["height"],
+        duration_ms=row["duration_ms"],
+        cover_extension=row["extension"],
+        rendition_version=_version(row["fingerprint"]),
+    )
+
+
+def summaries_by_ids(conn: sqlite3.Connection, ids: list[int]) -> list[AssetSummary]:
+    """Summaries for listable assets among ``ids``, in the order given."""
+    if not ids:
+        return []
+    found: dict[int, AssetSummary] = {}
+    for start in range(0, len(ids), 500):
+        chunk = ids[start : start + 500]
+        rows = conn.execute(
+            f"""
+            SELECT {_SUMMARY_COLUMNS} {_BASE_FROM}
+            WHERE {_BASE_WHERE} AND a.id IN ({",".join("?" * len(chunk))})
+            """,
+            chunk,
+        )
+        found.update((int(row["id"]), _summary(row)) for row in rows)
+    return [found[i] for i in ids if i in found]
+
+
+def has_filters(query: AssetQuery) -> bool:
+    return any(
+        value not in (None, [], "") for key, value in query.model_dump().items() if key != "sort"
+    )
+
+
 def list_assets(
     conn: sqlite3.Connection, query: AssetQuery, *, cursor: str | None, limit: int
 ) -> AssetPage:
@@ -143,12 +194,7 @@ def list_assets(
 
     rows = conn.execute(
         f"""
-        SELECT a.id, a.media_type, a.capture_time, a.rating, a.is_favorite,
-               c.file_name, c.extension, c.fingerprint, m.width, m.height, m.duration_ms,
-               (SELECT GROUP_CONCAT(ext, ',') FROM (
-                    SELECT DISTINCT UPPER(f.extension) AS ext FROM media_files f
-                    WHERE f.asset_id = a.id AND f.file_role != 'sidecar' ORDER BY ext
-               )) AS formats
+        SELECT {_SUMMARY_COLUMNS}
         {_BASE_FROM}
         WHERE {" AND ".join(clauses)}
         ORDER BY {order}
@@ -157,23 +203,7 @@ def list_assets(
         (*params, limit + 1),
     ).fetchall()
 
-    items = [
-        AssetSummary(
-            id=row["id"],
-            media_type=row["media_type"],
-            capture_time=row["capture_time"],
-            rating=row["rating"],
-            is_favorite=bool(row["is_favorite"]),
-            file_name=row["file_name"],
-            formats=row["formats"].split(",") if row["formats"] else [],
-            width=row["width"],
-            height=row["height"],
-            duration_ms=row["duration_ms"],
-            cover_extension=row["extension"],
-            rendition_version=_version(row["fingerprint"]),
-        )
-        for row in rows[:limit]
-    ]
+    items = [_summary(row) for row in rows[:limit]]
     next_cursor = _encode_cursor(query.sort, rows[limit - 1]) if len(rows) > limit else None
     return AssetPage(items=items, next_cursor=next_cursor)
 
@@ -339,9 +369,9 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
         rating_source=asset["rating_source"],
         notes=asset["notes"],
         tags=[
-            AssetTag(id=t["id"], name=t["name"], source=t["source"])
+            AssetTag(id=t["id"], name=t["name"], source=t["source"], confidence=t["confidence"])
             for t in conn.execute(
-                "SELECT t.id, t.name, mt.source FROM media_tags mt "
+                "SELECT t.id, t.name, mt.source, mt.confidence FROM media_tags mt "
                 "JOIN tags t ON t.id = mt.tag_id WHERE mt.asset_id = ? ORDER BY t.name_key",
                 (asset_id,),
             )

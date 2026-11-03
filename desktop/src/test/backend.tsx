@@ -81,7 +81,16 @@ export interface Request {
 }
 
 /** In-memory fake of the backend endpoints the UI uses; records every request. */
-export function stubBackend(options: { roots?: StorageRoot[]; assets?: AssetSummary[] } = {}) {
+export interface StubOptions {
+  roots?: StorageRoot[];
+  assets?: AssetSummary[];
+  /** Local AI state reported by /ai/status. */
+  ai?: { enabled?: boolean; downloaded?: boolean; installed?: boolean };
+  /** Cloud behaviour: "ok" (default), "no_vision" or "not_configured". */
+  cloud?: "ok" | "no_vision" | "not_configured";
+}
+
+export function stubBackend(options: StubOptions = {}) {
   let roots = [...(options.roots ?? [])];
   const assets = options.assets ?? [];
   const requests: Request[] = [];
@@ -95,7 +104,84 @@ export function stubBackend(options: { roots?: StorageRoot[]; assets?: AssetSumm
     const path = url.pathname;
 
     if (path.startsWith("/api/v1/tasks")) return json({ items: [] });
-    if (path === "/api/v1/settings") return json({ map_online_tiles: false });
+    if (path === "/api/v1/settings") {
+      return json({
+        map_online_tiles: false,
+        ai_enabled: options.ai?.enabled ?? false,
+        ai_model: "siglip2-so400m-patch14-384",
+        cloud_enabled: options.cloud !== "not_configured",
+        cloud_model: "deepseek-flash",
+        cloud_base_url: "https://api.deepseek.com",
+        cloud_include_location: false,
+        ...((body as object | undefined) ?? {}),
+      });
+    }
+    if (path === "/api/v1/ai/status") {
+      return json({
+        local: {
+          installed: options.ai?.installed ?? true,
+          device: "cuda",
+          device_name: "NVIDIA GeForce RTX 4070 SUPER",
+          memory_gb: 12,
+          enabled: options.ai?.enabled ?? false,
+          model_id: "siglip2-so400m-patch14-384",
+          model_downloaded: options.ai?.downloaded ?? false,
+          model_loaded: false,
+          indexed: assets.length,
+          total: assets.length,
+          models: [
+            {
+              id: "siglip2-so400m-patch14-384", display_name: "SigLIP2 so400m/14 @384",
+              backend: "siglip2", multilingual: true, approx_download_gb: 4.5,
+              downloaded: options.ai?.downloaded ?? false,
+            },
+          ],
+        },
+        cloud: {
+          enabled: options.cloud !== "not_configured", provider: "deepseek",
+          model: "deepseek-flash", base_url: "https://api.deepseek.com",
+          has_key: options.cloud !== "not_configured", include_location_default: false,
+        },
+      }); // prettier-ignore
+    }
+    if (path === "/api/v1/ai/search" || /\/similar$/.test(path)) {
+      const ranked = [...assets].reverse();
+      return json({
+        items: ranked,
+        scores: ranked.map((_, i) => 0.12 - i / 100),
+        relevant_count: Math.min(2, ranked.length),
+        model_id: "siglip2-so400m-patch14-384",
+      });
+    }
+    if (path === "/api/v1/ai/cloud/preview" || path === "/api/v1/ai/cloud/analyze") {
+      const request = body as { asset_ids: number[]; include_location: boolean; text_only: boolean; kind: string };
+      if (options.cloud === "not_configured" && path.endsWith("analyze")) {
+        return json({ error: { code: "cloud_not_configured", message: "off" } }, 409);
+      }
+      if (path.endsWith("preview")) {
+        return json({
+          provider: "deepseek", model: "deepseek-flash", host: "api.deepseek.com",
+          image_max_edge: request.text_only ? null : 1024, cached: false,
+          items: request.asset_ids.map((id) => ({
+            asset_id: id, rendition_version: `v${id}`,
+            fields: {
+              camera: "Canon EOS R5",
+              ...(request.include_location ? { location: "31.20000, 121.40000" } : {}),
+            },
+          })),
+        }); // prettier-ignore
+      }
+      if (options.cloud === "no_vision" && !request.text_only) {
+        return json({ error: { code: "vision_unsupported", message: "no images" } }, 422);
+      }
+      return json({
+        id: 1, kind: request.kind, provider: "deepseek", model: "deepseek-flash",
+        language: "zh-CN", vision: !request.text_only, cached: false,
+        result: "## 点评\n构图**很好**。", data: null, asset_ids: request.asset_ids,
+        input_tokens: 100, output_tokens: 50, created_at: "2026-11-03T08:00:00.000Z",
+      }); // prettier-ignore
+    }
+    if (/\/analyses$/.test(path)) return json([]);
     if (path === "/api/v1/tags") return json([]);
     if (path === "/api/v1/timeline") {
       return json({ granularity: "year", buckets: [{ period: "2024", count: assets.length }] });

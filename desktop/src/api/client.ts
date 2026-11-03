@@ -1,5 +1,7 @@
 import { toSearchParams, type AssetQuery, type QueryValue } from "./query";
 import type {
+  AIStatus,
+  AnalysisResult,
   AppSettings,
   AppSettingsUpdate,
   AssetBatchUpdate,
@@ -9,10 +11,14 @@ import type {
   AssetPage,
   AssetUpdate,
   BatchResult,
+  CloudPreview,
+  CloudRequest,
+  CloudTestResult,
   ErrorBody,
   HealthResponse,
   MapPoints,
   RenditionVariant,
+  SemanticPage,
   StorageRoot,
   StorageRootCreate,
   StorageRootList,
@@ -50,7 +56,7 @@ function isErrorEnvelope(value: unknown): value is { error: ErrorBody } {
 
 async function request<T>(
   conn: BackendConnection,
-  method: "GET" | "POST" | "PATCH" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -163,6 +169,46 @@ export const api = {
 
   updateSettings: (conn: BackendConnection, body: AppSettingsUpdate) =>
     request<AppSettings>(conn, "PATCH", "/api/v1/settings", body),
+
+  getAiStatus: (conn: BackendConnection) => request<AIStatus>(conn, "GET", "/api/v1/ai/status"),
+
+  downloadAiModel: (conn: BackendConnection) =>
+    request<Task>(conn, "POST", "/api/v1/ai/model/download", {}),
+
+  indexAi: (conn: BackendConnection) => request<Task>(conn, "POST", "/api/v1/ai/index"),
+
+  aiSearch: (conn: BackendConnection, text: string, query: AssetQuery, limit = 200) =>
+    request<SemanticPage>(
+      conn,
+      "GET",
+      `/api/v1/ai/search${toSearchParams({ ...filters(query), text, limit })}`,
+    ),
+
+  similarAssets: (conn: BackendConnection, id: number, query: AssetQuery, limit = 200) =>
+    request<SemanticPage>(
+      conn,
+      "GET",
+      `/api/v1/assets/${id}/similar${toSearchParams({ ...filters(query), limit })}`,
+    ),
+
+  saveCloudKey: (conn: BackendConnection, apiKey: string) =>
+    request<void>(conn, "PUT", "/api/v1/ai/cloud/key", { api_key: apiKey }),
+
+  deleteCloudKey: (conn: BackendConnection) =>
+    request<void>(conn, "DELETE", "/api/v1/ai/cloud/key"),
+
+  testCloud: (conn: BackendConnection) =>
+    request<CloudTestResult>(conn, "POST", "/api/v1/ai/cloud/test"),
+
+  previewCloud: (conn: BackendConnection, body: CloudRequest) =>
+    request<CloudPreview>(conn, "POST", "/api/v1/ai/cloud/preview", body),
+
+  /** Sends photos to the cloud provider. Only call after the user confirmed the preview. */
+  analyzeCloud: (conn: BackendConnection, body: CloudRequest) =>
+    request<AnalysisResult>(conn, "POST", "/api/v1/ai/cloud/analyze", { ...body, confirmed: true }),
+
+  listAnalyses: (conn: BackendConnection, assetId: number) =>
+    request<AnalysisResult[]>(conn, "GET", `/api/v1/assets/${assetId}/analyses`),
 };
 
 /**

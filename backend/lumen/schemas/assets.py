@@ -73,7 +73,8 @@ class Tag(BaseModel):
 class AssetTag(BaseModel):
     id: int
     name: str
-    source: Literal["user", "import"]
+    source: Literal["user", "import", "ai"]
+    confidence: float | None = Field(default=None, description="For AI labels (0-1)")
 
 
 class AssetUpdate(BaseModel):

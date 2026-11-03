@@ -5,9 +5,11 @@ import { Inspector } from "@/components/layout/Inspector";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { StatusBar } from "@/components/layout/StatusBar";
 import { TopBar } from "@/components/layout/TopBar";
+import { CloudDialog } from "@/components/ai/CloudDialog";
 import { Viewer } from "@/components/viewer/Viewer";
 import { cleanQuery, useLibraryState } from "@/library/state";
 import { ALL_NAV, MAIN_NAV, type PageId } from "@/navigation";
+import { AISearchPage } from "@/pages/AISearchPage";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { PlaceholderPage } from "@/pages/PlaceholderPage";
 import { SettingsPage } from "@/pages/SettingsPage";
@@ -20,7 +22,9 @@ const MapPage = lazy(() => import("@/pages/MapPage").then((module) => ({ default
 const INSPECTOR_KEY = "lumen.inspectorOpen";
 const SEARCH_DELAY_MS = 250;
 /** Pages that show the shared (filtered) library. */
-const LIBRARY_VIEWS: PageId[] = ["library", "timeline", "map"];
+const LIBRARY_VIEWS: PageId[] = ["library", "timeline", "map", "aiSearch"];
+/** Pages whose inspector shows the selected photo. */
+const INSPECTED_VIEWS: PageId[] = ["library", "timeline", "aiSearch"];
 
 function initialInspectorOpen(): boolean {
   try {
@@ -38,8 +42,13 @@ export default function App() {
   const [selection, setSelection] = useState<Selection>(null);
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
-  const { setQuery, viewer } = useLibraryState();
+  const { setQuery, viewer, similarTo, cloudRequest } = useLibraryState();
   useLibraryRefresh();
+
+  // "Find similar" (inspector, viewer) opens the AI search page.
+  useEffect(() => {
+    if (similarTo) setPage("aiSearch");
+  }, [similarTo]);
 
   useEffect(() => {
     try {
@@ -59,7 +68,7 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (viewer || !event.ctrlKey || event.altKey || event.metaKey) return;
+      if (viewer || cloudRequest || !event.ctrlKey || event.altKey || event.metaKey) return;
       const key = event.key.toLowerCase();
       const target = ALL_NAV.find((item) => item.shortcut === key);
       if (target) {
@@ -76,7 +85,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [viewer]);
+  }, [viewer, cloudRequest]);
 
   const onSearchSubmit = () => {
     if (!LIBRARY_VIEWS.includes(page)) setPage("library");
@@ -102,22 +111,19 @@ export default function App() {
               <MapPage />
             </Suspense>
           )}
-          {page === "aiSearch" && (
-            <PlaceholderPage page="aiSearch" icon={iconFor("aiSearch")} phase="Phase 4" />
-          )}
+          {page === "aiSearch" && <AISearchPage onSelect={setSelection} />}
           {page === "collections" && (
             <PlaceholderPage page="collections" icon={iconFor("collections")} phase="Phase 5" />
           )}
           {page === "settings" && <SettingsPage />}
         </main>
         {inspectorOpen && page !== "map" && (
-          <Inspector
-            selection={page === "library" || page === "timeline" ? selection : null}
-          />
+          <Inspector selection={INSPECTED_VIEWS.includes(page) ? selection : null} />
         )}
       </div>
       <StatusBar />
       <Viewer />
+      <CloudDialog onOpenSettings={() => setPage("settings")} />
     </div>
   );
 }

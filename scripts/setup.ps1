@@ -1,5 +1,7 @@
 # Prepares a development environment: Python venv + backend deps, frontend deps.
-# Usage: powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+# Usage: powershell -ExecutionPolicy Bypass -File scripts\setup.ps1 [-WithAI]
+#   -WithAI  also installs the local AI stack (PyTorch with CUDA, transformers; ~3 GB)
+param([switch]$WithAI)
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
@@ -10,6 +12,11 @@ try {
     & .\.venv\Scripts\python.exe -m pip install --upgrade pip
     & .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
     if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
+    if ($WithAI) {
+        Write-Host "==> Backend: installing the local AI stack (PyTorch CUDA build)" -ForegroundColor Cyan
+        & .\.venv\Scripts\python.exe -m pip install -e ".[ai]" --extra-index-url https://download.pytorch.org/whl/cu130
+        if ($LASTEXITCODE -ne 0) { throw "pip install .[ai] failed" }
+    }
 } finally { Pop-Location }
 
 Write-Host "==> Desktop: installing npm packages" -ForegroundColor Cyan

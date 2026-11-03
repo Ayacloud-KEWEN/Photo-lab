@@ -173,3 +173,40 @@ storage_roots ──scan──▶ media_files (pending) ──ingest──▶ as
 - MapLibre 的 Web Worker 以原始源码（`?raw`）通过 `blob:` URL 启动：MapLibre 默认按自身模块
   路径寻找 worker，打包后会失效；CSP 中对应放开 `worker-src blob:`。
 - CSP 中新增 `media-src`（视频）和 `https://tiles.openfreemap.org`（仅在线地图使用）。
+
+## 17. 本地 AI 引擎（ADR-014，Phase 4）
+
+- 首选模型 **SigLIP2 so400m/14 @384**（`google/siglip2-so400m-patch14-384`）：多语言，中文查询无需翻译；
+  RTX 4070 SUPER 上 fp16 约占 3.4 GB 显存，首次加载约 13 秒。也可选 SigLIP2 base（更快更小）。
+- **OpenCLIP** 作为生态与对照：同一 `Encoder` 接口下的第二个后端，并提供 `lumen.ai.bench` 对照工具。
+  小样本测试中，英文查询两者相当，中文查询 OpenCLIP ViT-B/32 的 R@1 只有 0.44（SigLIP2 为 1.0）。
+- 依赖可选：`pip install -e .[ai]`（PyTorch CUDA 版从 PyTorch 官方源安装）。未安装时其余功能照常，
+  AI 相关接口返回 `ai_not_ready`。
+- 模型在进程内按需加载（GPU 可用时 fp16），空闲 `ai_idle_unload_s`（默认 600 秒）后卸载以释放显存。
+- 模型文件放在 HuggingFace 标准缓存中，与其他工具共用，不在应用数据目录里重复保存。
+
+## 18. 向量化、搜索与标签（ADR-015）
+
+- 后台任务 `ai_index_assets`：读取已缓存的 400px 缩略图（不再解码原图/RAW），批量编码，
+  向量（float16、已归一化）存入 `embeddings(asset_id, model_id)`；入库新文件后自动追加；
+  封面内容（指纹）或标签词表版本变化时重算。
+- 搜索：内存中的精确余弦检索（10 万张 × 1152 维 ≈ 230 MB），写入后失效重载；可与所有筛选条件叠加。
+- **相关度阈值**：SigLIP 的 sigmoid 概率对中文查询几乎都接近 0，不可用作阈值；余弦相似度区分清楚
+  （真实匹配约 0.10–0.13，无关照片约 0.03–0.06），因此以余弦 0.075 作为"明显相关"，其余结果
+  按需展开（`relevant_count`）。阈值来自少量样本，后续用真实照片库校准。
+- **自动标签**：约 50 个中文场景/主体标签，每个用多条英文提示词的平均向量。绝对概率同样不可用，
+  改为对全部标签做 softmax（使用模型自身的 logit scale），占比 ≥ 0.25 才打标签（最多 3 个）。
+  标签以 `source='ai'` 和置信度写入 `media_tags`；重新标注只替换 AI 标签，不动用户和导入的标签。
+
+## 19. 云端分析（ADR-016）
+
+- 供应商：DeepSeek（OpenAI 兼容的 Chat Completions 接口，标准库实现，无额外依赖）。默认模型
+  `deepseek-flash`：据第三方资料，DeepSeek 自 2026 年 8 月起在该模型上支持图片输入（每张图约 384 token），
+  官方文档未能直接核实，因此提供"测试连接"实际检测，并在模型拒绝图片时提供"仅文字"降级
+  （发送拍摄参数和本地 AI 标签，结果明确标注不是基于画面）。模型 ID 和 API 地址可在设置中修改。
+- 隐私：默认关闭；API 密钥存 Windows 凭据管理器（`keyring`）；每次请求先调用 `/preview`
+  显示目标主机、模型、缩略图和随附字段，用户确认后前端才调用 `/analyze`（后端要求 `confirmed: true`）；
+  图片为缩小副本（长边 640–1024 px）；GPS 默认不发送，需逐次勾选。
+- 缓存：按 供应商/模型/提示词版本/语言/选项/照片指纹 计算 `cache_key`，相同请求直接返回结果，不再上传。
+- 结果为 Markdown（前端用 react-markdown 渲染，不允许原始 HTML）；"AI 选片"要求先输出一行 JSON
+  （最佳与排名），解析后在界面上标出最佳照片。

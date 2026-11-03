@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from lumen.ai.pipeline import AI_INDEX_TASK
 from lumen.db.connection import transaction, utc_now
 from lumen.library.common import (
     load_root,
@@ -37,6 +38,7 @@ from lumen.media.metadata import (
     parse_ffprobe,
     run_ffprobe,
 )
+from lumen.services.settings import get_settings
 from lumen.tasks.runner import TaskContext, TaskInterrupted
 
 logger = logging.getLogger(__name__)
@@ -111,6 +113,8 @@ def _ingest(ctx: TaskContext) -> None:
 
     set_root_status(conn, root_id, "ready", scanned=True)
     ctx.progress(done, max(total, done), force=True)
+    if done and get_settings(conn).ai_enabled:
+        ctx.enqueue(AI_INDEX_TASK)
 
 
 def _count_pending(conn: sqlite3.Connection, root_id: int) -> int:

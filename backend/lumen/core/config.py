@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     ingest_workers: int = Field(default_factory=lambda: max(1, min(4, os.cpu_count() or 1)), ge=1)
     # Background task processing; disabled in some tests.
     run_tasks: bool = True
+    # Local AI: "auto" uses the GPU when available; the model is unloaded when idle.
+    ai_device: Literal["auto", "cuda", "cpu"] = "auto"
+    ai_idle_unload_s: float = Field(default=600, ge=10)
 
     @field_validator("host")
     @classmethod

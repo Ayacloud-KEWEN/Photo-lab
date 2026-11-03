@@ -1,17 +1,22 @@
-import { Heart, X } from "lucide-react";
+import { ChevronRight, Cloud, Heart, ScanSearch, Sparkles, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { thumbnailUrl } from "@/api/client";
 import {
+  useAiStatus,
+  useAnalyses,
   useAsset,
   useBatchUpdate,
   useConnection,
   useStorageRoots,
   useUpdateAsset,
 } from "@/api/hooks";
+import { Result } from "@/components/ai/CloudDialog";
 import type { AssetDetail, StorageRoot } from "@/api/types";
 import { StarRating } from "@/components/library/StarRating";
+import { Button } from "@/components/ui/button";
+import { useLibraryState } from "@/library/state";
 import { TagInput } from "@/components/library/TagInput";
 import { formatBytes, formatDateTime, formatDuration, formatExposure } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -117,6 +122,7 @@ export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; 
       )}
       <h2 className="select-text break-all text-sm font-medium">{name}</h2>
       {editable && <Edits asset={asset} />}
+      {editable && <AiActions asset={asset} />}
       <dl className="space-y-3">
         {asset.capture_time && (
           <Field label={t("inspector.captureTime")}>
@@ -227,8 +233,15 @@ function Edits({ asset }: { asset: AssetDetail }) {
               <li
                 key={tag.id}
                 className="flex items-center gap-1 rounded bg-accent py-0.5 pl-2 pr-1 text-[11.5px]"
-                title={tag.source === "import" ? t("inspector.importedTag") : undefined}
+                title={
+                  tag.source === "import"
+                    ? t("inspector.importedTag")
+                    : tag.source === "ai"
+                      ? t("ai.label", { value: Math.round((tag.confidence ?? 0) * 100) })
+                      : undefined
+                }
               >
+                {tag.source === "ai" && <Sparkles className="size-3 text-highlight" />}
                 {tag.name}
                 <button
                   type="button"
@@ -275,4 +288,72 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <dd className="text-[12.5px] text-foreground">{children}</dd>
     </div>
   );
+}
+
+function AiActions({ asset }: { asset: AssetDetail }) {
+  const { t, i18n } = useTranslation();
+  const status = useAiStatus();
+  const analyses = useAnalyses(asset.id);
+  const { findSimilar, openCloud } = useLibraryState();
+  const [open, setOpen] = useState<number | null>(null);
+  const local = status.data?.local;
+  const aiReady = !!local && local.enabled && local.model_downloaded;
+
+  return (
+    <div className="space-y-2 border-b pb-3">
+      {aiReady && (
+        <Button variant="secondary" size="sm" className="w-full" onClick={() => findSimilar(asset.id)}>
+          <ScanSearch className="size-3.5" />
+          {t("ai.findSimilar")}
+        </Button>
+      )}
+      <div className="flex items-center gap-1.5">
+        <span className="flex items-center gap-1 text-[11px] text-subtle-foreground">
+          <Cloud className="size-3" />
+          {t("ai.cloud")}
+        </span>
+        <Button variant="ghost" size="sm" className="ml-auto" onClick={() => openCloud("describe", [asset.id])}>
+          {t("ai.describe")}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => openCloud("critique", [asset.id])}>
+          {t("ai.critique")}
+        </Button>
+      </div>
+      {(analyses.data?.length ?? 0) > 0 && (
+        <div>
+          <div className="mb-1 text-[11px] text-subtle-foreground">{t("ai.history")}</div>
+          <ul className="space-y-1">
+            {analyses.data!.map((analysis) => (
+              <li key={analysis.id} className="rounded border bg-card">
+                <button
+                  type="button"
+                  aria-expanded={open === analysis.id}
+                  onClick={() => setOpen(open === analysis.id ? null : analysis.id)}
+                  className="flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11.5px]"
+                >
+                  <ChevronRight
+                    className={cn("size-3 transition-transform", open === analysis.id && "rotate-90")}
+                  />
+                  {t(`ai.${kindKey(analysis.kind)}`)}
+                  <span className="ml-auto text-subtle-foreground">
+                    {formatDateTime(analysis.created_at, i18n.language)}
+                  </span>
+                </button>
+                {open === analysis.id && (
+                  <div className="border-t px-2 py-2">
+                    <Result result={analysis} />
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function kindKey(kind: string): "describe" | "critique" | "selectBest" | "story" {
+  if (kind === "select_best") return "selectBest";
+  return kind as "describe" | "critique" | "story";
 }

@@ -108,3 +108,35 @@
     background: transparent;
   }
 }
+
+/* Markdown returned by cloud analysis. */
+@layer components {
+  .prose-lumen h1,
+  .prose-lumen h2,
+  .prose-lumen h3 {
+    @apply mb-1.5 mt-4 font-semibold text-foreground first:mt-0;
+  }
+  .prose-lumen h1 {
+    @apply text-base;
+  }
+  .prose-lumen h2,
+  .prose-lumen h3 {
+    @apply text-[13.5px];
+  }
+  .prose-lumen p {
+    @apply my-2;
+  }
+  .prose-lumen ul,
+  .prose-lumen ol {
+    @apply my-2 space-y-1 pl-5;
+  }
+  .prose-lumen ul {
+    @apply list-disc;
+  }
+  .prose-lumen ol {
+    @apply list-decimal;
+  }
+  .prose-lumen strong {
+    @apply font-semibold text-foreground;
+  }
+}

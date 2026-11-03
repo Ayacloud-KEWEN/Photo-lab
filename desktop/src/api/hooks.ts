@@ -10,10 +10,12 @@ import { useBackendStatus } from "./backend-context";
 import { api, type BackendConnection } from "./client";
 import type { AssetQuery } from "./query";
 import type {
+  AnalysisResult,
   AppSettingsUpdate,
   AssetBatchUpdate,
   AssetDetail,
   AssetUpdate,
+  CloudRequest,
   StorageRootCreate,
   Task,
 } from "./types";
@@ -32,6 +34,10 @@ export const queryKeys = {
     ["library", "timeline", granularity, query] as const,
   map: (query: AssetQuery) => ["library", "map", query] as const,
   asset: (id: number) => ["library", "asset", id] as const,
+  aiStatus: ["ai", "status"] as const,
+  aiSearch: (text: string, query: AssetQuery) => ["library", "ai-search", text, query] as const,
+  similar: (id: number, query: AssetQuery) => ["library", "similar", id, query] as const,
+  analyses: (id: number) => ["library", "analyses", id] as const,
 };
 
 const ASSET_PAGE_SIZE = 300;
@@ -278,6 +284,102 @@ export function useUpdateSettings() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: AppSettingsUpdate) => api.updateSettings(requireConnection(conn), body),
-    onSuccess: (settings) => queryClient.setQueryData(queryKeys.settings, settings),
+    onSuccess: (settings) => {
+      queryClient.setQueryData(queryKeys.settings, settings);
+      // Enabling AI or changing the model starts background work.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.aiStatus });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+    },
+  });
+}
+
+/** Local AI and cloud configuration; polled quickly while AI work is running. */
+export function useAiStatus() {
+  const conn = useConnection();
+  const tasks = useActiveTasks();
+  const aiActive = tasks.data?.some((task) => task.kind.startsWith("ai_")) ?? false;
+  return useQuery({
+    queryKey: queryKeys.aiStatus,
+    queryFn: () => api.getAiStatus(requireConnection(conn)),
+    enabled: conn !== null,
+    refetchInterval: aiActive ? 2000 : 15_000,
+  });
+}
+
+export function useAiSearch(text: string, query: AssetQuery, enabled: boolean) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.aiSearch(text, query),
+    queryFn: () => api.aiSearch(requireConnection(conn), text, query),
+    enabled: conn !== null && enabled && text.trim().length > 0,
+    placeholderData: (previous) => previous,
+    retry: false,
+  });
+}
+
+export function useSimilar(id: number | null, query: AssetQuery) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.similar(id ?? 0, query),
+    queryFn: () => api.similarAssets(requireConnection(conn), id!, query),
+    enabled: conn !== null && id !== null,
+    retry: false,
+  });
+}
+
+export function useAiActions() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.aiStatus });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+  };
+  return {
+    download: useMutation({
+      mutationFn: () => api.downloadAiModel(requireConnection(conn)),
+      onSuccess: refresh,
+    }),
+    index: useMutation({
+      mutationFn: () => api.indexAi(requireConnection(conn)),
+      onSuccess: refresh,
+    }),
+    saveKey: useMutation({
+      mutationFn: (key: string) => api.saveCloudKey(requireConnection(conn), key),
+      onSuccess: refresh,
+    }),
+    deleteKey: useMutation({
+      mutationFn: () => api.deleteCloudKey(requireConnection(conn)),
+      onSuccess: refresh,
+    }),
+    test: useMutation({ mutationFn: () => api.testCloud(requireConnection(conn)) }),
+  };
+}
+
+export function useAnalyses(assetId: number | null) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.analyses(assetId ?? 0),
+    queryFn: () => api.listAnalyses(requireConnection(conn), assetId!),
+    enabled: conn !== null && assetId !== null,
+  });
+}
+
+export function useCloudPreview() {
+  const conn = useConnection();
+  return useMutation({
+    mutationFn: (body: CloudRequest) => api.previewCloud(requireConnection(conn), body),
+  });
+}
+
+export function useCloudAnalyze() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CloudRequest) => api.analyzeCloud(requireConnection(conn), body),
+    onSuccess: (result: AnalysisResult) => {
+      for (const id of result.asset_ids) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.analyses(id) });
+      }
+    },
   });
 }

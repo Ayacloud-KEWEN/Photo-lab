@@ -6,13 +6,14 @@ import {
   Info,
   Maximize2,
   Minimize2,
+  ScanSearch,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { api, originalUrl, thumbnailUrl } from "@/api/client";
-import { queryKeys, useAsset, useConnection, useUpdateAsset } from "@/api/hooks";
+import { queryKeys, useAiStatus, useAsset, useConnection, useUpdateAsset } from "@/api/hooks";
 import type { AssetDetail } from "@/api/types";
 import { AssetDetails } from "@/components/layout/Inspector";
 import { StarRating } from "@/components/library/StarRating";
@@ -58,6 +59,9 @@ function ViewerOverlay({
   const asset = useAsset(id);
   const update = useUpdateAsset();
   const detail = asset.data;
+  const aiStatus = useAiStatus();
+  const { findSimilar } = useLibraryState();
+  const aiReady = !!aiStatus.data?.local.enabled && !!aiStatus.data?.local.model_downloaded;
 
   useEffect(() => rootRef.current?.focus(), []);
   useEffect(() => setZoomed(false), [id]);
@@ -134,6 +138,17 @@ function ViewerOverlay({
               onClick={() => setZoomed((value) => !value)}
             >
               {zoomed ? <Minimize2 /> : <Maximize2 />}
+            </IconButton>
+          )}
+          {aiReady && (
+            <IconButton
+              label={t("ai.findSimilar")}
+              onClick={() => {
+                findSimilar(id);
+                onClose();
+              }}
+            >
+              <ScanSearch />
             </IconButton>
           )}
           <IconButton label={t("viewer.info")} active={showInfo} onClick={() => setShowInfo((v) => !v)}>

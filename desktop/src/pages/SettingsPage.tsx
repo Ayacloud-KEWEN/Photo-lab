@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { useBackendStatus } from "@/api/backend-context";
 import { useHealth, useSettings, useUpdateSettings } from "@/api/hooks";
+import { CloudSettings, LocalAiSettings } from "@/components/settings/AiSettings";
 import { LANGUAGES, setLanguage, type LanguageCode } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ export function SettingsPage() {
         : t("status.starting");
 
   return (
+    <div className="h-full overflow-y-auto">
     <div className="mx-auto max-w-2xl px-8 py-7">
       <h1 className="text-lg font-medium">{t("settings.title")}</h1>
 
@@ -69,6 +71,14 @@ export function SettingsPage() {
         </label>
       </Section>
 
+      <Section title={t("settings.ai")}>
+        <LocalAiSettings />
+      </Section>
+
+      <Section title={t("settings.cloud")}>
+        <CloudSettings />
+      </Section>
+
       <Section title={t("settings.about")}>
         <dl className="divide-y rounded-lg border bg-card">
           <Row label={t("settings.appVersion")}>{health.data?.app_version ?? "—"}</Row>
@@ -79,6 +89,7 @@ export function SettingsPage() {
           <Row label={t("settings.backend")}>{backendLabel}</Row>
         </dl>
       </Section>
+    </div>
     </div>
   );
 }
