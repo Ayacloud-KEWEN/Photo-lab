@@ -132,3 +132,44 @@ storage_roots ──scan──▶ media_files (pending) ──ingest──▶ as
 
 - ExifTool、FFmpeg、FFprobe 通过 `PATH` 或 `LUMEN_*_PATH` 查找；缺失时降级运行（不提取照片元数据 /
   不生成视频封面），并在日志中警告。正式安装包将随附这些工具（打包阶段处理）。
+
+## 13. 标签、星级与导入（ADR-010，Phase 3）
+
+- `tags`（`name_key` 小写唯一，大小写不同视为同一标签）+ `media_tags(asset_id, tag_id, source)`，
+  `source` 为 `user`（在 LUMEN 中添加）或 `import`（来自文件）。
+- 入库时只读读取 `XMP:Rating`/`EXIF:Rating` 与 `XMP:Subject`/`IPTC:Keywords`，包括 RAW 旁边的
+  `.xmp`（Lightroom 把 RAW 的星级和关键词写在这里）。一个资产取其所有文件中的最高星级。
+- `media_assets.rating_source`：`NULL` 未评级，`import` 来自文件，`user` 在 LUMEN 中设置。
+  `user` 星级永远不会被重新导入覆盖。
+- 迁移 0003 会把已入库文件标记为重新读取元数据并排队入库任务；指纹和缩略图已缓存，所以很快。
+
+## 14. 全文搜索（ADR-011）
+
+- 视图 `asset_search_source` 是"哪些内容可被搜索"的唯一定义：文件相对路径、来源名称、相机、
+  镜头、标签名、备注。`lumen.library.search.reindex_assets` 在资产变化时（入库、编辑标签/备注、
+  标签改名/删除）从视图重建对应文档；删除资产由触发器同步删除。
+- FTS5 使用 `trigram` 分词，查询用 `LIKE '%词%'`：既支持子串匹配，也支持没有空格分词的中文。
+  不足 3 个字符的词（如"西湖"）无法使用三元组索引，退化为对索引表的扫描，仍足够快。
+- 多个词之间是"且"的关系；`%` 和 `_` 会被转义。
+
+## 15. 查询接口（ADR-012）
+
+- 列表、全选 id、时间轴统计、地图坐标共用同一个筛选构造器（`services/assets._filters`），
+  所以同一组筛选条件在各页面结果一致。
+- 游标分页编码了排序方式和排序键；用错排序方式的游标会被拒绝。
+- `facets` 统计的是整个图库（不随筛选变化），用于填充筛选下拉框。
+
+## 16. 前端：照片墙、浏览器与地图（ADR-013）
+
+- 照片墙用"等高行"（justified）布局：按宽高比把照片排进行，每行恰好填满宽度，最后一行不拉伸；
+  宽高比限制在 0.4–3 之间，避免全景图独占一行。布局是纯函数（`library/layout.ts`），配合虚拟滚动，
+  只渲染可见行。
+- 筛选条件在图库、时间轴、地图之间共享（`library/state.tsx`）；顶部搜索栏实时更新筛选。
+- 时间轴按天分组；跳转到某个月是把列表"锚定"在该月（`date_to` 为下个月），可一键回到最新。
+- 全屏浏览显示 2048px 预览；浏览器可直接解码的格式（JPEG/PNG）可切换到原图 1:1。
+  视频直接播放原文件（`/original` 支持 Range）。
+- 地图使用 MapLibre；照片在前端用 Supercluster 聚合，气泡用 HTML 标记显示缩略图，因此离线
+  底图不需要字体文件。离线底图来自 `world-atlas`（Natural Earth 1:50m 国界，按需加载）。
+- MapLibre 的 Web Worker 以原始源码（`?raw`）通过 `blob:` URL 启动：MapLibre 默认按自身模块
+  路径寻找 worker，打包后会失效；CSP 中对应放开 `worker-src blob:`。
+- CSP 中新增 `media-src`（视频）和 `https://tiles.openfreemap.org`（仅在线地图使用）。

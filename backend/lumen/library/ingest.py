@@ -9,6 +9,7 @@ it is processed: a file that crashes the process is skipped after
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import sqlite3
 import uuid
@@ -23,6 +24,8 @@ from lumen.library.common import (
     root_status_guard,
     set_root_status,
 )
+from lumen.library.search import reindex_assets
+from lumen.library.tags import get_or_create_tag, normalize_tag_name, tag_assets
 from lumen.media import thumbnails
 from lumen.media.fingerprint import FingerprintCancelled, fingerprint_file
 from lumen.media.formats import MediaFormat, format_for
@@ -179,9 +182,10 @@ def _process_batch(
     for item in ok:
         _assign_asset(ctx.conn, item)
 
-    # 3. Metadata: one ExifTool call for the batch, FFprobe per video.
+    # 3. Metadata: one ExifTool call for the batch, FFprobe per video. Sidecars are read
+    #    too: Lightroom keeps RAW ratings and keywords in the .xmp next to the file.
     media = [i for i in ok if i.format.media_type is not None]
-    _extract_metadata(media, tools, pool)
+    _extract_metadata(ok, tools, pool)
 
     # 4. Thumbnails and previews (parallel, CPU bound; Pillow/LibRaw release the GIL).
     list(pool.map(lambda item: _render(item, ctx, tools), media))
@@ -391,50 +395,69 @@ def _store_results(conn: sqlite3.Connection, items: list[WorkItem], tools: Tools
 
     with transaction(conn):
         for item in items:
-            if item.vanished:
-                # Gone since the scan: missing, and not charged an attempt.
-                conn.execute(
-                    """
-                    UPDATE media_files
-                    SET status = 'missing', ingest_attempts = MAX(ingest_attempts - 1, 0),
-                        updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (now, item.file_id),
+            _store_item(conn, item, extractor_version, now)
+        # Asset ids may have been assigned in this batch (also to sidecars' siblings).
+        touched = (
+            {
+                int(row[0])
+                for row in conn.execute(
+                    f"SELECT DISTINCT asset_id FROM media_files WHERE asset_id IS NOT NULL "
+                    f"AND id IN ({','.join('?' * len(items))})",
+                    [item.file_id for item in items],
                 )
-                continue
-            if item.error:
-                conn.execute(
-                    """
-                    UPDATE media_files
-                    SET ingest_error = ?,
-                        ingest_state = CASE WHEN ingest_attempts >= ? THEN 'error'
-                                            ELSE 'pending' END,
-                        updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (item.error, MAX_FILE_ATTEMPTS, now, item.file_id),
-                )
-                logger.warning(
-                    "file ingest failed",
-                    extra={
-                        "file_id": item.file_id,
-                        "path": item.relative_path,
-                        "error": item.error,
-                    },
-                )
-                continue
+            }
+            if items
+            else set()
+        )
+        _apply_imports(conn, touched, now)
+        reindex_assets(conn, touched)
 
-            conn.execute(
-                """
-                UPDATE media_files
-                SET fingerprint = ?, ingest_state = 'done', ingest_error = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (item.fingerprint, "; ".join(item.warnings) or None, now, item.file_id),
-            )
-            if item.metadata is not None:
-                _store_metadata(conn, item, item.metadata, extractor_version, now)
+
+def _store_item(conn: sqlite3.Connection, item: WorkItem, version: str, now: str) -> None:
+    if item.vanished:
+        # Gone since the scan: missing, and not charged an attempt.
+        conn.execute(
+            """
+            UPDATE media_files
+            SET status = 'missing', ingest_attempts = MAX(ingest_attempts - 1, 0),
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (now, item.file_id),
+        )
+        return
+    if item.error:
+        conn.execute(
+            """
+            UPDATE media_files
+            SET ingest_error = ?,
+                ingest_state = CASE WHEN ingest_attempts >= ? THEN 'error'
+                                    ELSE 'pending' END,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (item.error, MAX_FILE_ATTEMPTS, now, item.file_id),
+        )
+        logger.warning(
+            "file ingest failed",
+            extra={
+                "file_id": item.file_id,
+                "path": item.relative_path,
+                "error": item.error,
+            },
+        )
+        return
+
+    conn.execute(
+        """
+        UPDATE media_files
+        SET fingerprint = ?, ingest_state = 'done', ingest_error = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (item.fingerprint, "; ".join(item.warnings) or None, now, item.file_id),
+    )
+    if item.metadata is not None:
+        _store_metadata(conn, item, item.metadata, version, now)
 
 
 def _store_metadata(
@@ -445,8 +468,9 @@ def _store_metadata(
         INSERT INTO media_metadata
             (file_id, width, height, orientation, duration_ms, capture_time, camera_make,
              camera_model, lens_model, focal_length_mm, aperture, exposure_time_s, iso,
-             video_codec, frame_rate, raw_json, extractor, extractor_version, extracted_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'exiftool+ffprobe', ?, ?)
+             video_codec, frame_rate, keywords, xmp_rating, raw_json, extractor,
+             extractor_version, extracted_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'exiftool+ffprobe', ?, ?)
         ON CONFLICT (file_id) DO UPDATE SET
             width = excluded.width, height = excluded.height,
             orientation = excluded.orientation, duration_ms = excluded.duration_ms,
@@ -455,6 +479,7 @@ def _store_metadata(
             focal_length_mm = excluded.focal_length_mm, aperture = excluded.aperture,
             exposure_time_s = excluded.exposure_time_s, iso = excluded.iso,
             video_codec = excluded.video_codec, frame_rate = excluded.frame_rate,
+            keywords = excluded.keywords, xmp_rating = excluded.xmp_rating,
             raw_json = excluded.raw_json, extractor = excluded.extractor,
             extractor_version = excluded.extractor_version, extracted_at = excluded.extracted_at
         """,
@@ -462,11 +487,13 @@ def _store_metadata(
             item.file_id, meta.width, meta.height, meta.orientation, meta.duration_ms,
             meta.capture_time, meta.camera_make, meta.camera_model, meta.lens_model,
             meta.focal_length_mm, meta.aperture, meta.exposure_time_s, meta.iso,
-            meta.video_codec, meta.frame_rate, meta.raw_json(), version, now,
+            meta.video_codec, meta.frame_rate,
+            json.dumps(meta.keywords, ensure_ascii=False) if meta.keywords else None,
+            meta.xmp_rating, meta.raw_json(), version, now,
         ),
     )  # fmt: skip
 
-    if item.asset_id is None:
+    if item.asset_id is None or item.format.kind == "sidecar":
         return
     # Asset capture time: the primary file's EXIF date, else any file's, else file mtime.
     conn.execute(
@@ -497,3 +524,45 @@ def _store_metadata(
             """,
             (item.asset_id, meta.latitude, meta.longitude, meta.altitude_m, now),
         )
+
+
+def _apply_imports(conn: sqlite3.Connection, asset_ids: set[int], now: str) -> None:
+    """Import ratings and keywords found in any of the assets' files (read-only sources).
+
+    A rating set in LUMEN (``rating_source = 'user'``) is never overwritten.
+    """
+    if not asset_ids:
+        return
+    marks = ",".join("?" * len(asset_ids))
+    ids = sorted(asset_ids)
+    conn.execute(
+        f"""
+        UPDATE media_assets
+        SET rating = imported.rating, rating_source = 'import', updated_at = ?
+        FROM (
+            SELECT f.asset_id, MAX(m.xmp_rating) AS rating
+            FROM media_files f JOIN media_metadata m ON m.file_id = f.id
+            WHERE f.asset_id IN ({marks}) AND m.xmp_rating > 0
+            GROUP BY f.asset_id
+        ) AS imported
+        WHERE media_assets.id = imported.asset_id
+          AND (media_assets.rating_source IS NULL OR media_assets.rating_source = 'import')
+        """,
+        [now, *ids],
+    )
+    rows = conn.execute(
+        f"""
+        SELECT f.asset_id, m.keywords FROM media_files f
+        JOIN media_metadata m ON m.file_id = f.id
+        WHERE f.asset_id IN ({marks}) AND m.keywords IS NOT NULL
+        """,
+        ids,
+    ).fetchall()
+    tag_ids: dict[str, int] = {}
+    for row in rows:
+        for keyword in json.loads(row["keywords"]):
+            if not isinstance(keyword, str) or not normalize_tag_name(keyword):
+                continue
+            if keyword not in tag_ids:
+                tag_ids[keyword] = get_or_create_tag(conn, keyword)
+            tag_assets(conn, [int(row["asset_id"])], tag_ids[keyword], "import")

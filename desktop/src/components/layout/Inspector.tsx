@@ -1,9 +1,18 @@
-import type { ReactNode } from "react";
+import { Heart, X } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { thumbnailUrl } from "@/api/client";
-import { useAsset, useConnection, useStorageRoots } from "@/api/hooks";
+import {
+  useAsset,
+  useBatchUpdate,
+  useConnection,
+  useStorageRoots,
+  useUpdateAsset,
+} from "@/api/hooks";
 import type { AssetDetail, StorageRoot } from "@/api/types";
+import { StarRating } from "@/components/library/StarRating";
+import { TagInput } from "@/components/library/TagInput";
 import { formatBytes, formatDateTime, formatDuration, formatExposure } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Selection } from "@/selection";
@@ -17,8 +26,12 @@ export function Inspector({ selection }: { selection: Selection }) {
 
   let content: ReactNode;
   if (root) content = <RootDetails root={root} />;
-  else if (selection?.kind === "asset" && asset.data) content = <AssetDetails asset={asset.data} />;
-  else content = <p className="pt-8 text-center text-xs text-subtle-foreground">{t("inspector.empty")}</p>;
+  else if (selection?.kind === "asset" && asset.data)
+    content = <AssetDetails asset={asset.data} editable />;
+  else
+    content = (
+      <p className="pt-8 text-center text-xs text-subtle-foreground">{t("inspector.empty")}</p>
+    );
 
   return (
     <aside
@@ -74,11 +87,13 @@ function RootDetails({ root }: { root: StorageRoot }) {
   );
 }
 
-function AssetDetails({ asset }: { asset: AssetDetail }) {
+/** Asset metadata; with `editable`, also rating, favorite, tags and notes. */
+export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; editable?: boolean }) {
   const { t, i18n } = useTranslation();
   const conn = useConnection();
   const meta = asset.metadata;
-  const name = asset.files[0]?.relative_path.split(/[\\/]/).pop() ?? "";
+  const cover = asset.files.find((file) => file.id === asset.cover_file_id) ?? asset.files[0];
+  const name = cover?.relative_path.split(/[\\/]/).pop() ?? "";
   const camera = [meta.camera_make, meta.camera_model].filter(Boolean).join(" ");
   const exposure = [
     meta.aperture ? `f/${meta.aperture}` : null,
@@ -93,7 +108,7 @@ function AssetDetails({ asset }: { asset: AssetDetail }) {
 
   return (
     <div className="space-y-4">
-      {conn && asset.rendition_version && (
+      {editable && conn && asset.rendition_version && (
         <img
           src={thumbnailUrl(conn, asset.id, asset.rendition_version)}
           alt={name}
@@ -101,6 +116,7 @@ function AssetDetails({ asset }: { asset: AssetDetail }) {
         />
       )}
       <h2 className="select-text break-all text-sm font-medium">{name}</h2>
+      {editable && <Edits asset={asset} />}
       <dl className="space-y-3">
         {asset.capture_time && (
           <Field label={t("inspector.captureTime")}>
@@ -128,12 +144,16 @@ function AssetDetails({ asset }: { asset: AssetDetail }) {
             </span>
           </Field>
         )}
+        {!editable && asset.tags.length > 0 && (
+          <Field label={t("inspector.tags")}>{asset.tags.map((tag) => tag.name).join(", ")}</Field>
+        )}
         <Field label={t("inspector.files")}>
           <ul className="space-y-2">
             {asset.files.map((file) => (
               <li key={file.id}>
                 <span className="flex items-center gap-1.5 text-[11px] text-subtle-foreground">
-                  {t(`inspector.fileRole.${file.role}`)} · {formatBytes(file.size_bytes, i18n.language)}
+                  {t(`inspector.fileRole.${file.role}`)} ·{" "}
+                  {formatBytes(file.size_bytes, i18n.language)}
                   {file.status === "missing" && (
                     <span className="text-warning">· {t("inspector.fileMissing")}</span>
                   )}
@@ -156,6 +176,94 @@ function AssetDetails({ asset }: { asset: AssetDetail }) {
           </ul>
         </Field>
       </dl>
+    </div>
+  );
+}
+
+function Edits({ asset }: { asset: AssetDetail }) {
+  const { t } = useTranslation();
+  const update = useUpdateAsset();
+  const batch = useBatchUpdate();
+  const [notes, setNotes] = useState(asset.notes ?? "");
+  useEffect(() => setNotes(asset.notes ?? ""), [asset.id, asset.notes]);
+
+  const saveNotes = () => {
+    if (notes.trim() !== (asset.notes ?? "")) {
+      update.mutate({ id: asset.id, changes: { notes } });
+    }
+  };
+
+  return (
+    <div className="space-y-3 border-y py-3">
+      <div className="flex items-center justify-between">
+        <StarRating
+          value={asset.rating}
+          onChange={(rating) => update.mutate({ id: asset.id, changes: { rating } })}
+        />
+        <button
+          type="button"
+          aria-pressed={asset.is_favorite}
+          aria-label={t("inspector.favorite")}
+          title={`${t("inspector.favorite")} (F)`}
+          onClick={() =>
+            update.mutate({ id: asset.id, changes: { is_favorite: !asset.is_favorite } })
+          }
+          className="rounded p-1 hover:bg-accent"
+        >
+          <Heart
+            className={cn(
+              "size-4",
+              asset.is_favorite ? "fill-destructive text-destructive" : "text-subtle-foreground",
+            )}
+          />
+        </button>
+      </div>
+
+      <div>
+        <div className="mb-1.5 text-[11px] text-subtle-foreground">{t("inspector.tags")}</div>
+        {asset.tags.length > 0 && (
+          <ul className="mb-2 flex flex-wrap gap-1">
+            {asset.tags.map((tag) => (
+              <li
+                key={tag.id}
+                className="flex items-center gap-1 rounded bg-accent py-0.5 pl-2 pr-1 text-[11.5px]"
+                title={tag.source === "import" ? t("inspector.importedTag") : undefined}
+              >
+                {tag.name}
+                <button
+                  type="button"
+                  aria-label={t("inspector.removeTag", { name: tag.name })}
+                  onClick={() => batch.mutate({ asset_ids: [asset.id], remove_tag_ids: [tag.id] })}
+                  className="rounded p-0.5 text-subtle-foreground hover:bg-background/50 hover:text-foreground"
+                >
+                  <X className="size-3" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <TagInput
+          placeholder={t("inspector.addTag")}
+          onAdd={(name) => batch.mutate({ asset_ids: [asset.id], add_tags: [name] })}
+        />
+      </div>
+
+      <div>
+        <label htmlFor="asset-notes" className="mb-1.5 block text-[11px] text-subtle-foreground">
+          {t("inspector.notes")}
+        </label>
+        <textarea
+          id="asset-notes"
+          value={notes}
+          placeholder={t("inspector.notesPlaceholder")}
+          onChange={(event) => setNotes(event.target.value)}
+          onBlur={saveNotes}
+          onKeyDown={(event) => event.stopPropagation()}
+          rows={3}
+          maxLength={10_000}
+          className="w-full resize-y rounded-md border border-input bg-background/60 px-2.5 py-1.5 text-[12.5px] outline-none placeholder:text-subtle-foreground focus-visible:border-ring/70"
+        />
+      </div>
     </div>
   );
 }

@@ -156,7 +156,10 @@ def test_rescan_detects_moves_changes_and_missing_files(
     root_id = register(conn, runner, library)
     wait_idle(db)
     moved = file_row(conn, "IMG_0002.jpg")
-    conn.execute("UPDATE media_assets SET rating = 5 WHERE id = ?", (moved["asset_id"],))
+    conn.execute(  # as the API does for a user rating
+        "UPDATE media_assets SET rating = 5, rating_source = 'user' WHERE id = ?",
+        (moved["asset_id"],),
+    )
     changed = file_row(conn, "西湖 日落.jpg")
     removed = file_row(conn, "poster.png")
 

@@ -10,20 +10,30 @@ import sqlite3
 from pathlib import Path
 
 from lumen.core.errors import LumenError, NotFoundError
+from lumen.library.search import like_pattern, search_terms
 from lumen.media import thumbnails
 from lumen.media.fingerprint import fingerprint_digest
 from lumen.media.formats import format_for
 from lumen.schemas.assets import (
     AssetDetail,
+    AssetFacets,
     AssetFile,
     AssetLocation,
     AssetMetadata,
     AssetPage,
+    AssetQuery,
     AssetSummary,
+    AssetTag,
     DuplicateFile,
     DuplicateGroup,
     DuplicateReport,
+    FacetValue,
+    MapPoint,
+    MapPoints,
     RenditionVariant,
+    Tag,
+    Timeline,
+    TimelineBucket,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,48 +48,110 @@ def _version(fingerprint: str | None) -> str:
     return fingerprint_digest(fingerprint)[:16] if fingerprint else ""
 
 
-def _encode_cursor(capture_time: str, asset_id: int) -> str:
-    raw = json.dumps([capture_time, asset_id]).encode()
+# Every listable asset has a processed, present cover file and a capture time.
+_BASE_FROM = """
+    FROM media_assets a
+    JOIN media_files c ON c.id = a.cover_file_id
+         AND c.ingest_state = 'done' AND c.status = 'present'
+    LEFT JOIN media_metadata m ON m.file_id = c.id
+"""
+_BASE_WHERE = "a.capture_time IS NOT NULL"
+
+_ORDER = {
+    "capture_desc": ("a.capture_time DESC, a.id DESC", "(a.capture_time, a.id) < (?, ?)"),
+    "capture_asc": ("a.capture_time ASC, a.id ASC", "(a.capture_time, a.id) > (?, ?)"),
+    "added_desc": ("a.id DESC", "a.id < ?"),
+}
+
+
+def _filters(query: AssetQuery) -> tuple[list[str], list[object]]:
+    """WHERE clauses (ANDed) and their parameters for an asset query."""
+    clauses = [_BASE_WHERE]
+    params: list[object] = []
+    for term in search_terms(query.q or ""):
+        clauses.append(r"a.id IN (SELECT rowid FROM asset_search WHERE body LIKE ? ESCAPE '\')")
+        params.append(like_pattern(term))
+    if query.media_type:
+        clauses.append("a.media_type = ?")
+        params.append(query.media_type)
+    if query.min_rating is not None:
+        clauses.append("a.rating >= ?")
+        params.append(query.min_rating)
+    if query.favorite is not None:
+        clauses.append("a.is_favorite = ?")
+        params.append(int(query.favorite))
+    if query.camera:
+        clauses.append("m.camera_model = ?")
+        params.append(query.camera)
+    if query.lens:
+        clauses.append("m.lens_model = ?")
+        params.append(query.lens)
+    if query.format:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM media_files f WHERE f.asset_id = a.id "
+            "AND f.extension = ? AND f.file_role != 'sidecar')"
+        )
+        params.append(query.format.lower().lstrip("."))
+    if query.storage_root_id is not None:
+        clauses.append("c.storage_root_id = ?")
+        params.append(query.storage_root_id)
+    for tag_id in query.tag_id:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM media_tags mt WHERE mt.asset_id = a.id AND mt.tag_id = ?)"
+        )
+        params.append(tag_id)
+    if query.date_from:
+        clauses.append("a.capture_time >= ?")
+        params.append(query.date_from)
+    if query.date_to:
+        clauses.append("a.capture_time < ?")
+        params.append(query.date_to)
+    if query.has_location is not None:
+        clauses.append(
+            ("" if query.has_location else "NOT ")
+            + "EXISTS (SELECT 1 FROM media_locations l WHERE l.asset_id = a.id)"
+        )
+    return clauses, params
+
+
+def _encode_cursor(sort: str, row: sqlite3.Row) -> str:
+    key = [row["id"]] if sort == "added_desc" else [row["capture_time"], row["id"]]
+    raw = json.dumps([sort, *key]).encode()
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
 
-def _decode_cursor(cursor: str) -> tuple[str, int]:
+def _decode_cursor(cursor: str, sort: str) -> list[object]:
     try:
         padded = cursor + "=" * (-len(cursor) % 4)
-        capture_time, asset_id = json.loads(base64.urlsafe_b64decode(padded))
-        return str(capture_time), int(asset_id)
+        cursor_sort, *key = json.loads(base64.urlsafe_b64decode(padded))
     except (ValueError, TypeError) as exc:
         raise LumenError("Invalid cursor") from exc
+    if cursor_sort != sort or len(key) != (1 if sort == "added_desc" else 2):
+        raise LumenError("Cursor does not match the requested sort order")
+    return list(key)
 
 
 def list_assets(
-    conn: sqlite3.Connection, *, storage_root_id: int | None, cursor: str | None, limit: int
+    conn: sqlite3.Connection, query: AssetQuery, *, cursor: str | None, limit: int
 ) -> AssetPage:
-    """Assets with a rendered cover, newest capture first (keyset pagination)."""
-    clauses = ["a.capture_time IS NOT NULL"]
-    params: list[object] = []
-    if storage_root_id is not None:
-        clauses.append("c.storage_root_id = ?")
-        params.append(storage_root_id)
+    """Assets matching the filters, in the requested order (keyset pagination)."""
+    clauses, params = _filters(query)
+    order, after = _ORDER[query.sort]
     if cursor:
-        capture_time, asset_id = _decode_cursor(cursor)
-        clauses.append("(a.capture_time, a.id) < (?, ?)")
-        params.extend([capture_time, asset_id])
+        clauses.append(after)
+        params.extend(_decode_cursor(cursor, query.sort))
 
     rows = conn.execute(
         f"""
         SELECT a.id, a.media_type, a.capture_time, a.rating, a.is_favorite,
-               c.file_name, c.fingerprint, m.width, m.height, m.duration_ms,
+               c.file_name, c.extension, c.fingerprint, m.width, m.height, m.duration_ms,
                (SELECT GROUP_CONCAT(ext, ',') FROM (
                     SELECT DISTINCT UPPER(f.extension) AS ext FROM media_files f
                     WHERE f.asset_id = a.id AND f.file_role != 'sidecar' ORDER BY ext
                )) AS formats
-        FROM media_assets a
-        JOIN media_files c ON c.id = a.cover_file_id
-             AND c.ingest_state = 'done' AND c.status = 'present'
-        LEFT JOIN media_metadata m ON m.file_id = c.id
+        {_BASE_FROM}
         WHERE {" AND ".join(clauses)}
-        ORDER BY a.capture_time DESC, a.id DESC
+        ORDER BY {order}
         LIMIT ?
         """,
         (*params, limit + 1),
@@ -93,19 +165,132 @@ def list_assets(
             rating=row["rating"],
             is_favorite=bool(row["is_favorite"]),
             file_name=row["file_name"],
-            formats=(row["formats"] or "").split(",") if row["formats"] else [],
+            formats=row["formats"].split(",") if row["formats"] else [],
             width=row["width"],
             height=row["height"],
             duration_ms=row["duration_ms"],
+            cover_extension=row["extension"],
             rendition_version=_version(row["fingerprint"]),
         )
         for row in rows[:limit]
     ]
-    next_cursor = None
-    if len(rows) > limit:
-        last = rows[limit - 1]
-        next_cursor = _encode_cursor(last["capture_time"], int(last["id"]))
+    next_cursor = _encode_cursor(query.sort, rows[limit - 1]) if len(rows) > limit else None
     return AssetPage(items=items, next_cursor=next_cursor)
+
+
+def list_asset_ids(conn: sqlite3.Connection, query: AssetQuery, *, limit: int) -> list[int]:
+    """All matching ids (for "select all"), in display order."""
+    clauses, params = _filters(query)
+    order, _ = _ORDER[query.sort]
+    rows = conn.execute(
+        f"SELECT a.id {_BASE_FROM} WHERE {' AND '.join(clauses)} ORDER BY {order} LIMIT ?",
+        (*params, limit),
+    )
+    return [int(row[0]) for row in rows]
+
+
+def timeline(conn: sqlite3.Connection, query: AssetQuery, granularity: str) -> Timeline:
+    length = {"year": 4, "month": 7, "day": 10}[granularity]
+    clauses, params = _filters(query)
+    rows = conn.execute(
+        f"""
+        SELECT substr(a.capture_time, 1, {length}) AS period, COUNT(*) AS count
+        {_BASE_FROM}
+        WHERE {" AND ".join(clauses)}
+        GROUP BY period
+        ORDER BY period DESC
+        """,
+        params,
+    )
+    return Timeline(
+        granularity=granularity,  # type: ignore[arg-type]
+        buckets=[TimelineBucket(period=row["period"], count=row["count"]) for row in rows],
+    )
+
+
+def map_points(conn: sqlite3.Connection, query: AssetQuery, *, limit: int) -> MapPoints:
+    clauses, params = _filters(query)
+    rows = conn.execute(
+        f"""
+        SELECT a.id, l.latitude, l.longitude, c.fingerprint
+        {_BASE_FROM}
+        JOIN media_locations l ON l.asset_id = a.id
+        WHERE {" AND ".join(clauses)}
+        ORDER BY a.capture_time DESC
+        LIMIT ?
+        """,
+        (*params, limit),
+    )
+    return MapPoints(
+        points=[MapPoint(id=row[0], lat=row[1], lon=row[2], v=_version(row[3])) for row in rows]
+    )
+
+
+def facets(conn: sqlite3.Connection) -> AssetFacets:
+    """Values available for filtering, with counts, over the whole library."""
+    where = f"WHERE {_BASE_WHERE}"
+    totals = conn.execute(
+        f"""
+        SELECT COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE a.media_type = 'photo') AS photos,
+               COUNT(*) FILTER (WHERE a.media_type = 'video') AS videos,
+               COUNT(*) FILTER (WHERE a.is_favorite = 1) AS favorites,
+               COUNT(*) FILTER (WHERE EXISTS (
+                   SELECT 1 FROM media_locations l WHERE l.asset_id = a.id)) AS with_location
+        {_BASE_FROM} {where}
+        """
+    ).fetchone()
+
+    def grouped(expression: str, limit: int = 200) -> list[FacetValue]:
+        rows = conn.execute(
+            f"""
+            SELECT {expression} AS value, COUNT(*) AS count {_BASE_FROM}
+            {where} AND {expression} IS NOT NULL AND {expression} != ''
+            GROUP BY value ORDER BY count DESC, value LIMIT ?
+            """,
+            (limit,),
+        )
+        return [FacetValue(value=str(row["value"]), count=row["count"]) for row in rows]
+
+    formats = conn.execute(
+        f"""
+        SELECT UPPER(f.extension) AS value, COUNT(DISTINCT a.id) AS count
+        {_BASE_FROM}
+        JOIN media_files f ON f.asset_id = a.id AND f.file_role != 'sidecar'
+        {where}
+        GROUP BY value ORDER BY count DESC
+        """
+    )
+    years = conn.execute(
+        f"""
+        SELECT substr(a.capture_time, 1, 4) AS value, COUNT(*) AS count
+        {_BASE_FROM} {where} GROUP BY value ORDER BY value DESC
+        """
+    )
+    return AssetFacets(
+        total=totals["total"],
+        photos=totals["photos"],
+        videos=totals["videos"],
+        favorites=totals["favorites"],
+        with_location=totals["with_location"],
+        cameras=grouped("m.camera_model"),
+        lenses=grouped("m.lens_model"),
+        formats=[FacetValue(value=r["value"], count=r["count"]) for r in formats],
+        years=[FacetValue(value=r["value"], count=r["count"]) for r in years],
+        tags=list_tags(conn),
+    )
+
+
+def list_tags(conn: sqlite3.Connection) -> list[Tag]:
+    rows = conn.execute(
+        """
+        SELECT t.id, t.name, COUNT(mt.asset_id) AS asset_count
+        FROM tags t LEFT JOIN media_tags mt ON mt.tag_id = t.id
+        GROUP BY t.id
+        ORDER BY t.name_key
+        """
+    )
+    return [Tag(id=r["id"], name=r["name"], asset_count=r["asset_count"]) for r in rows]
 
 
 def _file_rows(conn: sqlite3.Connection, asset_id: int) -> list[sqlite3.Row]:
@@ -151,7 +336,17 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
         capture_time=asset["capture_time"],
         rating=asset["rating"],
         is_favorite=bool(asset["is_favorite"]),
+        rating_source=asset["rating_source"],
         notes=asset["notes"],
+        tags=[
+            AssetTag(id=t["id"], name=t["name"], source=t["source"])
+            for t in conn.execute(
+                "SELECT t.id, t.name, mt.source FROM media_tags mt "
+                "JOIN tags t ON t.id = mt.tag_id WHERE mt.asset_id = ? ORDER BY t.name_key",
+                (asset_id,),
+            )
+        ],
+        cover_file_id=asset["cover_file_id"],
         rendition_version=_version(cover["fingerprint"]) if cover else None,
         metadata=metadata,
         location=AssetLocation(
@@ -260,3 +455,23 @@ def find_duplicates(conn: sqlite3.Connection, *, limit: int) -> DuplicateReport:
         )
         reclaimable += int(group["size_bytes"]) * (int(group["copies"]) - 1)
     return DuplicateReport(groups=groups, reclaimable_bytes=reclaimable)
+
+
+def original_file(conn: sqlite3.Connection, asset_id: int) -> tuple[Path, str]:
+    """The cover file on disk (for video playback and 1:1 viewing) and its MIME type."""
+    row = conn.execute(
+        """
+        SELECT c.relative_path, c.mime_type, c.status, r.path AS root_path
+        FROM media_assets a
+        JOIN media_files c ON c.id = a.cover_file_id
+        JOIN storage_roots r ON r.id = c.storage_root_id
+        WHERE a.id = ?
+        """,
+        (asset_id,),
+    ).fetchone()
+    if row is None:
+        raise NotFoundError("Asset not found", details={"id": asset_id})
+    path = Path(row["root_path"]) / row["relative_path"]
+    if row["status"] != "present" or not path.is_file():
+        raise NotFoundError("Original file is not available", details={"id": asset_id})
+    return path, row["mime_type"] or "application/octet-stream"

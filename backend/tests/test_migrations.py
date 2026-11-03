@@ -17,13 +17,17 @@ EXPECTED_TABLES = {
     "tasks",
     "app_settings",
     "media_locations",
+    "tags",
+    "media_tags",
+    "asset_search",
     "schema_migrations",
 }
 
 
 def _tables(conn: sqlite3.Connection) -> set[str]:
     rows = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "
+        "AND name NOT LIKE 'asset_search_%'"  # FTS5 shadow tables
     )
     return {row[0] for row in rows}
 

@@ -8,14 +8,30 @@ import { useEffect, useRef } from "react";
 
 import { useBackendStatus } from "./backend-context";
 import { api, type BackendConnection } from "./client";
-import type { StorageRootCreate, Task } from "./types";
+import type { AssetQuery } from "./query";
+import type {
+  AppSettingsUpdate,
+  AssetBatchUpdate,
+  AssetDetail,
+  AssetUpdate,
+  StorageRootCreate,
+  Task,
+} from "./types";
 
+/** Everything under `library` derives from assets and is refreshed together. */
 export const queryKeys = {
   health: ["health"] as const,
   storageRoots: ["storage-roots"] as const,
   tasks: ["tasks", "active"] as const,
-  assets: ["assets"] as const,
-  asset: (id: number) => ["asset", id] as const,
+  settings: ["settings"] as const,
+  library: ["library"] as const,
+  assets: (query: AssetQuery) => ["library", "assets", query] as const,
+  facets: ["library", "facets"] as const,
+  tags: ["library", "tags"] as const,
+  timeline: (query: AssetQuery, granularity: string) =>
+    ["library", "timeline", granularity, query] as const,
+  map: (query: AssetQuery) => ["library", "map", query] as const,
+  asset: (id: number) => ["library", "asset", id] as const,
 };
 
 const ASSET_PAGE_SIZE = 300;
@@ -73,7 +89,7 @@ export function useDeleteStorageRoot() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.storageRoots });
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.assets });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.library });
     },
   });
 }
@@ -139,7 +155,7 @@ export function useLibraryRefresh() {
   useEffect(() => {
     if (scans === undefined) return;
     if (lastScans.current !== null && lastScans.current !== scans) {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.assets });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.library });
     }
     lastScans.current = scans;
   }, [scans, queryClient]);
@@ -152,21 +168,22 @@ export function useLibraryRefresh() {
     }
     if ((active && now - lastGridRefresh.current > 4000) || (!active && wasActive.current)) {
       lastGridRefresh.current = now;
-      void queryClient.invalidateQueries({ queryKey: queryKeys.assets });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.library });
     }
     wasActive.current = active;
   }, [tasks.data, active, queryClient]);
 }
 
-export function useAssets() {
+export function useAssets(query: AssetQuery) {
   const conn = useConnection();
   return useInfiniteQuery({
-    queryKey: queryKeys.assets,
+    queryKey: queryKeys.assets(query),
     queryFn: ({ pageParam }) =>
-      api.listAssets(requireConnection(conn), { cursor: pageParam, limit: ASSET_PAGE_SIZE }),
+      api.listAssets(requireConnection(conn), query, { cursor: pageParam, limit: ASSET_PAGE_SIZE }),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.next_cursor,
     enabled: conn !== null,
+    placeholderData: (previous) => previous,
   });
 }
 
@@ -176,5 +193,91 @@ export function useAsset(id: number | null) {
     queryKey: queryKeys.asset(id ?? 0),
     queryFn: () => api.getAsset(requireConnection(conn), id!),
     enabled: conn !== null && id !== null,
+  });
+}
+
+export function useFacets() {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.facets,
+    queryFn: () => api.getFacets(requireConnection(conn)),
+    enabled: conn !== null,
+  });
+}
+
+export function useTimeline(query: AssetQuery, granularity: "year" | "month" | "day") {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.timeline(query, granularity),
+    queryFn: () => api.getTimeline(requireConnection(conn), query, granularity),
+    enabled: conn !== null,
+  });
+}
+
+export function useMapPoints(query: AssetQuery) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.map(query),
+    queryFn: () => api.getMapPoints(requireConnection(conn), query),
+    enabled: conn !== null,
+  });
+}
+
+export function useTags() {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.tags,
+    queryFn: () => api.listTags(requireConnection(conn)),
+    enabled: conn !== null,
+  });
+}
+
+/** Edit one asset; the detail view updates immediately, lists refresh afterwards. */
+export function useUpdateAsset() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, changes }: { id: number; changes: AssetUpdate }) =>
+      api.updateAsset(requireConnection(conn), id, changes),
+    onSuccess: (detail: AssetDetail) => {
+      queryClient.setQueryData(queryKeys.asset(detail.id), detail);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.library,
+        predicate: (query) => query.queryKey[1] !== "asset",
+      });
+    },
+  });
+}
+
+export function useBatchUpdate() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AssetBatchUpdate) => api.batchUpdate(requireConnection(conn), body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.library }),
+  });
+}
+
+/** Ids of every asset matching a query (for "select all"). */
+export function useSelectAll() {
+  const conn = useConnection();
+  return async (query: AssetQuery) => (await api.listAssetIds(requireConnection(conn), query)).ids;
+}
+
+export function useSettings() {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: () => api.getSettings(requireConnection(conn)),
+    enabled: conn !== null,
+  });
+}
+
+export function useUpdateSettings() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AppSettingsUpdate) => api.updateSettings(requireConnection(conn), body),
+    onSuccess: (settings) => queryClient.setQueryData(queryKeys.settings, settings),
   });
 }

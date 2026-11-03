@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useBackendStatus } from "@/api/backend-context";
-import { useHealth } from "@/api/hooks";
+import { useHealth, useSettings, useUpdateSettings } from "@/api/hooks";
 import { LANGUAGES, setLanguage, type LanguageCode } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +10,9 @@ export function SettingsPage() {
   const { t, i18n } = useTranslation();
   const backend = useBackendStatus();
   const health = useHealth();
+  const settings = useSettings();
+  const updateSettings = useUpdateSettings();
+  const online = settings.data?.map_online_tiles ?? false;
 
   const backendLabel =
     backend.state === "failed"
@@ -46,6 +49,24 @@ export function SettingsPage() {
           })}
         </div>
         <p className="mt-2 text-xs text-subtle-foreground">{t("settings.languageHint")}</p>
+      </Section>
+
+      <Section title={t("settings.map")}>
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            checked={online}
+            disabled={!settings.data || updateSettings.isPending}
+            onChange={(event) => updateSettings.mutate({ map_online_tiles: event.target.checked })}
+            className="mt-0.5 size-4 accent-[var(--highlight)]"
+          />
+          <span>
+            <span className="block text-[13px]">{t("settings.mapOnline")}</span>
+            <span className="mt-1 block max-w-lg text-xs leading-relaxed text-subtle-foreground">
+              {t("settings.mapOnlineHint")}
+            </span>
+          </span>
+        </label>
       </Section>
 
       <Section title={t("settings.about")}>

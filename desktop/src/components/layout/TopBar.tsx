@@ -8,11 +8,21 @@ import { Tooltip } from "@/components/ui/tooltip";
 
 interface TopBarProps {
   searchRef: Ref<HTMLInputElement>;
+  search: string;
+  onSearchChange: (value: string) => void;
+  onSearchSubmit: () => void;
   inspectorOpen: boolean;
   onToggleInspector: () => void;
 }
 
-export function TopBar({ searchRef, inspectorOpen, onToggleInspector }: TopBarProps) {
+export function TopBar({
+  searchRef,
+  search,
+  onSearchChange,
+  onSearchSubmit,
+  inspectorOpen,
+  onToggleInspector,
+}: TopBarProps) {
   const { t } = useTranslation();
   return (
     <header className="flex h-11 shrink-0 items-center gap-3 border-b bg-surface pr-2">
@@ -29,6 +39,15 @@ export function TopBar({ searchRef, inspectorOpen, onToggleInspector }: TopBarPr
           type="search"
           aria-label={t("topbar.searchPlaceholder")}
           placeholder={t("topbar.searchPlaceholder")}
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") onSearchSubmit();
+            if (event.key === "Escape") {
+              onSearchChange("");
+              event.currentTarget.blur();
+            }
+          }}
           className="h-7 bg-background/70 pl-8 pr-16"
         />
         <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border px-1.5 font-sans text-[10px] text-subtle-foreground">

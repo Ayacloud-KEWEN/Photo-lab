@@ -1,12 +1,41 @@
 from __future__ import annotations
 
+import re
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 MediaType = Literal["photo", "video"]
+AssetSort = Literal["capture_desc", "capture_asc", "added_desc"]
 FileRole = Literal["primary", "companion", "sidecar"]
 RenditionVariant = Literal["thumb", "preview"]
+
+
+class AssetQuery(BaseModel):
+    """Filters shared by the asset list, ids, timeline and map endpoints."""
+
+    q: str | None = Field(default=None, max_length=200, description="Text search (substring)")
+    media_type: MediaType | None = None
+    min_rating: int | None = Field(default=None, ge=0, le=5)
+    favorite: bool | None = None
+    camera: str | None = Field(default=None, max_length=200, description="Camera model")
+    lens: str | None = Field(default=None, max_length=200)
+    format: str | None = Field(default=None, max_length=10, description="File extension, e.g. CR3")
+    storage_root_id: int | None = Field(default=None, ge=1)
+    tag_id: list[int] = Field(default_factory=list, description="Assets having all these tags")
+    date_from: str | None = Field(default=None, description="Inclusive, YYYY-MM-DD[THH:MM:SS]")
+    date_to: str | None = Field(default=None, description="Exclusive, YYYY-MM-DD[THH:MM:SS]")
+    has_location: bool | None = None
+    sort: AssetSort = "capture_desc"
+
+    @field_validator("date_from", "date_to")
+    @classmethod
+    def _iso_prefix(cls, value: str | None) -> str | None:
+        if value is not None and not re.fullmatch(
+            r"\d{4}(-\d{2}(-\d{2}(T\d{2}:\d{2}(:\d{2})?)?)?)?", value
+        ):
+            raise ValueError("expected YYYY[-MM[-DD[THH:MM[:SS]]]]")
+        return value
 
 
 class AssetSummary(BaseModel):
@@ -20,6 +49,7 @@ class AssetSummary(BaseModel):
     width: int | None
     height: int | None
     duration_ms: int | None
+    cover_extension: str = Field(description="Lower-case extension of the cover file")
     rendition_version: str = Field(
         description="Changes whenever the cover's content changes; use as cache-buster"
     )
@@ -28,6 +58,83 @@ class AssetSummary(BaseModel):
 class AssetPage(BaseModel):
     items: list[AssetSummary]
     next_cursor: str | None
+
+
+class AssetIds(BaseModel):
+    ids: list[int]
+
+
+class Tag(BaseModel):
+    id: int
+    name: str
+    asset_count: int = 0
+
+
+class AssetTag(BaseModel):
+    id: int
+    name: str
+    source: Literal["user", "import"]
+
+
+class AssetUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rating: int | None = Field(default=None, ge=0, le=5)
+    is_favorite: bool | None = None
+    notes: str | None = Field(default=None, max_length=10_000, description="Empty string clears")
+
+
+class AssetBatchUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    asset_ids: list[int] = Field(min_length=1, max_length=100_000)
+    rating: int | None = Field(default=None, ge=0, le=5)
+    is_favorite: bool | None = None
+    add_tags: list[str] = Field(default_factory=list, max_length=50, description="Tag names")
+    remove_tag_ids: list[int] = Field(default_factory=list, max_length=50)
+
+
+class BatchResult(BaseModel):
+    updated: int
+
+
+class FacetValue(BaseModel):
+    value: str
+    count: int
+
+
+class AssetFacets(BaseModel):
+    total: int
+    photos: int
+    videos: int
+    favorites: int
+    with_location: int
+    cameras: list[FacetValue]
+    lenses: list[FacetValue]
+    formats: list[FacetValue]
+    years: list[FacetValue]
+    tags: list[Tag]
+
+
+class TimelineBucket(BaseModel):
+    period: str = Field(description="YYYY, YYYY-MM or YYYY-MM-DD")
+    count: int
+
+
+class Timeline(BaseModel):
+    granularity: Literal["year", "month", "day"]
+    buckets: list[TimelineBucket]
+
+
+class MapPoint(BaseModel):
+    id: int
+    lat: float
+    lon: float
+    v: str = Field(description="Rendition version (for thumbnail URLs)")
+
+
+class MapPoints(BaseModel):
+    points: list[MapPoint]
 
 
 class AssetFile(BaseModel):
@@ -73,7 +180,10 @@ class AssetDetail(BaseModel):
     capture_time: str | None
     rating: int
     is_favorite: bool
+    rating_source: Literal["import", "user"] | None
     notes: str | None
+    tags: list[AssetTag]
+    cover_file_id: int | None = Field(description="File shown as thumbnail and by /original")
     rendition_version: str | None
     metadata: AssetMetadata
     location: AssetLocation | None

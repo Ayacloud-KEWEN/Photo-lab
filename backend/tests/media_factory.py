@@ -101,6 +101,21 @@ def make_video(
     return path
 
 
+def make_xmp(*, rating: int, keywords: list[str]) -> str:
+    """An XMP sidecar as written by Lightroom (rating + keywords)."""
+    items = "".join(f"<rdf:li>{keyword}</rdf:li>" for keyword in keywords)
+    return (
+        '<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>\n'
+        '<x:xmpmeta xmlns:x="adobe:ns:meta/">'
+        '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+        '<rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" '
+        f'xmlns:dc="http://purl.org/dc/elements/1.1/" xmp:Rating="{rating}">'
+        f"<dc:subject><rdf:Bag>{items}</rdf:Bag></dc:subject>"
+        "</rdf:Description></rdf:RDF></x:xmpmeta>\n"
+        '<?xpacket end="w"?>'
+    )
+
+
 def make_sample_library(root: Path) -> dict[str, Path]:
     """A small library exercising pairing, sidecars, duplicates, Unicode names and video."""
     files = {
@@ -123,7 +138,7 @@ def make_sample_library(root: Path) -> dict[str, Path]:
     files["duplicate"] = duplicate
     # An XMP sidecar next to a photo.
     sidecar = root / "2024" / "05" / "IMG_0002.xmp"
-    sidecar.write_text('<x:xmpmeta xmlns:x="adobe:ns:meta/"></x:xmpmeta>', encoding="utf-8")
+    sidecar.write_text(make_xmp(rating=4, keywords=["旅行", "Landscape"]), encoding="utf-8")
     files["sidecar"] = sidecar
     # Ignored: unsupported type and hidden folder.
     (root / "notes.txt").write_text("not media", encoding="utf-8")

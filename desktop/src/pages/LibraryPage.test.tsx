@@ -1,13 +1,9 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { StaticBackendProvider } from "@/api/backend-context";
-import type { AssetSummary, StorageRoot } from "@/api/types";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import type { BackendStatus } from "@/lib/backend";
+import { fakeViewport, makeAsset, Providers, root, stubBackend } from "@/test/backend";
 
 import { LibraryPage } from "./LibraryPage";
 
@@ -16,69 +12,14 @@ vi.mock("@/lib/dialogs", () => ({
   confirmAction: vi.fn(() => Promise.resolve(true)),
 }));
 
-const ready: BackendStatus = { state: "ready", baseUrl: "http://127.0.0.1:1", token: "t" };
-
-const root: StorageRoot = {
-  id: 7,
-  path: "D:\\Photos",
-  display_name: "Photos",
-  status: "pending_scan",
-  is_available: true,
-  volume_serial: "1234ABCD",
-  volume_label: "Data",
-  last_scanned_at: null,
-  created_at: "2026-11-03T08:00:00.000Z",
-  updated_at: "2026-11-03T08:00:00.000Z",
-  stats: { file_count: 0, asset_count: 0, pending_count: 0, error_count: 0, missing_count: 0 },
-};
-
-const asset: AssetSummary = {
-  id: 42,
-  media_type: "video",
-  capture_time: "2024-06-01T09:30:00",
-  rating: 0,
-  is_favorite: false,
-  file_name: "clip.mp4",
-  formats: ["MP4"],
-  width: 320,
-  height: 240,
-  duration_ms: 65_000,
-  rendition_version: "abc123",
-};
-
-function renderPage(status: BackendStatus = ready) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderPage(status?: BackendStatus) {
   const onSelect = vi.fn();
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <StaticBackendProvider value={status}>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>{children}</TooltipProvider>
-      </QueryClientProvider>
-    </StaticBackendProvider>
+  render(
+    <Providers {...(status ? { status } : {})}>
+      <LibraryPage selection={null} onSelect={onSelect} />
+    </Providers>,
   );
-  render(<LibraryPage selection={null} onSelect={onSelect} />, { wrapper });
   return { onSelect };
-}
-
-/** Minimal in-memory backend for the endpoints the library page uses. */
-function stubBackend(initial: StorageRoot[], assets: AssetSummary[] = []) {
-  let roots = [...initial];
-  const fetch = vi.fn((url: string, init?: RequestInit) => {
-    const method = init?.method ?? "GET";
-    if (url.includes("/tasks")) return Promise.resolve(Response.json({ items: [] }));
-    if (url.includes("/assets")) {
-      return Promise.resolve(Response.json({ items: assets, next_cursor: null }));
-    }
-    if (method === "GET") return Promise.resolve(Response.json({ items: roots }));
-    if (method === "POST") {
-      roots = [...roots, root];
-      return Promise.resolve(Response.json(root, { status: 201 }));
-    }
-    roots = roots.filter((r) => !url.endsWith(`/${r.id}`));
-    return Promise.resolve(new Response(null, { status: 204 }));
-  });
-  vi.stubGlobal("fetch", fetch);
-  return fetch;
 }
 
 afterEach(() => {
@@ -88,48 +29,86 @@ afterEach(() => {
 
 describe("LibraryPage", () => {
   it("shows the empty state and registers a picked folder", async () => {
-    const fetch = stubBackend([]);
+    const { requests } = stubBackend();
     const { onSelect } = renderPage();
 
     const button = await screen.findByRole("button", { name: "选择照片文件夹" });
     expect(screen.getByText("开始建立你的照片库")).toBeInTheDocument();
-
     await userEvent.click(button);
 
     await waitFor(() => expect(onSelect).toHaveBeenCalledWith({ kind: "root", id: 7 }));
-    expect(fetch).toHaveBeenCalledWith(
-      "http://127.0.0.1:1/api/v1/storage-roots",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ path: "D:\\Photos" }) }),
-    );
+    const post = requests.find((r) => r.method === "POST");
+    expect(post?.url.pathname).toBe("/api/v1/storage-roots");
+    expect(post?.body).toEqual({ path: "D:\\Photos" });
     expect(await screen.findByText("D:\\Photos")).toBeInTheDocument();
     expect(screen.getByText("等待扫描")).toBeInTheDocument();
   });
 
   it("removes a folder after confirmation", async () => {
-    stubBackend([root]);
+    stubBackend({ roots: [root] });
     renderPage();
-
     await userEvent.click(await screen.findByRole("button", { name: "移除 Photos" }));
-
     expect(await screen.findByText("开始建立你的照片库")).toBeInTheDocument();
   });
 
-  it("shows processed media in the grid", async () => {
-    stubBackend([{ ...root, status: "ready" }], [asset]);
-    // jsdom does no layout; the virtualizer needs a viewport to render rows.
-    vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(800);
-    vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(600);
+  it("shows media, selects with click, ctrl+click and shift+click", async () => {
+    stubBackend({
+      roots: [{ ...root, status: "ready" }],
+      assets: [1, 2, 3, 4].map((id) => makeAsset(id)),
+    });
+    fakeViewport();
     const { onSelect } = renderPage();
 
-    const image = await screen.findByRole("img", { name: "clip.mp4" });
-    const src = new URL(image.getAttribute("src")!);
-    expect(src.pathname).toBe("/api/v1/assets/42/thumbnail");
-    expect(src.searchParams.get("v")).toBe("abc123");
-    expect(src.searchParams.get("token")).toBe("t");
-    expect(screen.getByText("1:05")).toBeInTheDocument();
+    const first = await screen.findByRole("img", { name: "IMG_1.JPG" });
+    expect(new URL(first.getAttribute("src")!).searchParams.get("token")).toBe("t");
+    expect(screen.getByText("4 项")).toBeInTheDocument();
 
-    await userEvent.click(image);
-    expect(onSelect).toHaveBeenCalledWith({ kind: "asset", id: 42 });
+    await userEvent.click(first);
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith({ kind: "asset", id: 1 }));
+    fireEvent.click(screen.getByRole("img", { name: "IMG_3.JPG" }), { shiftKey: true });
+    expect(await screen.findByText("已选择 3 项")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("img", { name: "IMG_2.JPG" }), { ctrlKey: true });
+    expect(await screen.findByText("已选择 2 项")).toBeInTheDocument();
+  });
+
+  it("rates the selection from the keyboard and selects all with Ctrl+A", async () => {
+    const { requests } = stubBackend({
+      roots: [{ ...root, status: "ready" }],
+      assets: [1, 2, 3].map((id) => makeAsset(id)),
+    });
+    fakeViewport();
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("img", { name: "IMG_2.JPG" }));
+    const wall = screen.getByRole("grid");
+    fireEvent.keyDown(wall, { key: "4" });
+    await waitFor(() =>
+      expect(requests.find((r) => r.url.pathname === "/api/v1/assets/batch")?.body).toEqual({
+        asset_ids: [2],
+        rating: 4,
+      }),
+    );
+
+    fireEvent.keyDown(wall, { key: "a", ctrlKey: true });
+    expect(await screen.findByText("已选择 3 项")).toBeInTheDocument();
+    fireEvent.keyDown(wall, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByText("已选择 3 项")).not.toBeInTheDocument());
+  });
+
+  it("filters by media type", async () => {
+    const { requests } = stubBackend({
+      roots: [{ ...root, status: "ready" }],
+      assets: [makeAsset(1)],
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("radio", { name: "视频" }));
+    await waitFor(() =>
+      expect(
+        requests.some(
+          (r) => r.url.pathname === "/api/v1/assets" && r.url.searchParams.get("media_type") === "video",
+        ),
+      ).toBe(true),
+    );
   });
 
   it("explains when the backend failed to start", () => {

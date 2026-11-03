@@ -48,6 +48,11 @@ EXIFTOOL_TAGS = [
     "Composite:GPSLongitude",
     "Composite:GPSAltitude",
     "QuickTime:Duration",
+    # Read-only imports of other tools' work (Lightroom, Bridge, Windows Photos).
+    "XMP:Rating",
+    "EXIF:Rating",
+    "XMP:Subject",
+    "IPTC:Keywords",
 ]
 
 
@@ -70,6 +75,8 @@ class Metadata:
     altitude_m: float | None = None
     video_codec: str | None = None
     frame_rate: float | None = None
+    keywords: list[str] = field(default_factory=list)
+    xmp_rating: int | None = None  # -1 = rejected, 0..5 stars
     raw: dict[str, Any] = field(default_factory=dict)
 
     def raw_json(self) -> str:
@@ -141,6 +148,26 @@ def _wall_clock(moment: datetime) -> str:
 def _utc_to_local_wall_clock(moment: datetime) -> str:
     aware = moment if moment.tzinfo else moment.replace(tzinfo=UTC)
     return _wall_clock(aware.astimezone())
+
+
+def _keywords(record: Mapping[str, Any]) -> list[str]:
+    seen: dict[str, str] = {}
+    for key in ("XMP:Subject", "IPTC:Keywords"):
+        value = record.get(key)
+        values = value if isinstance(value, list) else [value] if value is not None else []
+        for item in values:
+            text = _text(item)
+            if text and len(text) <= 100:
+                seen.setdefault(text.casefold(), text)
+    return list(seen.values())
+
+
+def _rating(record: Mapping[str, Any]) -> int | None:
+    for key in ("XMP:Rating", "EXIF:Rating"):
+        value = _number(record.get(key))
+        if value is not None and -1 <= value <= 5:
+            return int(value)
+    return None
 
 
 def _capture_time(record: Mapping[str, Any]) -> str | None:
@@ -218,6 +245,8 @@ def parse_exiftool(record: Mapping[str, Any]) -> Metadata:
         latitude=latitude,
         longitude=longitude,
         altitude_m=_number(record.get("Composite:GPSAltitude")) if latitude is not None else None,
+        keywords=_keywords(record),
+        xmp_rating=_rating(record),
         raw={k: v for k, v in record.items() if k != "SourceFile"},
     )
 

@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import { BackendProvider } from "@/api/backend-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "@/i18n";
+import { LibraryStateProvider } from "@/library/state";
 import "@/styles/globals.css";
 
 import App from "./App";
@@ -20,7 +21,9 @@ createRoot(document.getElementById("root")!).render(
     <BackendProvider>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider delayDuration={400}>
-          <App />
+          <LibraryStateProvider>
+            <App />
+          </LibraryStateProvider>
         </TooltipProvider>
       </QueryClientProvider>
     </BackendProvider>

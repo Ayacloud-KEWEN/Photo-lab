@@ -1,17 +1,26 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import { useLibraryRefresh } from "@/api/hooks";
 import { Inspector } from "@/components/layout/Inspector";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { StatusBar } from "@/components/layout/StatusBar";
 import { TopBar } from "@/components/layout/TopBar";
+import { Viewer } from "@/components/viewer/Viewer";
+import { cleanQuery, useLibraryState } from "@/library/state";
 import { ALL_NAV, MAIN_NAV, type PageId } from "@/navigation";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { PlaceholderPage } from "@/pages/PlaceholderPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { TimelinePage } from "@/pages/TimelinePage";
 import type { Selection } from "@/selection";
 
+// MapLibre is large: load the map page only when it is opened.
+const MapPage = lazy(() => import("@/pages/MapPage").then((module) => ({ default: module.MapPage })));
+
 const INSPECTOR_KEY = "lumen.inspectorOpen";
+const SEARCH_DELAY_MS = 250;
+/** Pages that show the shared (filtered) library. */
+const LIBRARY_VIEWS: PageId[] = ["library", "timeline", "map"];
 
 function initialInspectorOpen(): boolean {
   try {
@@ -27,7 +36,9 @@ export default function App() {
   const [page, setPage] = useState<PageId>("library");
   const [inspectorOpen, setInspectorOpen] = useState(initialInspectorOpen);
   const [selection, setSelection] = useState<Selection>(null);
+  const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
+  const { setQuery, viewer } = useLibraryState();
   useLibraryRefresh();
 
   useEffect(() => {
@@ -38,9 +49,17 @@ export default function App() {
     }
   }, [inspectorOpen]);
 
+  // Live search: applies to the library, timeline and map.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQuery((current) => cleanQuery({ ...current, q: search.trim() || undefined }));
+    }, SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [search, setQuery]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!event.ctrlKey || event.altKey || event.metaKey) return;
+      if (viewer || !event.ctrlKey || event.altKey || event.metaKey) return;
       const key = event.key.toLowerCase();
       const target = ALL_NAV.find((item) => item.shortcut === key);
       if (target) {
@@ -57,36 +76,48 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [viewer]);
+
+  const onSearchSubmit = () => {
+    if (!LIBRARY_VIEWS.includes(page)) setPage("library");
+  };
 
   return (
     <div className="flex h-full flex-col">
       <TopBar
         searchRef={searchRef}
+        search={search}
+        onSearchChange={setSearch}
+        onSearchSubmit={onSearchSubmit}
         inspectorOpen={inspectorOpen}
         onToggleInspector={() => setInspectorOpen((open) => !open)}
       />
       <div className="flex min-h-0 flex-1">
         <Sidebar current={page} onNavigate={setPage} />
-        <main className="min-w-0 flex-1 overflow-y-auto">
-          {page === "library" && (
-            <LibraryPage selection={selection} onSelect={setSelection} />
+        <main className="min-w-0 flex-1 overflow-hidden">
+          {page === "library" && <LibraryPage selection={selection} onSelect={setSelection} />}
+          {page === "timeline" && <TimelinePage onSelect={setSelection} />}
+          {page === "map" && (
+            <Suspense fallback={null}>
+              <MapPage />
+            </Suspense>
           )}
-          {page === "timeline" && (
-            <PlaceholderPage page="timeline" icon={iconFor("timeline")} phase="Phase 3" />
-          )}
-          {page === "map" && <PlaceholderPage page="map" icon={iconFor("map")} phase="Phase 3" />}
           {page === "aiSearch" && (
             <PlaceholderPage page="aiSearch" icon={iconFor("aiSearch")} phase="Phase 4" />
           )}
           {page === "collections" && (
-            <PlaceholderPage page="collections" icon={iconFor("collections")} phase="Phase 3" />
+            <PlaceholderPage page="collections" icon={iconFor("collections")} phase="Phase 5" />
           )}
           {page === "settings" && <SettingsPage />}
         </main>
-        {inspectorOpen && <Inspector selection={page === "library" ? selection : null} />}
+        {inspectorOpen && page !== "map" && (
+          <Inspector
+            selection={page === "library" || page === "timeline" ? selection : null}
+          />
+        )}
       </div>
       <StatusBar />
+      <Viewer />
     </div>
   );
 }

@@ -1,14 +1,25 @@
+import { toSearchParams, type AssetQuery, type QueryValue } from "./query";
 import type {
+  AppSettings,
+  AppSettingsUpdate,
+  AssetBatchUpdate,
   AssetDetail,
+  AssetFacets,
+  AssetIds,
   AssetPage,
+  AssetUpdate,
+  BatchResult,
   ErrorBody,
   HealthResponse,
+  MapPoints,
   RenditionVariant,
   StorageRoot,
   StorageRootCreate,
   StorageRootList,
+  Tag,
   Task,
   TaskList,
+  Timeline,
 } from "./types";
 
 export interface BackendConnection {
@@ -39,7 +50,7 @@ function isErrorEnvelope(value: unknown): value is { error: ErrorBody } {
 
 async function request<T>(
   conn: BackendConnection,
-  method: "GET" | "POST" | "DELETE",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -73,6 +84,8 @@ async function request<T>(
   return payload as T;
 }
 
+const filters = (query: AssetQuery): Record<string, QueryValue> => ({ ...query });
+
 export const api = {
   getHealth: (conn: BackendConnection) => request<HealthResponse>(conn, "GET", "/api/v1/health"),
 
@@ -89,7 +102,7 @@ export const api = {
     request<Task>(conn, "POST", `/api/v1/storage-roots/${id}/scan`),
 
   listTasks: (conn: BackendConnection, options: { active?: boolean; limit?: number } = {}) =>
-    request<TaskList>(conn, "GET", `/api/v1/tasks${query(options)}`),
+    request<TaskList>(conn, "GET", `/api/v1/tasks${toSearchParams({ ...options })}`),
 
   cancelTask: (conn: BackendConnection, id: number) =>
     request<Task>(conn, "POST", `/api/v1/tasks/${id}/cancel`),
@@ -99,31 +112,62 @@ export const api = {
 
   listAssets: (
     conn: BackendConnection,
-    options: { storageRootId?: number; cursor?: string | null; limit?: number } = {},
+    query: AssetQuery,
+    page: { cursor?: string | null; limit?: number } = {},
   ) =>
     request<AssetPage>(
       conn,
       "GET",
-      `/api/v1/assets${query({
-        storage_root_id: options.storageRootId,
-        cursor: options.cursor ?? undefined,
-        limit: options.limit,
-      })}`,
+      `/api/v1/assets${toSearchParams({ ...filters(query), cursor: page.cursor, limit: page.limit })}`,
     ),
+
+  listAssetIds: (conn: BackendConnection, query: AssetQuery) =>
+    request<AssetIds>(conn, "GET", `/api/v1/assets/ids${toSearchParams(filters(query))}`),
+
+  getFacets: (conn: BackendConnection) =>
+    request<AssetFacets>(conn, "GET", "/api/v1/assets/facets"),
 
   getAsset: (conn: BackendConnection, id: number) =>
     request<AssetDetail>(conn, "GET", `/api/v1/assets/${id}`),
-};
 
-function query(params: Record<string, string | number | boolean | undefined>): string {
-  const entries = Object.entries(params).filter(([, value]) => value !== undefined);
-  if (entries.length === 0) return "";
-  return `?${new URLSearchParams(entries.map(([key, value]) => [key, String(value)])).toString()}`;
-}
+  updateAsset: (conn: BackendConnection, id: number, body: AssetUpdate) =>
+    request<AssetDetail>(conn, "PATCH", `/api/v1/assets/${id}`, body),
+
+  batchUpdate: (conn: BackendConnection, body: AssetBatchUpdate) =>
+    request<BatchResult>(conn, "POST", "/api/v1/assets/batch", body),
+
+  getTimeline: (
+    conn: BackendConnection,
+    query: AssetQuery,
+    granularity: "year" | "month" | "day",
+  ) =>
+    request<Timeline>(
+      conn,
+      "GET",
+      `/api/v1/timeline${toSearchParams({ ...filters(query), granularity })}`,
+    ),
+
+  getMapPoints: (conn: BackendConnection, query: AssetQuery) =>
+    request<MapPoints>(conn, "GET", `/api/v1/map/points${toSearchParams(filters(query))}`),
+
+  listTags: (conn: BackendConnection) => request<Tag[]>(conn, "GET", "/api/v1/tags"),
+
+  renameTag: (conn: BackendConnection, id: number, name: string) =>
+    request<Tag>(conn, "PATCH", `/api/v1/tags/${id}`, { name }),
+
+  deleteTag: (conn: BackendConnection, id: number) =>
+    request<void>(conn, "DELETE", `/api/v1/tags/${id}`),
+
+  getSettings: (conn: BackendConnection) =>
+    request<AppSettings>(conn, "GET", "/api/v1/settings"),
+
+  updateSettings: (conn: BackendConnection, body: AppSettingsUpdate) =>
+    request<AppSettings>(conn, "PATCH", "/api/v1/settings", body),
+};
 
 /**
  * URL usable in `<img src>`. Images cannot send headers, so the token goes in the
- * query string (the backend accepts this for image endpoints only). `version`
+ * query string (the backend accepts this for media endpoints only). `version`
  * changes with the file content, which makes the response cacheable forever.
  */
 export function thumbnailUrl(
@@ -132,8 +176,16 @@ export function thumbnailUrl(
   version: string,
   variant: RenditionVariant = "thumb",
 ): string {
-  return `${conn.baseUrl}/api/v1/assets/${assetId}/thumbnail${query({
+  return `${conn.baseUrl}/api/v1/assets/${assetId}/thumbnail${toSearchParams({
     variant,
+    v: version,
+    token: conn.token,
+  })}`;
+}
+
+/** The original file (video playback, 1:1 viewing). Read-only; supports HTTP Range. */
+export function originalUrl(conn: BackendConnection, assetId: number, version: string): string {
+  return `${conn.baseUrl}/api/v1/assets/${assetId}/original${toSearchParams({
     v: version,
     token: conn.token,
   })}`;

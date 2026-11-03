@@ -158,6 +158,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assets/ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Asset Ids
+         * @description Every matching asset id, in display order (used for "select all").
+         */
+        get: operations["listAssetIds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Facets */
+        get: operations["getAssetFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Update
+         * @description Apply a rating, favorite flag or tag changes to many assets at once.
+         */
+        post: operations["batchUpdateAssets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assets/{asset_id}": {
         parameters: {
             query?: never;
@@ -172,7 +229,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Asset */
+        patch: operations["updateAsset"];
         trace?: never;
     };
     "/api/v1/assets/{asset_id}/thumbnail": {
@@ -187,6 +245,65 @@ export interface paths {
          * @description JPEG thumbnail (400px) or preview (2048px). Accepts ``?token=`` for use in ``<img>``.
          */
         get: operations["getAssetThumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{asset_id}/original": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Asset Original
+         * @description The cover file itself, read-only, with HTTP Range support (video seeking).
+         *
+         *     Accepts ``?token=`` for use in ``<video>`` / ``<img>``.
+         */
+        get: operations["getAssetOriginal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Timeline
+         * @description Asset counts per period, newest first.
+         */
+        get: operations["getTimeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/map/points": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Map Points */
+        get: operations["getMapPoints"];
         put?: never;
         post?: never;
         delete?: never;
@@ -215,10 +332,97 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tags */
+        get: operations["listTags"];
+        put?: never;
+        /** Create Tag */
+        post: operations["createTag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Tag
+         * @description Delete a tag and remove it from all assets (files are not touched).
+         */
+        delete: operations["deleteTag"];
+        options?: never;
+        head?: never;
+        /** Rename Tag */
+        patch: operations["renameTag"];
+        trace?: never;
+    };
+    "/api/v1/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Settings */
+        get: operations["getSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Settings */
+        patch: operations["updateSettings"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AppSettings */
+        AppSettings: {
+            /**
+             * Map Online Tiles
+             * @description Use the online street map (sends map viewport requests to OpenFreeMap)
+             * @default false
+             */
+            map_online_tiles: boolean;
+        };
+        /** AppSettingsUpdate */
+        AppSettingsUpdate: {
+            /** Map Online Tiles */
+            map_online_tiles?: boolean | null;
+        };
+        /** AssetBatchUpdate */
+        AssetBatchUpdate: {
+            /** Asset Ids */
+            asset_ids: number[];
+            /** Rating */
+            rating?: number | null;
+            /** Is Favorite */
+            is_favorite?: boolean | null;
+            /**
+             * Add Tags
+             * @description Tag names
+             */
+            add_tags?: string[];
+            /** Remove Tag Ids */
+            remove_tag_ids?: number[];
+        };
         /** AssetDetail */
         AssetDetail: {
             /** Id */
@@ -236,14 +440,46 @@ export interface components {
             rating: number;
             /** Is Favorite */
             is_favorite: boolean;
+            /** Rating Source */
+            rating_source: ("import" | "user") | null;
             /** Notes */
             notes: string | null;
+            /** Tags */
+            tags: components["schemas"]["AssetTag"][];
+            /**
+             * Cover File Id
+             * @description File shown as thumbnail and by /original
+             */
+            cover_file_id: number | null;
             /** Rendition Version */
             rendition_version: string | null;
             metadata: components["schemas"]["AssetMetadata"];
             location: components["schemas"]["AssetLocation"] | null;
             /** Files */
             files: components["schemas"]["AssetFile"][];
+        };
+        /** AssetFacets */
+        AssetFacets: {
+            /** Total */
+            total: number;
+            /** Photos */
+            photos: number;
+            /** Videos */
+            videos: number;
+            /** Favorites */
+            favorites: number;
+            /** With Location */
+            with_location: number;
+            /** Cameras */
+            cameras: components["schemas"]["FacetValue"][];
+            /** Lenses */
+            lenses: components["schemas"]["FacetValue"][];
+            /** Formats */
+            formats: components["schemas"]["FacetValue"][];
+            /** Years */
+            years: components["schemas"]["FacetValue"][];
+            /** Tags */
+            tags: components["schemas"]["Tag"][];
         };
         /** AssetFile */
         AssetFile: {
@@ -279,6 +515,11 @@ export interface components {
             ingest_error: string | null;
             /** Fingerprint */
             fingerprint: string | null;
+        };
+        /** AssetIds */
+        AssetIds: {
+            /** Ids */
+            ids: number[];
         };
         /** AssetLocation */
         AssetLocation: {
@@ -362,10 +603,44 @@ export interface components {
             /** Duration Ms */
             duration_ms: number | null;
             /**
+             * Cover Extension
+             * @description Lower-case extension of the cover file
+             */
+            cover_extension: string;
+            /**
              * Rendition Version
              * @description Changes whenever the cover's content changes; use as cache-buster
              */
             rendition_version: string;
+        };
+        /** AssetTag */
+        AssetTag: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "user" | "import";
+        };
+        /** AssetUpdate */
+        AssetUpdate: {
+            /** Rating */
+            rating?: number | null;
+            /** Is Favorite */
+            is_favorite?: boolean | null;
+            /**
+             * Notes
+             * @description Empty string clears
+             */
+            notes?: string | null;
+        };
+        /** BatchResult */
+        BatchResult: {
+            /** Updated */
+            updated: number;
         };
         /** DatabaseHealth */
         DatabaseHealth: {
@@ -430,6 +705,13 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
         };
+        /** FacetValue */
+        FacetValue: {
+            /** Value */
+            value: string;
+            /** Count */
+            count: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -449,6 +731,25 @@ export interface components {
             /** Uptime Seconds */
             uptime_seconds: number;
             database: components["schemas"]["DatabaseHealth"];
+        };
+        /** MapPoint */
+        MapPoint: {
+            /** Id */
+            id: number;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /**
+             * V
+             * @description Rendition version (for thumbnail URLs)
+             */
+            v: string;
+        };
+        /** MapPoints */
+        MapPoints: {
+            /** Points */
+            points: components["schemas"]["MapPoint"][];
         };
         /** StorageRoot */
         StorageRoot: {
@@ -526,6 +827,23 @@ export interface components {
              */
             missing_count: number;
         };
+        /** Tag */
+        Tag: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /**
+             * Asset Count
+             * @default 0
+             */
+            asset_count: number;
+        };
+        /** TagName */
+        TagName: {
+            /** Name */
+            name: string;
+        };
         /** Task */
         Task: {
             /** Id */
@@ -564,6 +882,26 @@ export interface components {
         TaskList: {
             /** Items */
             items: components["schemas"]["Task"][];
+        };
+        /** Timeline */
+        Timeline: {
+            /**
+             * Granularity
+             * @enum {string}
+             */
+            granularity: "year" | "month" | "day";
+            /** Buckets */
+            buckets: components["schemas"]["TimelineBucket"][];
+        };
+        /** TimelineBucket */
+        TimelineBucket: {
+            /**
+             * Period
+             * @description YYYY, YYYY-MM or YYYY-MM-DD
+             */
+            period: string;
+            /** Count */
+            count: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -921,7 +1259,25 @@ export interface operations {
     listAssets: {
         parameters: {
             query?: {
+                /** @description Text search (substring) */
+                q?: string | null;
+                media_type?: ("photo" | "video") | null;
+                min_rating?: number | null;
+                favorite?: boolean | null;
+                /** @description Camera model */
+                camera?: string | null;
+                lens?: string | null;
+                /** @description File extension, e.g. CR3 */
+                format?: string | null;
                 storage_root_id?: number | null;
+                /** @description Assets having all these tags */
+                tag_id?: number[];
+                /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
+                date_from?: string | null;
+                /** @description Exclusive, YYYY-MM-DD[THH:MM:SS] */
+                date_to?: string | null;
+                has_location?: boolean | null;
+                sort?: "capture_desc" | "capture_asc" | "added_desc";
                 cursor?: string | null;
                 limit?: number;
             };
@@ -951,6 +1307,109 @@ export interface operations {
             };
         };
     };
+    listAssetIds: {
+        parameters: {
+            query?: {
+                /** @description Text search (substring) */
+                q?: string | null;
+                media_type?: ("photo" | "video") | null;
+                min_rating?: number | null;
+                favorite?: boolean | null;
+                /** @description Camera model */
+                camera?: string | null;
+                lens?: string | null;
+                /** @description File extension, e.g. CR3 */
+                format?: string | null;
+                storage_root_id?: number | null;
+                /** @description Assets having all these tags */
+                tag_id?: number[];
+                /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
+                date_from?: string | null;
+                /** @description Exclusive, YYYY-MM-DD[THH:MM:SS] */
+                date_to?: string | null;
+                has_location?: boolean | null;
+                sort?: "capture_desc" | "capture_asc" | "added_desc";
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetIds"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getAssetFacets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetFacets"];
+                };
+            };
+        };
+    };
+    batchUpdateAssets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetBatchUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     getAsset: {
         parameters: {
             query?: never;
@@ -961,6 +1420,50 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetUpdate"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -1033,6 +1536,144 @@ export interface operations {
             };
         };
     };
+    getAssetOriginal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getTimeline: {
+        parameters: {
+            query?: {
+                /** @description Text search (substring) */
+                q?: string | null;
+                media_type?: ("photo" | "video") | null;
+                min_rating?: number | null;
+                favorite?: boolean | null;
+                /** @description Camera model */
+                camera?: string | null;
+                lens?: string | null;
+                /** @description File extension, e.g. CR3 */
+                format?: string | null;
+                storage_root_id?: number | null;
+                /** @description Assets having all these tags */
+                tag_id?: number[];
+                /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
+                date_from?: string | null;
+                /** @description Exclusive, YYYY-MM-DD[THH:MM:SS] */
+                date_to?: string | null;
+                has_location?: boolean | null;
+                sort?: "capture_desc" | "capture_asc" | "added_desc";
+                granularity?: "year" | "month" | "day";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Timeline"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getMapPoints: {
+        parameters: {
+            query?: {
+                /** @description Text search (substring) */
+                q?: string | null;
+                media_type?: ("photo" | "video") | null;
+                min_rating?: number | null;
+                favorite?: boolean | null;
+                /** @description Camera model */
+                camera?: string | null;
+                lens?: string | null;
+                /** @description File extension, e.g. CR3 */
+                format?: string | null;
+                storage_root_id?: number | null;
+                /** @description Assets having all these tags */
+                tag_id?: number[];
+                /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
+                date_from?: string | null;
+                /** @description Exclusive, YYYY-MM-DD[THH:MM:SS] */
+                date_to?: string | null;
+                has_location?: boolean | null;
+                sort?: "capture_desc" | "capture_asc" | "added_desc";
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapPoints"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listDuplicates: {
         parameters: {
             query?: {
@@ -1051,6 +1692,230 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DuplicateReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listTags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"][];
+                };
+            };
+        };
+    };
+    createTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagName"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tag_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    renameTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tag_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagName"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppSettings"];
+                };
+            };
+        };
+    };
+    updateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppSettings"];
                 };
             };
             /** @description Validation Error */

@@ -1,6 +1,7 @@
 import type { TFunction } from "i18next";
 import {
   AlertCircle,
+  ChevronDown,
   FolderOpen,
   FolderPlus,
   HardDrive,
@@ -17,17 +18,22 @@ import { ApiError } from "@/api/client";
 import {
   tasksByRoot,
   useActiveTasks,
-  useAssets,
   useCancelTask,
   useCreateStorageRoot,
   useDeleteStorageRoot,
   useScanStorageRoot,
   useStorageRoots,
+  useTimeline,
 } from "@/api/hooks";
 import type { StorageRoot, Task } from "@/api/types";
-import { MediaGrid } from "@/components/library/MediaGrid";
+import { FilterBar } from "@/components/library/FilterBar";
+import { PhotoWall } from "@/components/library/PhotoWall";
+import { SelectionBar } from "@/components/library/SelectionBar";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
+import type { WallMode } from "@/library/layout";
+import { useLibraryState } from "@/library/state";
+import { useWall } from "@/library/useWall";
 import { confirmAction, pickDirectory } from "@/lib/dialogs";
 import { cn } from "@/lib/utils";
 import type { Selection } from "@/selection";
@@ -35,6 +41,16 @@ import type { Selection } from "@/selection";
 interface LibraryPageProps {
   selection: Selection;
   onSelect: (selection: Selection) => void;
+}
+
+const MODE_KEY = "lumen.wallMode";
+
+function initialMode(): WallMode {
+  try {
+    return localStorage.getItem(MODE_KEY) === "grid" ? "grid" : "justified";
+  } catch {
+    return "justified";
+  }
 }
 
 export function describeError(t: TFunction, error: unknown): string {
@@ -57,19 +73,35 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
   const backend = useBackendStatus();
   const roots = useStorageRoots();
   const tasks = useActiveTasks();
-  const assets = useAssets();
   const createRoot = useCreateStorageRoot();
   const deleteRoot = useDeleteStorageRoot();
   const scanRoot = useScanStorageRoot();
   const cancelTask = useCancelTask();
+  const { query, setQuery } = useLibraryState();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [mode, setMode] = useState<WallMode>(initialMode);
+  const [showSources, setShowSources] = useState<boolean | null>(null);
 
+  const focusAsset = useCallback(
+    (id: number | null) => {
+      if (id !== null) onSelect({ kind: "asset", id });
+    },
+    [onSelect],
+  );
+  const wall = useWall(query, focusAsset);
+  const counts = useTimeline(query, "year");
+  const total = counts.data?.buckets.reduce((sum, bucket) => sum + bucket.count, 0);
   const rootTasks = useMemo(() => tasksByRoot(tasks.data), [tasks.data]);
-  const items = useMemo(() => assets.data?.pages.flatMap((page) => page.items) ?? [], [assets.data]);
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = assets;
-  const loadMore = useCallback(() => {
-    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const groups = useMemo(() => [{ key: "all", items: wall.items }], [wall.items]);
+
+  const changeMode = (next: WallMode) => {
+    setMode(next);
+    try {
+      localStorage.setItem(MODE_KEY, next);
+    } catch {
+      // Preference simply won't persist.
+    }
+  };
 
   const run = async (action: () => Promise<unknown>) => {
     setActionError(null);
@@ -85,6 +117,7 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
       const path = await pickDirectory(t("library.pickerTitle"));
       if (!path) return;
       const root = await createRoot.mutateAsync({ path });
+      setShowSources(true);
       onSelect({ kind: "root", id: root.id });
     });
 
@@ -147,66 +180,93 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
   }
 
   const indexing = (tasks.data?.length ?? 0) > 0;
-  const selectedAssetId = selection?.kind === "asset" ? selection.id : null;
+  const sourcesOpen = showSources ?? (wall.items.length === 0 && !wall.assets.isPending);
+  const filtered = Object.keys(query).some((key) => key !== "sort");
+  const error = actionError ?? (wall.error ? describeError(t, wall.error) : null);
 
   return (
     <div className="flex h-full flex-col">
-      <div className="shrink-0 px-6 pt-6">
-        <div className="flex items-end justify-between gap-4">
-          <div>
+      <div className="shrink-0 space-y-3 px-6 pb-3 pt-5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-baseline gap-3">
             <h1 className="text-lg font-medium">{t("library.title")}</h1>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {t("library.subtitle", { count: roots.data.length })}
-            </p>
+            {total !== undefined && (
+              <span className="text-xs text-muted-foreground">
+                {query.q ? `${t("filters.searching", { q: query.q })} · ` : ""}
+                {t("filters.results", { count: total })}
+              </span>
+            )}
           </div>
-          <Button variant="secondary" onClick={() => void addFolder()} disabled={busy}>
-            <FolderPlus />
-            {t("library.addFolder")}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={sourcesOpen}
+              onClick={() => setShowSources(!sourcesOpen)}
+            >
+              <HardDrive className="size-3.5" />
+              {t("library.subtitle", { count: roots.data.length })}
+              <ChevronDown
+                className={cn("size-3.5 transition-transform", sourcesOpen && "rotate-180")}
+              />
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => void addFolder()} disabled={busy}>
+              <FolderPlus className="size-3.5" />
+              {t("library.addFolder")}
+            </Button>
+          </div>
         </div>
 
-        {actionError && <ErrorBanner message={actionError} className="mt-4" />}
+        {error && <ErrorBanner message={error} />}
 
-        <ul className="mt-4 max-h-52 divide-y overflow-y-auto rounded-lg border bg-card">
-          {roots.data.map((root) => (
-            <RootRow
-              key={root.id}
-              root={root}
-              task={rootTasks.get(root.id)}
-              selected={selection?.kind === "root" && selection.id === root.id}
-              onSelect={() => onSelect({ kind: "root", id: root.id })}
-              onRescan={() => void run(() => scanRoot.mutateAsync(root.id))}
-              onStop={(task) => void run(() => cancelTask.mutateAsync(task.id))}
-              onRemove={() => void removeFolder(root)}
-            />
-          ))}
-        </ul>
+        {sourcesOpen && (
+          <ul className="max-h-52 divide-y overflow-y-auto rounded-lg border bg-card">
+            {roots.data.map((root) => (
+              <RootRow
+                key={root.id}
+                root={root}
+                task={rootTasks.get(root.id)}
+                selected={selection?.kind === "root" && selection.id === root.id}
+                onSelect={() => onSelect({ kind: "root", id: root.id })}
+                onRescan={() => void run(() => scanRoot.mutateAsync(root.id))}
+                onStop={(task) => void run(() => cancelTask.mutateAsync(task.id))}
+                onRemove={() => void removeFolder(root)}
+              />
+            ))}
+          </ul>
+        )}
 
-        <div className="mb-2 mt-5 flex items-baseline justify-between">
-          <h2 className="text-[11px] font-medium uppercase tracking-wider text-subtle-foreground">
-            {t("library.allMedia")}
-          </h2>
-          {items.length > 0 && (
-            <span className="text-[11px] text-subtle-foreground">
-              {t("library.itemCount", { count: items.length })}
-              {hasNextPage ? "+" : ""}
-            </span>
-          )}
-        </div>
+        <FilterBar query={query} onChange={setQuery} mode={mode} onModeChange={changeMode} />
+        {wall.selection.selected.size > 1 && (
+          <SelectionBar
+            ids={wall.selectedIds}
+            onClear={wall.clearSelection}
+            onError={(cause) => setActionError(describeError(t, cause))}
+          />
+        )}
       </div>
 
       <div className="min-h-0 flex-1">
-        {items.length > 0 ? (
-          <MediaGrid
-            assets={items}
-            selectedId={selectedAssetId}
-            onSelect={(id) => onSelect({ kind: "asset", id })}
-            onReachEnd={loadMore}
+        {wall.items.length > 0 ? (
+          <PhotoWall
+            groups={groups}
+            mode={mode}
+            selection={wall.selection}
+            onSelect={wall.select}
+            onOpen={wall.open}
+            onReachEnd={wall.loadMore}
+            onKeyDown={wall.onKeyDown}
           />
         ) : (
           <p className="flex items-start justify-center gap-2 px-6 pt-10 text-center text-xs text-subtle-foreground">
             <Info className="mt-px size-3.5 shrink-0" />
-            {assets.isPending || indexing ? t("library.gridIndexing") : t("library.gridEmpty")}
+            {wall.assets.isPending
+              ? t("wall.loading")
+              : filtered
+                ? t("wall.empty")
+                : indexing
+                  ? t("library.gridIndexing")
+                  : t("library.gridEmpty")}
           </p>
         )}
       </div>
