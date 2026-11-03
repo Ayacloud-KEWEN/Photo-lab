@@ -36,6 +36,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/storage-roots/{root_id}/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan Storage Root
+         * @description Queue a rescan (reuses an already queued or running scan of this root).
+         */
+        post: operations["scanStorageRoot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/storage-roots/{root_id}": {
         parameters: {
             query?: never;
@@ -53,10 +73,300 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tasks */
+        get: operations["listTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Task */
+        get: operations["getTask"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{task_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Task */
+        post: operations["cancelTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{task_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Task */
+        post: operations["retryTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Assets */
+        get: operations["listAssets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{asset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Asset */
+        get: operations["getAsset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{asset_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Asset Thumbnail
+         * @description JPEG thumbnail (400px) or preview (2048px). Accepts ``?token=`` for use in ``<img>``.
+         */
+        get: operations["getAssetThumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Duplicates
+         * @description Groups of files with identical content. Reported only; nothing is merged or deleted.
+         */
+        get: operations["listDuplicates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AssetDetail */
+        AssetDetail: {
+            /** Id */
+            id: number;
+            /** Uuid */
+            uuid: string;
+            /**
+             * Media Type
+             * @enum {string}
+             */
+            media_type: "photo" | "video";
+            /** Capture Time */
+            capture_time: string | null;
+            /** Rating */
+            rating: number;
+            /** Is Favorite */
+            is_favorite: boolean;
+            /** Notes */
+            notes: string | null;
+            /** Rendition Version */
+            rendition_version: string | null;
+            metadata: components["schemas"]["AssetMetadata"];
+            location: components["schemas"]["AssetLocation"] | null;
+            /** Files */
+            files: components["schemas"]["AssetFile"][];
+        };
+        /** AssetFile */
+        AssetFile: {
+            /** Id */
+            id: number;
+            /** Storage Root Id */
+            storage_root_id: number;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "primary" | "companion" | "sidecar";
+            /**
+             * Path
+             * @description Absolute path (root path + relative path)
+             */
+            path: string;
+            /** Relative Path */
+            relative_path: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "present" | "missing" | "error";
+            /**
+             * Ingest State
+             * @enum {string}
+             */
+            ingest_state: "pending" | "done" | "error";
+            /** Ingest Error */
+            ingest_error: string | null;
+            /** Fingerprint */
+            fingerprint: string | null;
+        };
+        /** AssetLocation */
+        AssetLocation: {
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+            /** Altitude M */
+            altitude_m: number | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "exif" | "manual";
+        };
+        /** AssetMetadata */
+        AssetMetadata: {
+            /** Width */
+            width?: number | null;
+            /** Height */
+            height?: number | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Capture Time */
+            capture_time?: string | null;
+            /** Camera Make */
+            camera_make?: string | null;
+            /** Camera Model */
+            camera_model?: string | null;
+            /** Lens Model */
+            lens_model?: string | null;
+            /** Focal Length Mm */
+            focal_length_mm?: number | null;
+            /** Aperture */
+            aperture?: number | null;
+            /** Exposure Time S */
+            exposure_time_s?: number | null;
+            /** Iso */
+            iso?: number | null;
+            /** Video Codec */
+            video_codec?: string | null;
+            /** Frame Rate */
+            frame_rate?: number | null;
+        };
+        /** AssetPage */
+        AssetPage: {
+            /** Items */
+            items: components["schemas"]["AssetSummary"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** AssetSummary */
+        AssetSummary: {
+            /** Id */
+            id: number;
+            /**
+             * Media Type
+             * @enum {string}
+             */
+            media_type: "photo" | "video";
+            /** Capture Time */
+            capture_time: string | null;
+            /** Rating */
+            rating: number;
+            /** Is Favorite */
+            is_favorite: boolean;
+            /**
+             * File Name
+             * @description Name of the file shown as the asset's cover
+             */
+            file_name: string;
+            /**
+             * Formats
+             * @description Upper-case extensions of the asset's files
+             */
+            formats: string[];
+            /** Width */
+            width: number | null;
+            /** Height */
+            height: number | null;
+            /** Duration Ms */
+            duration_ms: number | null;
+            /**
+             * Rendition Version
+             * @description Changes whenever the cover's content changes; use as cache-buster
+             */
+            rendition_version: string;
+        };
         /** DatabaseHealth */
         DatabaseHealth: {
             /**
@@ -68,6 +378,36 @@ export interface components {
             schema_version: number;
             /** Detail */
             detail?: string | null;
+        };
+        /** DuplicateFile */
+        DuplicateFile: {
+            /** File Id */
+            file_id: number;
+            /** Asset Id */
+            asset_id: number | null;
+            /** Storage Root Id */
+            storage_root_id: number;
+            /** Path */
+            path: string;
+        };
+        /** DuplicateGroup */
+        DuplicateGroup: {
+            /** Fingerprint */
+            fingerprint: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Files */
+            files: components["schemas"]["DuplicateFile"][];
+        };
+        /** DuplicateReport */
+        DuplicateReport: {
+            /** Groups */
+            groups: components["schemas"]["DuplicateGroup"][];
+            /**
+             * Reclaimable Bytes
+             * @description Bytes used by redundant copies in these groups
+             */
+            reclaimable_bytes: number;
         };
         /** ErrorBody */
         ErrorBody: {
@@ -138,6 +478,7 @@ export interface components {
             created_at: string;
             /** Updated At */
             updated_at: string;
+            stats: components["schemas"]["StorageRootStats"];
         };
         /** StorageRootCreate */
         StorageRootCreate: {
@@ -153,6 +494,76 @@ export interface components {
         StorageRootList: {
             /** Items */
             items: components["schemas"]["StorageRoot"][];
+        };
+        /** StorageRootStats */
+        StorageRootStats: {
+            /**
+             * File Count
+             * @default 0
+             */
+            file_count: number;
+            /**
+             * Asset Count
+             * @default 0
+             */
+            asset_count: number;
+            /**
+             * Pending Count
+             * @description Files waiting to be processed
+             * @default 0
+             */
+            pending_count: number;
+            /**
+             * Error Count
+             * @description Files that could not be processed
+             * @default 0
+             */
+            error_count: number;
+            /**
+             * Missing Count
+             * @description Indexed files no longer on disk
+             * @default 0
+             */
+            missing_count: number;
+        };
+        /** Task */
+        Task: {
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "succeeded" | "failed" | "cancelled";
+            /** Storage Root Id */
+            storage_root_id: number | null;
+            /** Progress Current */
+            progress_current: number;
+            /** Progress Total */
+            progress_total: number | null;
+            /** Attempts */
+            attempts: number;
+            /** Max Attempts */
+            max_attempts: number;
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Error */
+            error: string | null;
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+        };
+        /** TaskList */
+        TaskList: {
+            /** Items */
+            items: components["schemas"]["Task"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -258,6 +669,46 @@ export interface operations {
             };
         };
     };
+    scanStorageRoot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                root_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     deleteStorageRoot: {
         parameters: {
             query?: never;
@@ -283,6 +734,323 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listTasks: {
+        parameters: {
+            query?: {
+                /** @description Only pending and running tasks */
+                active?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancelTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retryTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listAssets: {
+        parameters: {
+            query?: {
+                storage_root_id?: number | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getAssetThumbnail: {
+        parameters: {
+            query?: {
+                variant?: "thumb" | "preview";
+            };
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listDuplicates: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateReport"];
                 };
             };
             /** @description Validation Error */

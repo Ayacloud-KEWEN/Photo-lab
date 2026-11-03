@@ -15,11 +15,13 @@ from pathlib import Path
 from lumen.core.errors import ConflictError, InvalidPathError, NotFoundError
 from lumen.core.volumes import get_volume_info
 from lumen.db.connection import transaction, utc_now
-from lumen.schemas.storage_roots import StorageRoot, StorageRootCreate
+from lumen.library.common import SCAN_TASK
+from lumen.schemas.storage_roots import StorageRoot, StorageRootCreate, StorageRootStats
+from lumen.tasks import queue
 
 logger = logging.getLogger(__name__)
 
-SCAN_TASK_KIND = "scan_storage_root"
+SCAN_TASK_KIND = SCAN_TASK
 
 
 def normalize_directory(raw: str) -> Path:
@@ -63,8 +65,36 @@ def _default_display_name(path: Path, volume_label: str | None) -> str:
     return f"{volume_label} ({drive})" if volume_label else drive
 
 
-def _to_model(row: sqlite3.Row) -> StorageRoot:
+_STATS_SQL = """
+    SELECT storage_root_id,
+           COUNT(*) FILTER (WHERE status = 'present' AND file_role != 'sidecar') AS files,
+           COUNT(DISTINCT asset_id) FILTER (WHERE status = 'present') AS assets,
+           COUNT(*) FILTER (WHERE status = 'present' AND ingest_state = 'pending') AS pending,
+           COUNT(*) FILTER (WHERE status = 'present' AND ingest_state = 'error') AS errors,
+           COUNT(*) FILTER (WHERE status = 'missing') AS missing
+    FROM media_files
+    {where}
+    GROUP BY storage_root_id
+"""
+
+
+def _stats(conn: sqlite3.Connection, root_id: int | None = None) -> dict[int, StorageRootStats]:
+    where, params = ("WHERE storage_root_id = ?", (root_id,)) if root_id else ("", ())
+    return {
+        int(row["storage_root_id"]): StorageRootStats(
+            file_count=row["files"],
+            asset_count=row["assets"],
+            pending_count=row["pending"],
+            error_count=row["errors"],
+            missing_count=row["missing"],
+        )
+        for row in conn.execute(_STATS_SQL.format(where=where), params)
+    }
+
+
+def _to_model(row: sqlite3.Row, stats: StorageRootStats | None = None) -> StorageRoot:
     return StorageRoot(
+        stats=stats or StorageRootStats(),
         id=row["id"],
         path=row["path"],
         display_name=row["display_name"],
@@ -80,14 +110,21 @@ def _to_model(row: sqlite3.Row) -> StorageRoot:
 
 def list_storage_roots(conn: sqlite3.Connection) -> list[StorageRoot]:
     rows = conn.execute("SELECT * FROM storage_roots ORDER BY created_at, id").fetchall()
-    return [_to_model(row) for row in rows]
+    stats = _stats(conn)
+    return [_to_model(row, stats.get(int(row["id"]))) for row in rows]
 
 
 def get_storage_root(conn: sqlite3.Connection, root_id: int) -> StorageRoot:
     row = conn.execute("SELECT * FROM storage_roots WHERE id = ?", (root_id,)).fetchone()
     if row is None:
         raise NotFoundError("Storage root not found", details={"id": root_id})
-    return _to_model(row)
+    return _to_model(row, _stats(conn, root_id).get(root_id))
+
+
+def request_scan(conn: sqlite3.Connection, root_id: int) -> int:
+    """Queue a (re)scan of a root; returns the task id (an active one is reused)."""
+    get_storage_root(conn, root_id)
+    return queue.enqueue(conn, SCAN_TASK, storage_root_id=root_id, payload={"reason": "user"})
 
 
 def create_storage_root(conn: sqlite3.Connection, data: StorageRootCreate) -> StorageRoot:

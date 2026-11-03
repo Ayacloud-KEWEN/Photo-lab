@@ -19,4 +19,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
 } finally { Pop-Location }
 
+foreach ($tool in "exiftool", "ffmpeg", "ffprobe") {
+    if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
+        Write-Warning "$tool not found on PATH. Install it (e.g. 'scoop install exiftool' / 'scoop install ffmpeg') for metadata and video thumbnails."
+    }
+}
+
 Write-Host "==> Done. Start the app with: scripts\dev.ps1" -ForegroundColor Green

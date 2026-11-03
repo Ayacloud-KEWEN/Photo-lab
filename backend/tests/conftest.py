@@ -17,7 +17,7 @@ TOKEN = "test-token"
 
 @pytest.fixture
 def settings(tmp_path: Path) -> Settings:
-    return Settings(data_dir=tmp_path / "data", log_to_file=False)
+    return Settings(data_dir=tmp_path / "data", log_to_file=False, run_tasks=False)
 
 
 @pytest.fixture

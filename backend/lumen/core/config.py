@@ -8,6 +8,8 @@ for running the backend on its own during development.
 from __future__ import annotations
 
 import ipaddress
+import os
+import shutil
 from functools import cached_property
 from pathlib import Path
 from typing import Annotated, Literal
@@ -44,6 +46,15 @@ class Settings(BaseSettings):
     )
     log_level: LogLevel = "INFO"
     log_to_file: bool = True
+
+    # External media tools; looked up on PATH when not set.
+    exiftool_path: Path | None = None
+    ffmpeg_path: Path | None = None
+    ffprobe_path: Path | None = None
+    # Parallel file workers used while ingesting media.
+    ingest_workers: int = Field(default_factory=lambda: max(1, min(4, os.cpu_count() or 1)), ge=1)
+    # Background task processing; disabled in some tests.
+    run_tasks: bool = True
 
     @field_validator("host")
     @classmethod
@@ -82,6 +93,17 @@ class Settings(BaseSettings):
     def backup_dir(self) -> Path:
         return self.data_dir / "backups"
 
+    @cached_property
+    def cache_dir(self) -> Path:
+        """Generated thumbnails and previews; safe to delete, rebuilt on demand."""
+        return self.data_dir / "cache"
+
+    def tool(self, name: Literal["exiftool", "ffmpeg", "ffprobe"]) -> str | None:
+        configured: Path | None = getattr(self, f"{name}_path")
+        if configured is not None:
+            return str(configured) if configured.exists() else None
+        return shutil.which(name)
+
     def ensure_directories(self) -> None:
-        for directory in (self.data_dir, self.log_dir, self.backup_dir):
+        for directory in (self.data_dir, self.log_dir, self.backup_dir, self.cache_dir):
             directory.mkdir(parents=True, exist_ok=True)

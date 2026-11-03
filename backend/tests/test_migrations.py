@@ -16,6 +16,7 @@ EXPECTED_TABLES = {
     "storage_roots",
     "tasks",
     "app_settings",
+    "media_locations",
     "schema_migrations",
 }
 

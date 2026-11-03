@@ -80,3 +80,55 @@
 
 - 正式版用 PyInstaller 将后端打包为 `lumen-backend.exe`，作为 Tauri `externalBin` 随安装包分发。
 - 开发模式直接使用 `backend/.venv` 中的 Python 运行 `python -m lumen`。
+
+## 8. 媒体处理流水线（ADR-006，Phase 2）
+
+```
+storage_roots ──scan──▶ media_files (pending) ──ingest──▶ assets / metadata / renditions
+                 快：只比对大小+mtime          慢：指纹 → 归组 → 元数据 → 缩略图
+```
+
+- **扫描**（`library/scan.py`）只读文件系统属性，按 `size + mtime_ns` 判断新增/修改/未变，
+  每次扫描递增 `scan_generation`；扫描完整结束后，代数落后的文件标记为 `missing`（不删除）。
+  根目录不可达时标记 `offline` 并以不可重试错误结束任务，文件记录不变。
+- **入库**（`library/ingest.py`）按批（24 个文件）处理 `ingest_state = 'pending'` 的文件：
+  1. 指纹：整文件 xxh3-128（`xxh128:<hex>`），只在内容变化后重算；
+  2. 归组：同一目录、同名主干的照片合并为一个资产（RAW 为 `primary`，JPEG/HEIC 为 `companion`
+     并作为封面），`.xmp` 为 `sidecar`；视频不与照片配对；
+  3. 元数据：ExifTool 常驻进程（`-stay_open`，`-charset filename=utf8` 支持中文路径）一次读一批，
+     视频再用 FFprobe 补充编码、帧率、旋转与时长；
+  4. 缩略图（长边 400px）与预览图（长边 2048px），JPEG，原子写入。
+- **拍摄时间**统一存为本地挂钟时间 `YYYY-MM-DDTHH:MM:SS`：优先 EXIF DateTimeOriginal，
+  QuickTime 的 UTC 时间换算为本机时区，都没有时退回文件修改时间。
+- **尺寸**存为显示方向（EXIF 方向 5–8、视频旋转 ±90° 时交换宽高）。
+
+## 9. 任务引擎（ADR-007）
+
+- 队列就是 `tasks` 表；`TaskRunner` 在后端进程内用一个线程依次执行任务，任务内部再并行。
+- 同类型、同根目录的活动任务去重（重复点"重新扫描"不会排多个任务）。
+- 失败按指数退避重试（10s、20s…，最多 `max_attempts` 次）；`PermanentTaskError` 不重试。
+- 取消：排队中的任务直接取消；运行中的任务设置 `cancel_requested`，处理器在下一次进度上报时退出。
+- 关闭应用：运行中的任务放回队列（不计入尝试次数），下次启动继续。
+- **崩溃恢复**：启动时把残留的 `running` 任务放回队列。入库在处理文件**之前**先把该文件的
+  `ingest_attempts` 加一，所以导致进程崩溃的坏文件最多重试 3 次就被标记为 `error`，不会卡住队列。
+
+## 10. 移动、丢失与重复（ADR-008）
+
+- **移动**：新文件的指纹与同一根目录下某个 `missing` 文件相同 → 视为移动，新文件继承原资产
+  （评分、收藏、备注保留），旧记录删除。
+- **丢失**：文件记录保留并标记 `missing`；资产不删除（硬盘可能重新接入）。
+- **重复**：`GET /duplicates` 按指纹列出内容相同的文件，只报告，不自动合并或删除。
+
+## 11. 缩略图缓存与访问（ADR-009）
+
+- 位置：`cache/renditions/<指纹前两位>/<指纹>_t1.jpg|_p1.jpg`；按内容寻址，所以重复文件共用一份，
+  文件移动后仍然有效；`_t1/_p1` 中的数字是渲染器版本，算法变化时递增即可整体失效。
+- 同一指纹的渲染在进程内加锁，避免并发写同一文件（Windows 上会冲突）。
+- 缓存被删除时，接口按需重新生成。
+- `<img>` 无法携带请求头，因此**仅**缩略图接口额外接受 `?token=`；URL 带内容版本号 `v=`，
+  响应可永久缓存（`Cache-Control: immutable`）。
+
+## 12. 外部工具
+
+- ExifTool、FFmpeg、FFprobe 通过 `PATH` 或 `LUMEN_*_PATH` 查找；缺失时降级运行（不提取照片元数据 /
+  不生成视频封面），并在日志中警告。正式安装包将随附这些工具（打包阶段处理）。

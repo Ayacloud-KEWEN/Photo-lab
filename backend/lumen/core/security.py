@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import logging
+import re
 import secrets
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -12,6 +13,9 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
 logger = logging.getLogger(__name__)
+
+# <img src> cannot send headers, so image endpoints also accept ?token=.
+_QUERY_TOKEN_PATHS = re.compile(r"^/api/v1/assets/\d+/thumbnail$")
 
 
 def generate_token() -> str:
@@ -35,6 +39,8 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
 
         header = request.headers.get("authorization", "")
         scheme, _, supplied = header.partition(" ")
+        if not header and request.method == "GET" and _QUERY_TOKEN_PATHS.match(request.url.path):
+            scheme, supplied = "bearer", request.query_params.get("token", "")
         if scheme.lower() != "bearer" or not hmac.compare_digest(supplied.encode(), self._token):
             logger.warning("rejected unauthenticated request", extra={"path": request.url.path})
             return JSONResponse(

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { useStorageRoots } from "@/api/hooks";
+import { useLibraryRefresh } from "@/api/hooks";
 import { Inspector } from "@/components/layout/Inspector";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { StatusBar } from "@/components/layout/StatusBar";
@@ -9,6 +9,7 @@ import { ALL_NAV, MAIN_NAV, type PageId } from "@/navigation";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { PlaceholderPage } from "@/pages/PlaceholderPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import type { Selection } from "@/selection";
 
 const INSPECTOR_KEY = "lumen.inspectorOpen";
 
@@ -25,9 +26,9 @@ const iconFor = (id: PageId) => MAIN_NAV.find((item) => item.id === id)!.icon;
 export default function App() {
   const [page, setPage] = useState<PageId>("library");
   const [inspectorOpen, setInspectorOpen] = useState(initialInspectorOpen);
-  const [selectedRootId, setSelectedRootId] = useState<number | null>(null);
+  const [selection, setSelection] = useState<Selection>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const roots = useStorageRoots();
+  useLibraryRefresh();
 
   useEffect(() => {
     try {
@@ -58,9 +59,6 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const selectedRoot =
-    page === "library" ? roots.data?.find((root) => root.id === selectedRootId) : undefined;
-
   return (
     <div className="flex h-full flex-col">
       <TopBar
@@ -72,7 +70,7 @@ export default function App() {
         <Sidebar current={page} onNavigate={setPage} />
         <main className="min-w-0 flex-1 overflow-y-auto">
           {page === "library" && (
-            <LibraryPage selectedRootId={selectedRootId} onSelectRoot={setSelectedRootId} />
+            <LibraryPage selection={selection} onSelect={setSelection} />
           )}
           {page === "timeline" && (
             <PlaceholderPage page="timeline" icon={iconFor("timeline")} phase="Phase 3" />
@@ -86,7 +84,7 @@ export default function App() {
           )}
           {page === "settings" && <SettingsPage />}
         </main>
-        {inspectorOpen && <Inspector root={selectedRoot} />}
+        {inspectorOpen && <Inspector selection={page === "library" ? selection : null} />}
       </div>
       <StatusBar />
     </div>

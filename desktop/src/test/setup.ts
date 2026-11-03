@@ -9,3 +9,17 @@ void i18n.changeLanguage("zh-CN");
 afterEach(() => {
   cleanup();
 });
+
+// jsdom has no layout engine: give the virtualized grid a fixed size.
+class ResizeObserverStub {
+  constructor(private readonly callback: ResizeObserverCallback) {}
+  observe(target: Element) {
+    this.callback(
+      [{ target, contentRect: { width: 800, height: 600 } } as unknown as ResizeObserverEntry],
+      this as unknown as ResizeObserver,
+    );
+  }
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;

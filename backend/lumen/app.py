@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
@@ -24,6 +25,8 @@ from lumen.core.logging import request_id_var
 from lumen.core.security import TokenAuthMiddleware
 from lumen.db.connection import Database
 from lumen.db.migrator import migrate
+from lumen.library.handlers import HANDLERS
+from lumen.tasks.runner import TaskRunner
 
 logger = logging.getLogger(__name__)
 
@@ -81,15 +84,24 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             raise
         app.state.db = db
         app.state.started_at = time.monotonic()
+        runner: TaskRunner | None = None
+        if settings.run_tasks:
+            runner = TaskRunner(db, settings, HANDLERS)
+            runner.start()
+        app.state.task_runner = runner
         logger.info(
             "backend started",
             extra={
                 "version": __version__,
                 "schema_version": version,
                 "data_dir": str(settings.data_dir),
+                "tools": {name: settings.tool(name) for name in ("exiftool", "ffmpeg", "ffprobe")},
             },
         )
         yield
+        if runner is not None:
+            # Running tasks are put back in the queue and resume on next start.
+            await run_in_threadpool(runner.stop)
         logger.info("backend stopped")
 
     app = FastAPI(

@@ -14,6 +14,14 @@ class StorageRootCreate(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=255)
 
 
+class StorageRootStats(BaseModel):
+    file_count: int = 0
+    asset_count: int = 0
+    pending_count: int = Field(default=0, description="Files waiting to be processed")
+    error_count: int = Field(default=0, description="Files that could not be processed")
+    missing_count: int = Field(default=0, description="Indexed files no longer on disk")
+
+
 class StorageRoot(BaseModel):
     id: int
     path: str
@@ -25,6 +33,7 @@ class StorageRoot(BaseModel):
     last_scanned_at: str | None
     created_at: str
     updated_at: str
+    stats: StorageRootStats
 
 
 class StorageRootList(BaseModel):
