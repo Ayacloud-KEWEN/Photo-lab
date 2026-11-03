@@ -1,0 +1,4 @@
+"""LUMEN Studio local backend service."""
+
+__version__ = "0.1.0"
+API_VERSION = "v1"
