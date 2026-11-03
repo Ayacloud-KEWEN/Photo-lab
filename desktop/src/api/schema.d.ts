@@ -378,6 +378,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/edits/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Edits
+         * @description Apply some settings (pasted, or a preset) to many photos, each as a new history step.
+         */
+        post: operations["applyEdits"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assets/{asset_id}/edit/undo": {
         parameters: {
             query?: never;
@@ -449,6 +469,48 @@ export interface paths {
          *     comma-separated pixel counts.
          */
         post: operations["renderDevelopPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Export
+         * @description Export photos, with their edits, as new JPEG files in a background task.
+         *
+         *     Existing files are never replaced; videos are skipped.
+         */
+        post: operations["startExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Export
+         * @description Progress of an export, and what it wrote once finished.
+         */
+        get: operations["getExport"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1267,6 +1329,28 @@ export interface components {
              */
             reclaimable_bytes: number;
         };
+        /** EditBatch */
+        EditBatch: {
+            /** Asset Ids */
+            asset_ids: number[];
+            /** @description Source of the values (copied settings, a preset) */
+            recipe: components["schemas"]["EditRecipe"];
+            /**
+             * Fields
+             * @description Which values to apply
+             */
+            fields: ("exposure" | "contrast" | "highlights" | "shadows" | "whites" | "blacks" | "temperature" | "tint" | "vibrance" | "saturation" | "clarity" | "sharpness" | "vignette" | "rotate" | "flip_horizontal" | "straighten" | "crop")[];
+        };
+        /** EditBatchResult */
+        EditBatchResult: {
+            /** Updated */
+            updated: number;
+            /**
+             * Skipped
+             * @description Videos, and photos whose original is unavailable
+             */
+            skipped: number;
+        };
         /**
          * EditRecipe
          * @description Slider values are in the ranges the UI shows; 0 (or None) means unchanged.
@@ -1438,6 +1522,71 @@ export interface components {
          */
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
+        };
+        /** ExportFailure */
+        ExportFailure: {
+            /** Asset Id */
+            asset_id: number;
+            /** File Name */
+            file_name: string;
+            /** Error */
+            error: string;
+        };
+        /** ExportRequest */
+        ExportRequest: {
+            /** Asset Ids */
+            asset_ids: number[];
+            /**
+             * Destination
+             * @description An existing folder (absolute path)
+             */
+            destination: string;
+            /**
+             * Long Edge
+             * @description Long side in pixels; null: full size
+             */
+            long_edge?: number | null;
+            /**
+             * Quality
+             * @description JPEG quality
+             * @default 90
+             */
+            quality: number;
+            /**
+             * Include Metadata
+             * @description Copy EXIF/XMP from the original
+             * @default true
+             */
+            include_metadata: boolean;
+            /**
+             * Include Location
+             * @description Keep GPS (only with metadata)
+             * @default false
+             */
+            include_location: boolean;
+        };
+        /**
+         * ExportResult
+         * @description The ``result`` of a finished export task.
+         */
+        ExportResult: {
+            /** Destination */
+            destination: string;
+            /** Exported */
+            exported: number;
+            /**
+             * Skipped
+             * @description Videos and photos whose original is unavailable
+             */
+            skipped: number;
+            /** Failed */
+            failed: components["schemas"]["ExportFailure"][];
+        };
+        /** ExportStatus */
+        ExportStatus: {
+            task: components["schemas"]["Task"];
+            /** @description Set once the export has finished */
+            result: components["schemas"]["ExportResult"] | null;
         };
         /** FacetValue */
         FacetValue: {
@@ -1680,6 +1829,13 @@ export interface components {
             cancel_requested: boolean;
             /** Error */
             error: string | null;
+            /**
+             * Result
+             * @description Outcome of a finished task (depends on its kind)
+             */
+            result?: {
+                [key: string]: unknown;
+            } | null;
             /** Created At */
             created_at: string;
             /** Updated At */
@@ -2656,6 +2812,39 @@ export interface operations {
             };
         };
     };
+    applyEdits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditBatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     undoEdit: {
         parameters: {
             query?: never;
@@ -2856,6 +3045,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    startExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportStatus"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The folder is missing or not writable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportStatus"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The folder is missing or not writable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

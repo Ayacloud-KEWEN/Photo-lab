@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
 import type { AssetQuery, QueryPatch } from "@/api/query";
-import type { AnalysisKind } from "@/api/types";
+import type { AnalysisKind, EditRecipe, RecipeField } from "@/api/types";
 
 /**
  * State shared across pages: filters (library, timeline, map, AI search), the
@@ -19,6 +19,22 @@ interface LibraryState {
   cloudRequest: CloudDialogRequest | null;
   openCloud: (kind: AnalysisKind, assetIds: number[]) => void;
   closeCloud: () => void;
+  /** Develop settings copied from one photo, to paste onto others. */
+  copiedSettings: CopiedSettings | null;
+  copySettings: (settings: CopiedSettings) => void;
+  exportRequest: ExportDialogRequest | null;
+  openExport: (assetIds: number[]) => void;
+  closeExport: () => void;
+}
+
+export interface CopiedSettings {
+  recipe: EditRecipe;
+  fields: RecipeField[];
+}
+
+export interface ExportDialogRequest {
+  assetIds: number[];
+  nonce: number;
 }
 
 export interface ViewerState {
@@ -47,6 +63,8 @@ export function LibraryStateProvider({ children }: { children: ReactNode }) {
   const [viewer, setViewer] = useState<ViewerState | null>(null);
   const [similarTo, setSimilarTo] = useState<SimilarRequest | null>(null);
   const [cloudRequest, setCloudRequest] = useState<CloudDialogRequest | null>(null);
+  const [copiedSettings, setCopiedSettings] = useState<CopiedSettings | null>(null);
+  const [exportRequest, setExportRequest] = useState<ExportDialogRequest | null>(null);
 
   const openViewer = useCallback((ids: readonly number[], id: number) => {
     const index = ids.indexOf(id);
@@ -63,6 +81,11 @@ export function LibraryStateProvider({ children }: { children: ReactNode }) {
     [],
   );
   const closeCloud = useCallback(() => setCloudRequest(null), []);
+  const openExport = useCallback(
+    (assetIds: number[]) => setExportRequest({ assetIds, nonce: Date.now() }),
+    [],
+  );
+  const closeExport = useCallback(() => setExportRequest(null), []);
 
   const value = useMemo(
     () => ({
@@ -76,8 +99,27 @@ export function LibraryStateProvider({ children }: { children: ReactNode }) {
       cloudRequest,
       openCloud,
       closeCloud,
+      copiedSettings,
+      copySettings: setCopiedSettings,
+      exportRequest,
+      openExport,
+      closeExport,
     }),
-    [query, viewer, openViewer, closeViewer, similarTo, findSimilar, cloudRequest, openCloud, closeCloud],
+    [
+      query,
+      viewer,
+      openViewer,
+      closeViewer,
+      similarTo,
+      findSimilar,
+      cloudRequest,
+      openCloud,
+      closeCloud,
+      copiedSettings,
+      exportRequest,
+      openExport,
+      closeExport,
+    ],
   );
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;
 }

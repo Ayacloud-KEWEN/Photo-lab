@@ -1,7 +1,8 @@
-import { BookOpen, Heart, HeartOff, Trophy, X } from "lucide-react";
+import { BookOpen, ClipboardPaste, Download, Heart, HeartOff, Trophy, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { useBatchUpdate } from "@/api/hooks";
+import { useApplyEdits, useBatchUpdate } from "@/api/hooks";
+import { PRESETS, settingsFor } from "@/components/develop/presets";
 import { Button } from "@/components/ui/button";
 import { useLibraryState } from "@/library/state";
 
@@ -18,9 +19,12 @@ interface SelectionBarProps {
 export function SelectionBar({ ids, onClear, onError }: SelectionBarProps) {
   const { t } = useTranslation();
   const batch = useBatchUpdate();
-  const { openCloud } = useLibraryState();
+  const applyEdits = useApplyEdits();
+  const { openCloud, openExport, copiedSettings } = useLibraryState();
   const apply = (changes: { rating?: number; is_favorite?: boolean; add_tags?: string[] }) =>
     batch.mutateAsync({ asset_ids: ids, ...changes }).catch(onError);
+  const applySettings = (settings: ReturnType<typeof settingsFor>) =>
+    applyEdits.mutateAsync({ asset_ids: ids, ...settings }).catch(onError);
 
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-md border border-highlight/40 bg-highlight/10 px-3 py-1.5">
@@ -54,6 +58,38 @@ export function SelectionBar({ ids, onClear, onError }: SelectionBarProps) {
           {t("ai.story")}
         </Button>
       )}
+      {copiedSettings && (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={applyEdits.isPending}
+          onClick={() => void applySettings(copiedSettings)}
+        >
+          <ClipboardPaste className="size-3.5" />
+          {t("develop.paste")}
+        </Button>
+      )}
+      <select
+        aria-label={t("develop.applyPreset")}
+        value=""
+        disabled={applyEdits.isPending}
+        onChange={(event) => {
+          const preset = PRESETS.find((item) => item.id === event.target.value);
+          if (preset) void applySettings(settingsFor(preset.values));
+        }}
+        className="h-7 rounded-md border border-input bg-background/60 px-2 text-xs text-muted-foreground"
+      >
+        <option value="">{t("develop.applyPreset")}</option>
+        {PRESETS.map((preset) => (
+          <option key={preset.id} value={preset.id}>
+            {t(`develop.presets.${preset.id}`)}
+          </option>
+        ))}
+      </select>
+      <Button variant="ghost" size="sm" onClick={() => openExport(ids)}>
+        <Download className="size-3.5" />
+        {t("export.action")}
+      </Button>
       <Button variant="ghost" size="sm" className="ml-auto" onClick={onClear}>
         <X className="size-3.5" />
         {t("selection.clear")}

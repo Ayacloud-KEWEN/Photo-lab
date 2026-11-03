@@ -16,8 +16,10 @@ import type {
   AssetDetail,
   AssetUpdate,
   CloudRequest,
+  EditBatch,
   EditRecipe,
   EditState,
+  ExportRequest,
   StorageRootCreate,
   Task,
 } from "./types";
@@ -41,6 +43,7 @@ export const queryKeys = {
   similar: (id: number, query: AssetQuery) => ["library", "similar", id, query] as const,
   analyses: (id: number) => ["library", "analyses", id] as const,
   edit: (id: number) => ["library", "edit", id] as const,
+  export: (taskId: number) => ["export", taskId] as const,
 };
 
 const ASSET_PAGE_SIZE = 300;
@@ -291,6 +294,42 @@ export function useEditActions() {
       select: (id: number, editId: number | null) => run((c) => api.selectEdit(c, id, editId)),
     };
   }, [conn, queryClient]);
+}
+
+/** Settings applied to many photos: every view of them (and their edits) refreshes. */
+export function useApplyEdits() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: EditBatch) => api.applyEdits(requireConnection(conn), body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.library }),
+  });
+}
+
+export function useStartExport() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ExportRequest) => api.startExport(requireConnection(conn), body),
+    onSuccess: (status) => {
+      queryClient.setQueryData(queryKeys.export(status.task.id), status);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+    },
+  });
+}
+
+/** An export's progress, polled until it has finished. */
+export function useExportStatus(taskId: number | null) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.export(taskId ?? 0),
+    queryFn: () => api.getExport(requireConnection(conn), taskId!),
+    enabled: conn !== null && taskId !== null,
+    refetchInterval: (query) => {
+      const status = query.state.data?.task.status;
+      return status === "pending" || status === "running" ? 500 : false;
+    },
+  });
 }
 
 /** Refresh lists, the timeline and the map (e.g. after edits changed thumbnails). */

@@ -1,5 +1,7 @@
 import {
   Check,
+  ClipboardCopy,
+  ClipboardPaste,
   Crop as CropIcon,
   Eye,
   FlipHorizontal2,
@@ -31,11 +33,13 @@ import {
 import type { Crop, EditRecipe, EditState, EditStep } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { useLibraryState } from "@/library/state";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { CropOverlay } from "./CropOverlay";
 import { Histogram } from "./Histogram";
+import { COPY_FIELDS, PRESETS, pick } from "./presets";
 import {
   ASPECTS,
   DEFAULT_RECIPE,
@@ -175,6 +179,13 @@ export function DevelopWorkspace({
     setCropping(false);
   };
 
+  // --- Presets, copy and paste ------------------------------------------------------------
+  const { copiedSettings, copySettings } = useLibraryState();
+  const copy = () => copySettings({ recipe: recipeRef.current, fields: COPY_FIELDS });
+  const paste = () => {
+    if (copiedSettings) change(pick(copiedSettings.recipe, copiedSettings.fields), COMMIT_DELAY_MS);
+  };
+
   // --- Geometry ---------------------------------------------------------------------------
   const rotate = (clockwise: boolean) => {
     const current = recipeRef.current;
@@ -227,6 +238,8 @@ export function DevelopWorkspace({
       if (event.shiftKey) redo();
       else undo();
     } else if (ctrl && key.toLowerCase() === "y") redo();
+    else if (ctrl && event.shiftKey && key.toLowerCase() === "c") copy();
+    else if (ctrl && event.shiftKey && key.toLowerCase() === "v") paste();
     else if (key === "\\") setBefore((value) => !value);
     else if (key.toLowerCase() === "c" && !ctrl) {
       if (cropping) applyCrop();
@@ -408,6 +421,22 @@ export function DevelopWorkspace({
               </section>
             ))}
 
+            <section aria-label={t("develop.groups.presets")}>
+              <GroupTitle>{t("develop.groups.presets")}</GroupTitle>
+              <div className="grid grid-cols-2 gap-1">
+                {PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => change(preset.values, COMMIT_DELAY_MS)}
+                    className="truncate rounded bg-white/5 px-2 py-1 text-left text-[12px] text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                  >
+                    {t(`develop.presets.${preset.id}`)}
+                  </button>
+                ))}
+              </div>
+            </section>
+
             {state && (
               <History
                 state={state}
@@ -427,6 +456,12 @@ export function DevelopWorkspace({
           </IconButton>
           <IconButton label={t("develop.before")} active={before} onClick={() => setBefore((v) => !v)}>
             <Eye />
+          </IconButton>
+          <IconButton label={t("develop.copy")} onClick={copy}>
+            <ClipboardCopy />
+          </IconButton>
+          <IconButton label={t("develop.paste")} onClick={paste} disabled={!copiedSettings}>
+            <ClipboardPaste />
           </IconButton>
           <Button
             size="sm"

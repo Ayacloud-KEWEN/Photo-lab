@@ -66,6 +66,7 @@ class TaskContext:
         return self.stop_event.is_set()
 
 
+# A handler may return a JSON-serialisable dict: the task's result.
 Handler = Callable[[TaskContext], object]
 
 
@@ -144,7 +145,7 @@ class TaskRunner:
         started = time.monotonic()
         logger.info("task started", extra={**log, "attempt": task["attempts"]})
         try:
-            handler(ctx)
+            outcome = handler(ctx)
         except TaskCancelled:
             queue.mark_cancelled(conn, task_id)
             logger.info("task cancelled", extra=log)
@@ -158,7 +159,7 @@ class TaskRunner:
             outcome = queue.mark_failed(conn, task_id, f"{type(exc).__name__}: {exc}", retry=True)
             logger.exception("task error", extra={**log, "outcome": outcome})
         else:
-            queue.mark_succeeded(conn, task_id)
+            queue.mark_succeeded(conn, task_id, outcome if isinstance(outcome, dict) else None)
             logger.info(
                 "task succeeded",
                 extra={**log, "duration_s": round(time.monotonic() - started, 2)},

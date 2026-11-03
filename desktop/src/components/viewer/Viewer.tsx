@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
   ChevronRight,
+  Download,
   Heart,
   Info,
   Maximize2,
@@ -64,7 +65,7 @@ function ViewerOverlay({
   const update = useUpdateAsset();
   const detail = asset.data;
   const aiStatus = useAiStatus();
-  const { findSimilar } = useLibraryState();
+  const { findSimilar, openExport } = useLibraryState();
   const aiReady = !!aiStatus.data?.local.enabled && !!aiStatus.data?.local.model_downloaded;
 
   useEffect(() => rootRef.current?.focus(), []);
@@ -188,6 +189,11 @@ function ViewerOverlay({
               onClick={() => setDeveloping((value) => !value)}
             >
               <SlidersHorizontal />
+            </IconButton>
+          )}
+          {isPhoto && (
+            <IconButton label={t("export.action")} onClick={() => openExport([id])}>
+              <Download />
             </IconButton>
           )}
           {!showDevelop && (

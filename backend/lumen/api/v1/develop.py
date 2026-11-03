@@ -9,7 +9,13 @@ from starlette.concurrency import run_in_threadpool
 from lumen.api.deps import Connection
 from lumen.develop.recipe import EditRecipe
 from lumen.schemas.common import ErrorResponse
-from lumen.schemas.develop import DevelopPreviewRequest, EditSelect, EditState
+from lumen.schemas.develop import (
+    DevelopPreviewRequest,
+    EditBatch,
+    EditBatchResult,
+    EditSelect,
+    EditState,
+)
 from lumen.services import develop as service
 
 router = APIRouter(tags=["develop"])
@@ -38,6 +44,12 @@ def get_edit(conn: Connection, asset_id: int = Path(ge=1)) -> EditState:
 def save_edit(conn: Connection, recipe: EditRecipe, asset_id: int = Path(ge=1)) -> EditState:
     """Save ``recipe`` as a new history step and put it in effect. Originals are not touched."""
     return service.save_edit(conn, asset_id, recipe)
+
+
+@router.post("/edits/batch", response_model=EditBatchResult, operation_id="applyEdits")
+def apply_edits(conn: Connection, body: EditBatch) -> EditBatchResult:
+    """Apply some settings (pasted, or a preset) to many photos, each as a new history step."""
+    return service.apply_to_many(conn, body)
 
 
 @router.post(

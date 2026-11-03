@@ -44,11 +44,14 @@ _cache: OrderedDict[tuple[str, int, int, int | None], Array] = OrderedDict()
 _cache_lock = threading.Lock()
 
 
-def load_base(source: Path, media_format: MediaFormat, edge: int | None) -> Array:
+def load_base(
+    source: Path, media_format: MediaFormat, edge: int | None, *, cache: bool = True
+) -> Array:
     """The oriented original, at most ``edge`` px on its long side (``None``: full size).
 
-    Recently used bases stay in memory, so moving a slider never decodes the file again.
-    The result is shared: callers must not modify it.
+    Recently used bases stay in memory, so moving a slider never decodes the file again
+    (``cache=False`` for one-off full-size work such as exports). The result is shared:
+    callers must not modify it.
     """
     try:
         stat = source.stat()
@@ -64,6 +67,8 @@ def load_base(source: Path, media_format: MediaFormat, edge: int | None) -> Arra
     if edge is not None and max(base.shape[:2]) > edge:
         base = _resize(base, edge)
     base.setflags(write=False)
+    if not cache:
+        return base
     with _cache_lock:
         _cache[key] = base
         while len(_cache) > _CACHE_SIZE:
@@ -148,9 +153,27 @@ def histogram(image: Image.Image) -> list[list[int]]:
 
 
 def develop(
-    source: Path, media_format: MediaFormat, recipe: EditRecipe, edge: int | None
+    source: Path,
+    media_format: MediaFormat,
+    recipe: EditRecipe,
+    edge: int | None,
+    *,
+    cache: bool = True,
 ) -> Image.Image:
-    return to_image(render(load_base(source, media_format, edge), recipe))
+    return to_image(render(load_base(source, media_format, edge, cache=cache), recipe))
+
+
+def source_icc_profile(source: Path, media_format: MediaFormat) -> bytes | None:
+    """The original's colour profile (e.g. Display P3 on iPhones), which the developed
+    pixels are still in. RAW files are developed to sRGB and need none."""
+    if media_format.kind == "raw":
+        return None
+    try:
+        with Image.open(source) as opened:
+            profile = opened.info.get("icc_profile")
+    except (OSError, ValueError):
+        return None
+    return profile if isinstance(profile, bytes) and profile else None
 
 
 def _geometry(image: Array, recipe: EditRecipe) -> Array:

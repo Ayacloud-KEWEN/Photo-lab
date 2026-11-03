@@ -42,19 +42,27 @@ def enqueue(
     storage_root_id: int | None = None,
     payload: dict[str, Any] | None = None,
     priority: int = 0,
+    unique: bool = True,
 ) -> int:
-    """Queue a task, or return the id of an identical one that is already active."""
+    """Queue a task, or return the id of an identical one that is already active.
+
+    ``unique=False`` always queues a new task (e.g. two exports of different photos).
+    """
     now = utc_now()
     with transaction(conn):
-        existing = conn.execute(
-            """
+        existing = (
+            None
+            if not unique
+            else conn.execute(
+                """
             SELECT id FROM tasks
             WHERE kind = ? AND storage_root_id IS ? AND cancel_requested = 0
               AND status IN ('pending', 'running')
             ORDER BY id LIMIT 1
             """,
-            (kind, storage_root_id),
-        ).fetchone()
+                (kind, storage_root_id),
+            ).fetchone()
+        )
         if existing is not None:
             return int(existing["id"])
         cursor = conn.execute(
@@ -117,16 +125,18 @@ def cancel_requested(conn: sqlite3.Connection, task_id: int) -> bool:
     return row is None or bool(row["cancel_requested"]) or row["status"] != "running"
 
 
-def mark_succeeded(conn: sqlite3.Connection, task_id: int) -> None:
+def mark_succeeded(
+    conn: sqlite3.Connection, task_id: int, result: dict[str, Any] | None = None
+) -> None:
     now = utc_now()
     conn.execute(
         """
         UPDATE tasks
         SET status = 'succeeded', finished_at = ?, updated_at = ?, error = NULL,
-            progress_current = COALESCE(progress_total, progress_current)
+            progress_current = COALESCE(progress_total, progress_current), result = ?
         WHERE id = ? AND status = 'running'
         """,
-        (now, now, task_id),
+        (now, now, json.dumps(result) if result is not None else None, task_id),
     )
 
 

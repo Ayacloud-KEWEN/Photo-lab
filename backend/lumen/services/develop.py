@@ -9,11 +9,11 @@ from __future__ import annotations
 import io
 import sqlite3
 
-from lumen.core.errors import NotFoundError
+from lumen.core.errors import LumenError, NotFoundError
 from lumen.db.connection import transaction, utc_now
 from lumen.develop import engine
 from lumen.develop.recipe import IDENTITY, EditRecipe
-from lumen.schemas.develop import EditState, EditStep
+from lumen.schemas.develop import EditBatch, EditBatchResult, EditState, EditStep
 from lumen.services.assets import (
     DevelopUnavailableError,
     develop_source,
@@ -121,6 +121,37 @@ def save_edit(conn: sqlite3.Connection, asset_id: int, recipe: EditRecipe) -> Ed
             (asset_id, asset_id, MAX_STEPS),
         )
     return get_edit_state(conn, asset_id)
+
+
+def current_recipe(conn: sqlite3.Connection, asset_id: int) -> EditRecipe:
+    """The recipe in effect (the default recipe for an unedited photo)."""
+    row = conn.execute(
+        "SELECT e.recipe FROM media_assets a JOIN edit_history e ON e.id = a.current_edit_id "
+        "WHERE a.id = ?",
+        (asset_id,),
+    ).fetchone()
+    return EditRecipe.model_validate_json(row["recipe"]) if row else IDENTITY
+
+
+def apply_to_many(conn: sqlite3.Connection, body: EditBatch) -> EditBatchResult:
+    """Copy ``body.fields`` of ``body.recipe`` into each photo's edit (pasting settings,
+    applying a preset). Each changed photo gets a new history step; videos and photos
+    whose original is unavailable are skipped."""
+    values: dict[str, object] = {field: getattr(body.recipe, field) for field in body.fields}
+    updated = skipped = 0
+    for asset_id in dict.fromkeys(body.asset_ids):  # unique, in order
+        try:
+            recipe = current_recipe(conn, asset_id).model_copy(update=values)
+            before = _asset(conn, asset_id)["current_edit_id"]
+            state = save_edit(conn, asset_id, EditRecipe.model_validate(recipe.model_dump()))
+        except (DevelopUnavailableError, NotFoundError):
+            skipped += 1
+            continue
+        except ValueError as exc:  # e.g. a crop that no longer fits
+            raise LumenError(f"Invalid settings: {exc}") from exc
+        if state.current_edit_id != before:
+            updated += 1
+    return EditBatchResult(updated=updated, skipped=skipped)
 
 
 def select_edit(conn: sqlite3.Connection, asset_id: int, edit_id: int | None) -> EditState:

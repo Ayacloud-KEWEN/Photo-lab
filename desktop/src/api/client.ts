@@ -14,9 +14,13 @@ import type {
   CloudPreview,
   CloudRequest,
   CloudTestResult,
+  EditBatch,
+  EditBatchResult,
   EditRecipe,
   EditState,
   ErrorBody,
+  ExportRequest,
+  ExportStatus,
   HealthResponse,
   MapPoints,
   RenditionVariant,
@@ -201,6 +205,16 @@ export const api = {
 
   redoEdit: (conn: BackendConnection, id: number) =>
     request<EditState>(conn, "POST", `/api/v1/assets/${id}/edit/redo`),
+
+  /** Apply some settings (pasted, or a preset) to many photos. */
+  applyEdits: (conn: BackendConnection, body: EditBatch) =>
+    request<EditBatchResult>(conn, "POST", "/api/v1/edits/batch", body),
+
+  startExport: (conn: BackendConnection, body: ExportRequest) =>
+    request<ExportStatus>(conn, "POST", "/api/v1/exports", body),
+
+  getExport: (conn: BackendConnection, taskId: number) =>
+    request<ExportStatus>(conn, "GET", `/api/v1/exports/${taskId}`),
 
   selectEdit: (conn: BackendConnection, id: number, editId: number | null) =>
     request<EditState>(conn, "POST", `/api/v1/assets/${id}/edit/select`, { edit_id: editId }),

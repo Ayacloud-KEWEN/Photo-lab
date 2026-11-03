@@ -1,12 +1,12 @@
 # LUMEN Studio — 交接文档（HANDOFF）
 
-> 给接手的开发者或新的 Claude 会话：先读本文，再按需读 `docs/`。最后更新：2026-11-03（Phase 5.1 显影完成，分支 `phase-5-studio`）。
+> 给接手的开发者或新的 Claude 会话：先读本文，再按需读 `docs/`。最后更新：2026-11-03（Phase 5.2 导出与批量完成，分支 `phase-5-studio`）。
 
 ## 1. 一句话现状
 
 Windows 桌面照片/视频管理工作站，**Phase 1–4 已完成并合并进 `main`**。**Phase 5（摄影工作室）进行中**，
 在分支 `phase-5-studio` 上分 4 步交付，每步由用户试用确认：
-5.1 显影（非破坏性照片编辑）✅ → 5.2 导出与批量（导出 JPEG 任务、拷贝/粘贴调整、预设）→
+5.1 显影（非破坏性照片编辑）✅ → 5.2 导出与批量（导出 JPEG 任务、拷贝/粘贴调整、预设）✅ →
 5.3 视频基础处理（首尾剪辑、旋转、静音、导出、抽帧）→ 5.4 旅行作品集（collections 表、排序、说明、旅行建议、批量导出）。
 用户（中文沟通）会先试用当前版本，可能带着问题反馈回来。
 
@@ -16,7 +16,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–4 已完成并合并进
 | Phase 2 | 扫描、元数据、指纹、缩略图、RAW+JPEG 配对、移动/丢失/重复、后台任务 | ✅ |
 | Phase 3 | 照片墙、全屏浏览、时间轴、地图、星级/收藏/标签/备注、搜索筛选 | ✅ |
 | Phase 4 | SigLIP2 语义搜索/相似照片/自动标签、OpenCLIP 对照工具、DeepSeek 云端分析 | ✅ |
-| Phase 5 | RAW 后期、色彩调整、非破坏性编辑、视频基础处理、旅行摄影作品集 | 🚧 5.1 显影已完成 |
+| Phase 5 | RAW 后期、色彩调整、非破坏性编辑、视频基础处理、旅行摄影作品集 | 🚧 5.1–5.2 已完成 |
 
 ## 2. 必读文档
 
@@ -25,7 +25,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–4 已完成并合并进
 | `docs/PROJECT_SPEC.md` | 产品需求（原始需求，勿随意改动） |
 | `docs/phases.md` | 阶段划分 |
 | `docs/Project_Initialization.md` | Phase 1 任务书（工作方式：先查环境、提方案、经确认再实施） |
-| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-019）**，改动架构前先读 |
+| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-020）**，改动架构前先读 |
 | `README.md` | 安装、开发、测试、API 列表、快捷键 |
 
 ## 3. 环境（用户的开发机）
@@ -53,7 +53,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **120** 个测试、前端 **55** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **128** 个测试、前端 **59** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ## 5. 代码地图
 
@@ -69,7 +69,8 @@ backend/lumen/
   ai/              models（注册表）、encoders（SigLIP2/OpenCLIP）、engine（加载/卸载）、
                    index（内存向量检索）、labels（标签词表）、pipeline（下载/索引任务）、
                    cloud（DeepSeek）、bench（对照工具）
-  develop/         显影（Phase 5）：recipe（编辑配方）、engine（numpy+OpenCV 渲染、底图缓存）、renditions（编辑后的缩略图）
+  develop/         显影（Phase 5）：recipe（编辑配方）、engine（numpy+OpenCV 渲染、底图缓存）、renditions（编辑后的缩略图）、
+                   exporter（导出 JPEG：ICC、元数据、不覆盖）；导出任务在 library/exports.py
   services/        供 API 调用的业务逻辑；api/v1/ 路由只做输入输出
 desktop/src/
   api/             client.ts、hooks.ts（React Query）、query.ts、schema.d.ts（生成，勿手改）
@@ -151,9 +152,12 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 - **5.1 显影 ✅**：全屏浏览中按 D 或点“编辑”进入；基本/色彩/细节/效果滑块、旋转/翻转/拉直/裁剪（比例锁定）、
   直方图、对比原图、撤销/重做/历史、编辑后的缩略图与“已编辑”标记。用真实 HEIC/JPG 在浏览器里验证过。
   未验证：RAW 显影（用户库里没有 RAW，`_decode_raw` 只测了错误路径）。
-- **5.2 导出与批量（下一步）**：导出 JPEG 后台任务（长边、质量、保留 EXIF、默认去 GPS、同名不覆盖），
-  全尺寸渲染用 `engine.develop(..., edge=None)`；拷贝/粘贴调整到多选；内置预设。
-- **5.3 视频**、**5.4 作品集**：见第 1 节。`collections`/`collection_items` 表在 5.4 的迁移里建。
+- **5.2 导出与批量 ✅**（ADR-020）：导出对话框（多选操作条和全屏浏览中的“导出”）、后台导出任务（长边、质量、
+  保留 EXIF、GPS 默认删除、原图 ICC、同名不覆盖、重启续传）；显影面板的 8 个预设与拷贝/粘贴设置；
+  多选操作条可粘贴设置、应用预设。任务结果存 `tasks.result`（迁移 0008）。用真实 HEIC 验证过导出的元数据与 P3 配置文件。
+- **5.3 视频基础处理（下一步）**：首尾剪辑、旋转、静音（非破坏性，存为视频的配方），查看器按剪辑范围播放，
+  FFmpeg 导出（快速复制或重新编码），导出当前帧为照片。
+- **5.4 作品集**：见第 1 节。`collections`/`collection_items` 表在 5.4 的迁移里建。
 
 ## 10. 测试素材
 

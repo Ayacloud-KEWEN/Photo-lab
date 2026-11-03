@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { StatusBar } from "@/components/layout/StatusBar";
 import { TopBar } from "@/components/layout/TopBar";
 import { CloudDialog } from "@/components/ai/CloudDialog";
+import { ExportDialog } from "@/components/library/ExportDialog";
 import { Viewer } from "@/components/viewer/Viewer";
 import { cleanQuery, useLibraryState } from "@/library/state";
 import { ALL_NAV, MAIN_NAV, type PageId } from "@/navigation";
@@ -124,6 +125,7 @@ export default function App() {
       <StatusBar />
       <Viewer />
       <CloudDialog onOpenSettings={() => setPage("settings")} />
+      <ExportDialog />
     </div>
   );
 }

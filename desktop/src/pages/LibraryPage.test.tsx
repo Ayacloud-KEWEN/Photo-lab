@@ -165,6 +165,29 @@ describe("LibraryPage", () => {
     await waitFor(() => expect(screen.queryByText("已选择 3 项")).not.toBeInTheDocument());
   });
 
+  it("applies a preset to the selection", async () => {
+    const { requests } = stubBackend({
+      roots: [{ ...root, status: "ready" }],
+      assets: [1, 2, 3].map((id) => makeAsset(id)),
+    });
+    fakeViewport();
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("img", { name: "IMG_1.JPG" }));
+    fireEvent.click(screen.getByRole("img", { name: "IMG_3.JPG" }), { shiftKey: true });
+    fireEvent.change(await screen.findByRole("combobox", { name: "应用预设…" }), {
+      target: { value: "warm" },
+    });
+    await waitFor(() =>
+      expect(requests.find((r) => r.url.pathname === "/api/v1/edits/batch")?.body).toEqual({
+        asset_ids: [1, 2, 3],
+        recipe: expect.objectContaining({ temperature: 25, tint: 5, vibrance: 10, exposure: 0 }),
+        fields: ["temperature", "tint", "vibrance"],
+      }),
+    );
+    expect(screen.getByRole("button", { name: "导出" })).toBeInTheDocument();
+  });
+
   it("filters by media type", async () => {
     const { requests } = stubBackend({
       roots: [{ ...root, status: "ready" }],

@@ -20,6 +20,11 @@ export function StatusBar() {
       done: (running.progress_current / 1024 ** 3).toFixed(1),
       total: ((running.progress_total ?? 0) / 1024 ** 3).toFixed(1),
     });
+  } else if (running?.kind === "export_assets") {
+    taskLabel = t("status.taskExport", {
+      current: running.progress_current,
+      total: running.progress_total ?? 0,
+    });
   } else if (running?.kind === "ai_index_assets") {
     taskLabel = t("status.taskAiIndex", {
       current: running.progress_current,

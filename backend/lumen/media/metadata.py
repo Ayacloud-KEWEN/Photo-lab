@@ -344,6 +344,24 @@ class ExifToolSession:
     ) -> None:
         self._helper.terminate()
 
+    def copy_metadata(
+        self, source: Path, target: Path, *, width: int, height: int, include_location: bool
+    ) -> None:
+        """Copy ``source``'s metadata into ``target`` (an exported JPEG, never an original).
+
+        The pixels were developed (oriented, possibly cropped), so orientation, size and the
+        embedded thumbnails are corrected; GPS is removed unless ``include_location``.
+        The ICC profile is left as written with the pixels.
+        """
+        args = [
+            "-TagsFromFile", str(source), "-all:all", "--ICC_Profile:all",
+            "-ThumbnailImage=", "-PreviewImage=", "-Orientation=1",
+            f"-ExifImageWidth={width}", f"-ExifImageHeight={height}",
+        ]  # fmt: skip
+        if not include_location:
+            args += ["-GPS:all=", "-XMP:GPS*=", "-XMP-exif:GPS*="]
+        self._helper.execute(*args, "-overwrite_original", str(target))
+
     def read(self, paths: Iterable[Path]) -> dict[str, dict[str, Any] | Exception]:
         """Read tags for many files; returns results keyed by ``str(path)``."""
         files = [str(p) for p in paths]

@@ -116,6 +116,7 @@ export function stubBackend(options: StubOptions = {}) {
   const assets = options.assets ?? [];
   const requests: Request[] = [];
   const json = (body: unknown, status = 200) => Promise.resolve(Response.json(body, { status }));
+  let exportRequest: unknown = null;
   // Edit history per asset: saved recipes and the index in effect (-1: the original).
   const edits = new Map<number, { steps: EditRecipe[]; current: number }>();
   const editState = (id: number): EditState => {
@@ -229,6 +230,43 @@ export function stubBackend(options: StubOptions = {}) {
       }); // prettier-ignore
     }
     if (/\/analyses$/.test(path)) return json([]);
+    if (path === "/api/v1/edits/batch") {
+      const request = body as { asset_ids: number[]; recipe: EditRecipe; fields: (keyof EditRecipe)[] };
+      let updated = 0;
+      for (const id of request.asset_ids) {
+        if (assets.find((asset) => asset.id === id)?.media_type !== "photo") continue;
+        const history = edits.get(id) ?? { steps: [], current: -1 };
+        const current = history.steps[history.current] ?? DEFAULT_RECIPE;
+        const next = { ...current, ...Object.fromEntries(request.fields.map((f) => [f, request.recipe[f]])) };
+        history.steps = [...history.steps.slice(0, history.current + 1), next];
+        history.current = history.steps.length - 1;
+        edits.set(id, history);
+        updated += 1;
+      }
+      return json({ updated, skipped: request.asset_ids.length - updated });
+    }
+    if (path === "/api/v1/exports" || /^\/api\/v1\/exports\/\d+$/.test(path)) {
+      const started = path === "/api/v1/exports";
+      const request = (started ? body : exportRequest) as { asset_ids: number[]; destination: string };
+      if (started) {
+        if (!/^[A-Za-z]:\\/.test(request.destination)) {
+          return json({ error: { code: "invalid_path", message: "The folder does not exist" } }, 422);
+        }
+        exportRequest = request;
+      }
+      const total = request.asset_ids.length;
+      const task = {
+        id: 99, kind: "export_assets", status: started ? "pending" : "succeeded",
+        storage_root_id: null, progress_current: started ? 0 : total, progress_total: total,
+        attempts: 1, max_attempts: 3, cancel_requested: false, error: null, result: null,
+        created_at: "2026-11-03T08:00:00.000Z", updated_at: "2026-11-03T08:00:00.000Z",
+        started_at: null, finished_at: null,
+      }; // prettier-ignore
+      const result = started
+        ? null
+        : { destination: request.destination, exported: total - 1, skipped: 1, failed: [] };
+      return json({ task: { ...task, result }, result }, started ? 202 : 200);
+    }
     const editMatch = /^\/api\/v1\/assets\/(\d+)\/(edit(?:\/undo|\/redo|\/select)?|develop\/preview)$/.exec(path);
     if (editMatch) {
       const id = Number(editMatch[1]);

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 
 from lumen.schemas.tasks import Task
@@ -18,6 +19,7 @@ def _to_model(row: sqlite3.Row) -> Task:
         max_attempts=row["max_attempts"],
         cancel_requested=bool(row["cancel_requested"]),
         error=row["error"],
+        result=json.loads(row["result"]) if row["result"] else None,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         started_at=row["started_at"],

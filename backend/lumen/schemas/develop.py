@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal, get_args
+
 from pydantic import BaseModel, Field
 
 from lumen.develop.recipe import EditRecipe
@@ -25,6 +27,25 @@ class EditState(BaseModel):
     source_format: str = Field(description="Upper-case extension of the developed file")
     is_raw: bool
     rendition_version: str | None
+
+
+RecipeField = Literal[
+    "exposure", "contrast", "highlights", "shadows", "whites", "blacks",
+    "temperature", "tint", "vibrance", "saturation", "clarity", "sharpness", "vignette",
+    "rotate", "flip_horizontal", "straighten", "crop",
+]  # fmt: skip
+assert set(get_args(RecipeField)) == set(EditRecipe.model_fields) - {"version"}
+
+
+class EditBatch(BaseModel):
+    asset_ids: list[int] = Field(min_length=1, max_length=20_000)
+    recipe: EditRecipe = Field(description="Source of the values (copied settings, a preset)")
+    fields: list[RecipeField] = Field(min_length=1, description="Which values to apply")
+
+
+class EditBatchResult(BaseModel):
+    updated: int
+    skipped: int = Field(description="Videos, and photos whose original is unavailable")
 
 
 class EditSelect(BaseModel):

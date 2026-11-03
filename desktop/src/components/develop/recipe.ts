@@ -219,4 +219,4 @@ export function resizeCrop(
 }
 
 /** Recipe fields that history steps name (everything but the version). */
-export type RecipeField = SliderKey | "rotate" | "flip_horizontal" | "crop";
+export type { RecipeField } from "@/api/types";

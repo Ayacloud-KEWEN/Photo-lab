@@ -126,6 +126,31 @@ describe("Develop", () => {
     expect(screen.getByRole("dialog", { name: "IMG_1.JPG" })).toBeInTheDocument();
   });
 
+  it("applies presets and pastes copied settings onto another photo", async () => {
+    const { requests } = stubBackend({ assets: [makeAsset(1), makeAsset(2)] });
+    renderViewer();
+    const dialog = await screen.findByRole("dialog", { name: "IMG_1.JPG" });
+    fireEvent.keyDown(dialog, { key: "d" });
+    const panel = await screen.findByRole("complementary", { name: "显影" });
+
+    fireEvent.click(await within(panel).findByRole("button", { name: "黑白" }));
+    expect(within(panel).getByLabelText("饱和度")).toHaveValue("-100");
+    await waitFor(() =>
+      expect(saves(requests).at(-1)?.body).toMatchObject({ saturation: -100, contrast: 15 }),
+    );
+
+    fireEvent.click(within(panel).getByRole("button", { name: "拷贝设置 (Ctrl+Shift+C)" }));
+    fireEvent.keyDown(dialog, { key: "ArrowRight" });
+    await screen.findByRole("dialog", { name: "IMG_2.JPG" });
+    const next = await screen.findByRole("complementary", { name: "显影" });
+    await within(next).findByLabelText("饱和度");
+    fireEvent.keyDown(dialog, { key: "v", ctrlKey: true, shiftKey: true });
+    await waitFor(() =>
+      expect(saves(requests).find((r) => r.url.pathname === "/api/v1/assets/2/edit")?.body)
+        .toMatchObject({ saturation: -100, contrast: 15, rotate: 0 }),
+    );
+  });
+
   it("offers no editing for videos", async () => {
     stubBackend({ assets: [makeAsset(1, { media_type: "video", file_name: "clip.mp4" })] });
     renderViewer([1]);
