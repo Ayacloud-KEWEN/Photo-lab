@@ -71,6 +71,18 @@ describe("LibraryPage", () => {
     expect(await screen.findByText("已选择 2 项")).toBeInTheDocument();
   });
 
+  it("marks Live Photos on the wall", async () => {
+    stubBackend({
+      roots: [{ ...root, status: "ready" }],
+      assets: [makeAsset(1, { is_live: true, formats: ["HEIC", "MOV"] }), makeAsset(2)],
+    });
+    fakeViewport();
+    renderPage();
+
+    await screen.findByRole("img", { name: "IMG_1.JPG" });
+    expect(screen.getAllByRole("img", { name: "实况" })).toHaveLength(1);
+  });
+
   it("rates the selection from the keyboard and selects all with Ctrl+A", async () => {
     const { requests } = stubBackend({
       roots: [{ ...root, status: "ready" }],

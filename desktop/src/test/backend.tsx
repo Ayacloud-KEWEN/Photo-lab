@@ -36,6 +36,7 @@ export function makeAsset(id: number, overrides: Partial<AssetSummary> = {}): As
     width: 600,
     height: 400,
     duration_ms: null,
+    is_live: false,
     cover_extension: "jpg",
     rendition_version: `v${id}`,
     ...overrides,
@@ -54,6 +55,7 @@ export function makeDetail(summary: AssetSummary): AssetDetail {
     notes: null,
     tags: [],
     cover_file_id: summary.id * 10,
+    motion_file_id: summary.is_live ? summary.id * 10 + 1 : null,
     rendition_version: summary.rendition_version,
     metadata: { width: summary.width, height: summary.height },
     location: null,
@@ -70,6 +72,22 @@ export function makeDetail(summary: AssetSummary): AssetDetail {
         ingest_error: null,
         fingerprint: "xxh128:abc",
       },
+      ...(summary.is_live
+        ? [
+            {
+              id: summary.id * 10 + 1,
+              storage_root_id: 7,
+              role: "companion" as const,
+              path: `D:\\Photos\\IMG_${summary.id}.MOV`,
+              relative_path: `IMG_${summary.id}.MOV`,
+              size_bytes: 1000,
+              status: "present" as const,
+              ingest_state: "done" as const,
+              ingest_error: null,
+              fingerprint: "xxh128:def",
+            },
+          ]
+        : []),
     ],
   };
 }

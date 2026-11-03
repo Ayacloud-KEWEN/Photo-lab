@@ -22,7 +22,7 @@ from lumen.schemas.storage_roots import StorageRootCreate
 from lumen.services import storage_roots
 from lumen.tasks.runner import TaskRunner
 from tests.conftest import TOKEN
-from tests.media_factory import make_jpeg, make_sample_library
+from tests.media_factory import make_heic, make_jpeg, make_sample_library, make_video
 
 pytestmark = pytest.mark.skipif(
     not (shutil.which("exiftool") and shutil.which("ffmpeg") and shutil.which("ffprobe")),
@@ -309,3 +309,48 @@ def test_api_end_to_end(tmp_path: Path, library: Path) -> None:
         wait_idle(app.state.db)
         failed = client.post(f"/api/v1/tasks/{scan.json()['id']}/cancel")
         assert failed.status_code == 409
+
+
+def test_live_photos_end_to_end(tmp_path: Path) -> None:
+    phone = tmp_path / "Phone"
+    make_heic(phone / "IMG_7001.HEIC")
+    make_video(phone / "IMG_7001.MOV", seconds=2)  # Live Photo clip
+    make_heic(phone / "IMG_7002.HEIC")
+    make_video(phone / "IMG_7002.MOV", seconds=6)  # a real video sharing the name
+    make_video(phone / "IMG_7003.MOV", seconds=2)  # its still arrives later
+
+    settings = Settings(data_dir=tmp_path / "data", log_to_file=False)
+    app = create_app(settings, TOKEN)
+    with TestClient(app, headers={"Authorization": f"Bearer {TOKEN}"}) as client:
+        root = client.post("/api/v1/storage-roots", json={"path": str(phone)}).json()
+        wait_idle(app.state.db)
+
+        items = {i["file_name"]: i for i in client.get("/api/v1/assets").json()["items"]}
+        assert set(items) == {"IMG_7001.HEIC", "IMG_7002.HEIC", "IMG_7002.MOV", "IMG_7003.MOV"}
+        live = items["IMG_7001.HEIC"]
+        assert live["is_live"] and live["media_type"] == "photo"
+        assert live["formats"] == ["HEIC", "MOV"]
+        assert not items["IMG_7002.HEIC"]["is_live"]
+        assert client.get("/api/v1/assets", params={"media_type": "video"}).json()["items"]
+
+        detail = client.get(f"/api/v1/assets/{live['id']}").json()
+        clip = next(f for f in detail["files"] if f["id"] == detail["motion_file_id"])
+        assert clip["role"] == "companion" and clip["relative_path"] == "IMG_7001.MOV"
+        url = f"/api/v1/assets/{live['id']}/motion"
+        motion = TestClient(app).get(url, params={"token": TOKEN})  # as <video src> does
+        assert motion.status_code == 200 and motion.headers["content-type"] == "video/quicktime"
+        not_live = items["IMG_7002.HEIC"]["id"]
+        assert client.get(f"/api/v1/assets/{not_live}/motion").status_code == 404
+
+        # The clip was imported alone and rated; its still arrives with the next scan.
+        video_id = items["IMG_7003.MOV"]["id"]
+        client.patch(f"/api/v1/assets/{video_id}", json={"rating": 4, "is_favorite": True})
+        make_heic(phone / "IMG_7003.HEIC")
+        client.post(f"/api/v1/storage-roots/{root['id']}/scan")
+        wait_idle(app.state.db)
+
+        items = {i["file_name"]: i for i in client.get("/api/v1/assets").json()["items"]}
+        assert "IMG_7003.MOV" not in items
+        merged = items["IMG_7003.HEIC"]
+        assert merged["is_live"] and (merged["rating"], merged["is_favorite"]) == (4, True)
+        assert client.get(f"/api/v1/assets/{video_id}").status_code == 404

@@ -12,10 +12,11 @@ import {
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { api, originalUrl, thumbnailUrl } from "@/api/client";
+import { api, motionUrl, originalUrl, thumbnailUrl } from "@/api/client";
 import { queryKeys, useAiStatus, useAsset, useConnection, useUpdateAsset } from "@/api/hooks";
 import type { AssetDetail } from "@/api/types";
 import { AssetDetails } from "@/components/layout/Inspector";
+import { LiveIcon } from "@/components/library/LiveIcon";
 import { StarRating } from "@/components/library/StarRating";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -172,6 +173,11 @@ function ViewerOverlay({
                   : undefined
               }
               originalSrc={originalUrl(conn, detail.id, detail.rendition_version ?? "")}
+              motionSrc={
+                detail.motion_file_id
+                  ? motionUrl(conn, detail.id, detail.rendition_version ?? "")
+                  : undefined
+              }
             />
           )}
           {index > 0 && (
@@ -219,11 +225,13 @@ function Stage({
   zoomed,
   previewSrc,
   originalSrc,
+  motionSrc,
 }: {
   detail: AssetDetail;
   zoomed: boolean;
   previewSrc: string | undefined;
   originalSrc: string;
+  motionSrc: string | undefined;
 }) {
   const { t } = useTranslation();
   const [videoFailed, setVideoFailed] = useState(false);
@@ -255,7 +263,7 @@ function Stage({
       </div>
     );
   }
-  return (
+  const still = (
     <img
       key={detail.id}
       src={previewSrc}
@@ -263,6 +271,67 @@ function Stage({
       draggable={false}
       className="size-full select-none object-contain p-2"
     />
+  );
+  return motionSrc ? <LivePhoto key={detail.id} still={still} motionSrc={motionSrc} /> : still;
+}
+
+/** The still, with its motion clip played over it while the LIVE button is hovered. */
+function LivePhoto({ still, motionSrc }: { still: ReactNode; motionSrc: string }) {
+  const { t } = useTranslation();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const play = () => {
+    const video = videoRef.current;
+    if (!video || failed) return;
+    video.currentTime = 0;
+    setPlaying(true);
+    video.play()?.catch(() => setFailed(true));
+  };
+  const stop = () => {
+    videoRef.current?.pause();
+    setPlaying(false);
+  };
+
+  return (
+    <div className="relative size-full">
+      {still}
+      {!failed && (
+        <>
+          <video
+            ref={videoRef}
+            src={motionSrc}
+            muted
+            playsInline
+            preload="auto"
+            onEnded={stop}
+            onError={() => {
+              setFailed(true);
+              setPlaying(false);
+            }}
+            className={cn(
+              "pointer-events-none absolute inset-0 size-full object-contain p-2 transition-opacity duration-150",
+              playing ? "opacity-100" : "opacity-0",
+            )}
+          />
+          <button
+            type="button"
+            aria-label={t("viewer.livePlay")}
+            title={t("viewer.livePlay")}
+            aria-pressed={playing}
+            onMouseEnter={play}
+            onMouseLeave={stop}
+            onFocus={play}
+            onBlur={stop}
+            className="absolute left-4 top-4 flex items-center gap-1 rounded-full bg-black/50 px-2 py-1 text-[11px] font-semibold tracking-wide text-white/90 hover:bg-black/70"
+          >
+            <LiveIcon className="size-3.5" />
+            {t("viewer.live")}
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 

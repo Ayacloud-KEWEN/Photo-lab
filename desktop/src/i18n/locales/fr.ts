@@ -179,6 +179,8 @@ const fr: LocaleResource = {
     fit: "Ajuster à la fenêtre (Z)",
     info: "Infos (I)",
     videoUnsupported: "Ce format vidéo ne peut pas être lu dans l’application (l’extension HEVC peut être nécessaire).",
+    live: "LIVE",
+    livePlay: "Survoler pour lire la Live Photo",
     position: "{{index, number}} / {{total, number}}",
   },
   timeline: {

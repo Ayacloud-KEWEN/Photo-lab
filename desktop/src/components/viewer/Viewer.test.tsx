@@ -69,4 +69,50 @@ describe("Viewer", () => {
     await waitFor(() => expect(dialog.querySelector("video")).not.toBeNull());
     expect(new URL(dialog.querySelector("video")!.src).pathname).toBe("/api/v1/assets/1/original");
   });
+
+  it("plays a Live Photo's clip over the still while LIVE is hovered", async () => {
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, "play")
+      .mockImplementation(() => Promise.resolve());
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+    stubBackend({ assets: [makeAsset(1, { is_live: true, file_name: "IMG_1.HEIC" })] });
+    render(
+      <Providers>
+        <OpenOnMount ids={[1]} id={1} />
+        <Viewer />
+      </Providers>,
+    );
+    const live = await screen.findByRole("button", { name: "悬停播放实况" });
+    const dialog = screen.getByRole("dialog");
+    const video = dialog.querySelector("video")!;
+    expect(new URL(video.src).pathname).toBe("/api/v1/assets/1/motion");
+    expect(video.muted).toBe(true);
+    expect(dialog.querySelector("img")).not.toBeNull(); // the still stays underneath
+
+    fireEvent.mouseEnter(live);
+    expect(play).toHaveBeenCalledOnce();
+    expect(live).toHaveAttribute("aria-pressed", "true");
+    fireEvent.mouseLeave(live);
+    expect(pause).toHaveBeenCalled();
+    expect(live).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.error(video); // e.g. no HEVC decoder: fall back to the still alone
+    expect(screen.queryByRole("button", { name: "悬停播放实况" })).not.toBeInTheDocument();
+    play.mockRestore();
+    pause.mockRestore();
+  });
+
+  it("shows ordinary photos without a LIVE button", async () => {
+    stubBackend({ assets: [makeAsset(1)] });
+    render(
+      <Providers>
+        <OpenOnMount ids={[1]} id={1} />
+        <Viewer />
+      </Providers>,
+    );
+    const dialog = await screen.findByRole("dialog", { name: "IMG_1.JPG" });
+    await waitFor(() => expect(dialog.querySelector("img")).not.toBeNull());
+    expect(screen.queryByRole("button", { name: "悬停播放实况" })).not.toBeInTheDocument();
+    expect(dialog.querySelector("video")).toBeNull();
+  });
 });

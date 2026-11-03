@@ -192,9 +192,7 @@ def test_render_video_with_reserved_color_codes(tmp_path: Path, encoder: str, co
 
 
 @needs_ffmpeg
-def test_video_tools_never_inherit_stdin(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_video_tools_never_inherit_stdin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Under the desktop shell the backend's stdin is a pipe with a read always pending
     # (--watch-stdin). On Windows, ffmpeg polling an inherited copy of it (after its first
     # 0.5 s stats period, so typical 4K phone videos) blocks until the timeout.

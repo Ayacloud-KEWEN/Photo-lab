@@ -230,6 +230,14 @@ export function thumbnailUrl(
 }
 
 /** The original file (video playback, 1:1 viewing). Read-only; supports HTTP Range. */
+/** A Live Photo's motion clip. */
+export function motionUrl(conn: BackendConnection, assetId: number, version: string): string {
+  return `${conn.baseUrl}/api/v1/assets/${assetId}/motion${toSearchParams({
+    v: version,
+    token: conn.token,
+  })}`;
+}
+
 export function originalUrl(conn: BackendConnection, assetId: number, version: string): string {
   return `${conn.baseUrl}/api/v1/assets/${assetId}/original${toSearchParams({
     v: version,

@@ -275,6 +275,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assets/{asset_id}/motion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Asset Motion
+         * @description A Live Photo's motion clip, read-only, with HTTP Range support.
+         *
+         *     Accepts ``?token=`` for use in ``<video>``.
+         */
+        get: operations["getAssetMotion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/timeline": {
         parameters: {
             query?: never;
@@ -733,6 +755,11 @@ export interface components {
              * @description File shown as thumbnail and by /original
              */
             cover_file_id: number | null;
+            /**
+             * Motion File Id
+             * @description Live Photo clip, served by /motion
+             */
+            motion_file_id: number | null;
             /** Rendition Version */
             rendition_version: string | null;
             metadata: components["schemas"]["AssetMetadata"];
@@ -884,6 +911,11 @@ export interface components {
             height: number | null;
             /** Duration Ms */
             duration_ms: number | null;
+            /**
+             * Is Live
+             * @description A Live Photo: has a motion clip (see /motion)
+             */
+            is_live: boolean;
             /**
              * Cover Extension
              * @description Lower-case extension of the cover file
@@ -2031,6 +2063,44 @@ export interface operations {
         };
     };
     getAssetOriginal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getAssetMotion: {
         parameters: {
             query?: never;
             header?: never;

@@ -11,10 +11,12 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
+import { useTranslation } from "react-i18next";
 
 import { thumbnailUrl } from "@/api/client";
 import { useConnection } from "@/api/hooks";
 import type { AssetSummary } from "@/api/types";
+import { LiveIcon } from "@/components/library/LiveIcon";
 import {
   clampAspect,
   gridRows,
@@ -264,6 +266,7 @@ const Tile = memo(function Tile({
   onSelect,
   onOpen,
 }: TileProps) {
+  const { t } = useTranslation();
   const conn = useConnection();
   const [failed, setFailed] = useState(false);
   const src = conn ? thumbnailUrl(conn, asset.id, asset.rendition_version) : undefined;
@@ -313,7 +316,9 @@ const Tile = memo(function Tile({
       )}
 
       <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-1 bg-gradient-to-t from-black/55 to-transparent px-1.5 pb-1 pt-4 opacity-0 transition-opacity group-hover:opacity-100 data-[pinned=true]:opacity-100"
-        data-pinned={asset.rating > 0 || asset.is_favorite || asset.media_type === "video"}
+        data-pinned={
+          asset.rating > 0 || asset.is_favorite || asset.media_type === "video" || asset.is_live
+        }
       >
         <span className="flex items-center gap-1">
           {asset.is_favorite && <Heart className="size-3 fill-white text-white" />}
@@ -329,6 +334,15 @@ const Tile = memo(function Tile({
           <span className="flex items-center gap-1 text-[10.5px] font-medium text-white">
             <Play className="size-2.5 fill-current" />
             {asset.duration_ms ? formatDuration(asset.duration_ms) : null}
+          </span>
+        )}
+        {asset.is_live && (
+          <span
+            role="img"
+            aria-label={t("viewer.live")}
+            className="flex items-center gap-1 text-[10.5px] font-medium text-white"
+          >
+            <LiveIcon />
           </span>
         )}
       </span>

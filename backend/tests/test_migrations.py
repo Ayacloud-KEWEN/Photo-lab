@@ -177,3 +177,38 @@ def test_schema_enforces_constraints(conn: sqlite3.Connection) -> None:
         conn.execute(
             "INSERT INTO app_settings (key, value, updated_at) VALUES ('k', 'not json', ?)", (now,)
         )
+
+
+def test_live_photo_candidates_are_reread(tmp_path: Path) -> None:
+    db = Database(tmp_path / "lumen.db")
+    migrate(db, migrations=load_migrations()[:5])
+    now = "2026-01-01T00:00:00.000Z"
+    with db.session() as conn:
+        conn.execute(
+            "INSERT INTO storage_roots (id, path, path_key, display_name, created_at, updated_at) "
+            "VALUES (1, 'D:\\Photos', 'd:\\photos', 'Photos', ?, ?)",
+            (now, now),
+        )
+        conn.executemany(
+            "INSERT INTO media_files (storage_root_id, relative_path, relative_path_key, "
+            "file_name, extension, size_bytes, modified_at, created_at, updated_at, "
+            "ingest_state, ingest_attempts, fingerprint) "
+            "VALUES (1, ?1, ?1, ?1, ?2, 1, ?3, ?3, ?3, 'done', 1, 'xxh128:00')",
+            [(f"a.{ext}", ext, now) for ext in ("mov", "heic", "jpg", "png", "cr3")],
+        )
+
+    migrate(db)
+    with db.session() as conn:
+        states = dict(conn.execute("SELECT extension, ingest_state FROM media_files").fetchall())
+        assert states == {
+            "mov": "pending", "heic": "pending", "jpg": "pending", "png": "done", "cr3": "done"
+        }  # fmt: skip
+        fingerprints = conn.execute("SELECT DISTINCT fingerprint FROM media_files").fetchall()
+        assert [f[0] for f in fingerprints] == ["xxh128:00"]  # kept: no re-hashing
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM tasks "
+                "WHERE kind = 'ingest_storage_root' AND status = 'pending'"
+            ).fetchone()[0]
+            == 1
+        )

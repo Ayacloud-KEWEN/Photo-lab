@@ -177,6 +177,8 @@ const zhCN = {
     fit: "适合窗口 (Z)",
     info: "信息 (I)",
     videoUnsupported: "无法在应用内播放此视频格式（可能需要 HEVC 扩展）。",
+    live: "实况",
+    livePlay: "悬停播放实况",
     position: "{{index, number}} / {{total, number}}",
   },
   timeline: {

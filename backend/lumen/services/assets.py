@@ -10,6 +10,7 @@ import sqlite3
 from pathlib import Path
 
 from lumen.core.errors import LumenError, NotFoundError
+from lumen.library.live import CLIP_EXTENSION
 from lumen.library.search import like_pattern, search_terms
 from lumen.media import thumbnails
 from lumen.media.fingerprint import fingerprint_digest
@@ -134,6 +135,8 @@ def _decode_cursor(cursor: str, sort: str) -> list[object]:
 _SUMMARY_COLUMNS = """
     a.id, a.media_type, a.capture_time, a.rating, a.is_favorite,
     c.file_name, c.extension, c.fingerprint, m.width, m.height, m.duration_ms,
+    EXISTS (SELECT 1 FROM media_files lf WHERE lf.asset_id = a.id
+            AND lf.file_role = 'companion' AND lf.extension = 'mov') AS is_live,
     (SELECT GROUP_CONCAT(ext, ',') FROM (
          SELECT DISTINCT UPPER(f.extension) AS ext FROM media_files f
          WHERE f.asset_id = a.id AND f.file_role != 'sidecar' ORDER BY ext
@@ -153,6 +156,7 @@ def _summary(row: sqlite3.Row) -> AssetSummary:
         width=row["width"],
         height=row["height"],
         duration_ms=row["duration_ms"],
+        is_live=bool(row["is_live"]),
         cover_extension=row["extension"],
         rendition_version=_version(row["fingerprint"]),
     )
@@ -335,6 +339,11 @@ def _file_rows(conn: sqlite3.Connection, asset_id: int) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def _is_motion(file: sqlite3.Row) -> bool:
+    """The clip of a Live Photo (see lumen.library.live)."""
+    return bool(file["file_role"] == "companion" and file["extension"] == CLIP_EXTENSION)
+
+
 def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
     asset = conn.execute("SELECT * FROM media_assets WHERE id = ?", (asset_id,)).fetchone()
     if asset is None:
@@ -358,6 +367,7 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
         "SELECT * FROM media_locations WHERE asset_id = ?", (asset_id,)
     ).fetchone()
     cover = next((f for f in files if f["id"] == asset["cover_file_id"]), None)
+    motion = next((f for f in files if _is_motion(f)), None)
 
     return AssetDetail(
         id=asset["id"],
@@ -377,6 +387,7 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
             )
         ],
         cover_file_id=asset["cover_file_id"],
+        motion_file_id=motion["id"] if motion else None,
         rendition_version=_version(cover["fingerprint"]) if cover else None,
         metadata=metadata,
         location=AssetLocation(
@@ -505,3 +516,14 @@ def original_file(conn: sqlite3.Connection, asset_id: int) -> tuple[Path, str]:
     if row["status"] != "present" or not path.is_file():
         raise NotFoundError("Original file is not available", details={"id": asset_id})
     return path, row["mime_type"] or "application/octet-stream"
+
+
+def motion_file(conn: sqlite3.Connection, asset_id: int) -> tuple[Path, str]:
+    """A Live Photo's motion clip on disk and its MIME type."""
+    clip = next((f for f in _file_rows(conn, asset_id) if _is_motion(f)), None)
+    if clip is None:
+        raise NotFoundError("Asset has no motion clip", details={"id": asset_id})
+    path = Path(clip["root_path"]) / clip["relative_path"]
+    if clip["status"] != "present" or not path.is_file():
+        raise NotFoundError("Motion clip is not available", details={"id": asset_id})
+    return path, clip["mime_type"] or "video/quicktime"

@@ -94,7 +94,7 @@ storage_roots ──scan──▶ media_files (pending) ──ingest──▶ as
 - **入库**（`library/ingest.py`）按批（24 个文件）处理 `ingest_state = 'pending'` 的文件：
   1. 指纹：整文件 xxh3-128（`xxh128:<hex>`），只在内容变化后重算；
   2. 归组：同一目录、同名主干的照片合并为一个资产（RAW 为 `primary`，JPEG/HEIC 为 `companion`
-     并作为封面），`.xmp` 为 `sidecar`；视频不与照片配对；
+     并作为封面），`.xmp` 为 `sidecar`；视频不在这一步与照片配对（实况照片在写入元数据后配对，见 ADR-017）；
   3. 元数据：ExifTool 常驻进程（`-stay_open`，`-charset filename=utf8` 支持中文路径）一次读一批，
      视频再用 FFprobe 补充编码、帧率、旋转与时长；
   4. 缩略图（长边 400px）与预览图（长边 2048px），JPEG，原子写入。
@@ -210,3 +210,21 @@ storage_roots ──scan──▶ media_files (pending) ──ingest──▶ as
 - 缓存：按 供应商/模型/提示词版本/语言/选项/照片指纹 计算 `cache_key`，相同请求直接返回结果，不再上传。
 - 结果为 Markdown（前端用 react-markdown 渲染，不允许原始 HTML）；"AI 选片"要求先输出一行 JSON
   （最佳与排名），解析后在界面上标出最佳照片。
+
+## 20. 实况照片（ADR-017）
+
+- iPhone 实况照片由一张静态照片（HEIC/JPG）和一段约 1.5–3 秒的 `.MOV` 组成，两者写有相同的
+  `ContentIdentifier`（照片在 MakerNotes，视频在 QuickTime Keys）。导入时读取该值存入
+  `media_metadata.content_identifier`（迁移 0006）。
+- **配对规则**（`library/live.py`）：同一目录内的照片与 `.MOV`，
+  两者都有 `ContentIdentifier` 时以是否相等为准；任一方缺少时，要求同名且视频不超过 4 秒。
+  "照片"导出会改名并带原版/编辑版（如 `SWDK1197.JPG` ↔ `GYFF2926.MOV`、`SWDKE1197.JPG` ↔ `GYFFE2926.MOV`，
+  四个文件同一个 ID）：不同名时只配"同为原版"或"同为编辑版"的一对，与导入顺序无关。
+- 配对发生在每批结果写入之后（需要两边的元数据），无论照片或视频谁先导入都会配上。视频成为照片资产的
+  `companion`（不新增 `file_role`），资产类型仍为 `photo`，封面与拍摄时间仍以照片为准。
+  视频原先若是独立资产：星级（用户设置的优先、取较高者）、收藏、备注、用户/导入标签和位置合并到照片资产，
+  AI 标签不合并（它描述的是封面），然后删除该视频资产（向量等随之级联删除）。
+- 是否为实况由"存在 `.mov` 的 `companion` 文件"推导，列表返回 `is_live`，详情返回 `motion_file_id`；
+  视频片段由 `GET /assets/{id}/motion` 提供（与 `/original` 一样支持 Range 和 `?token=`）。
+- 片段为 HEVC，不转码，直接由 WebView2 播放（需系统的 HEVC 视频扩展）；播放失败时只显示静态照片。
+- 已有数据：迁移 0006 把 MOV/HEIC/JPG 重新标为待处理，只重读元数据（指纹与缩略图保留），由同一配对逻辑处理。

@@ -48,6 +48,9 @@ EXIFTOOL_TAGS = [
     "Composite:GPSLongitude",
     "Composite:GPSAltitude",
     "QuickTime:Duration",
+    # Apple's Live Photo pairing id: same value in the still and its motion clip.
+    "MakerNotes:ContentIdentifier",
+    "QuickTime:ContentIdentifier",
     # Read-only imports of other tools' work (Lightroom, Bridge, Windows Photos).
     "XMP:Rating",
     "EXIF:Rating",
@@ -77,6 +80,7 @@ class Metadata:
     frame_rate: float | None = None
     keywords: list[str] = field(default_factory=list)
     xmp_rating: int | None = None  # -1 = rejected, 0..5 stars
+    content_identifier: str | None = None  # Live Photo pairing id (upper-case UUID)
     raw: dict[str, Any] = field(default_factory=dict)
 
     def raw_json(self) -> str:
@@ -228,6 +232,9 @@ def parse_exiftool(record: Mapping[str, Any]) -> Metadata:
     if lens and lens.lower() in {"unknown", "0", "n/a"}:
         lens = None
     iso = _number(record.get("EXIF:ISO"))
+    content_identifier = _text(record.get("MakerNotes:ContentIdentifier")) or _text(
+        record.get("QuickTime:ContentIdentifier")
+    )
 
     return Metadata(
         width=width,
@@ -247,6 +254,7 @@ def parse_exiftool(record: Mapping[str, Any]) -> Metadata:
         altitude_m=_number(record.get("Composite:GPSAltitude")) if latitude is not None else None,
         keywords=_keywords(record),
         xmp_rating=_rating(record),
+        content_identifier=content_identifier.upper() if content_identifier else None,
         raw={k: v for k, v in record.items() if k != "SourceFile"},
     )
 

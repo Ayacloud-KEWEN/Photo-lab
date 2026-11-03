@@ -124,6 +124,27 @@ def get_asset_original(conn: Connection, asset_id: int = Path(ge=1)) -> FileResp
     )
 
 
+@router.get(
+    "/assets/{asset_id}/motion",
+    operation_id="getAssetMotion",
+    response_class=FileResponse,
+    responses=NOT_FOUND,
+)
+def get_asset_motion(conn: Connection, asset_id: int = Path(ge=1)) -> FileResponse:
+    """A Live Photo's motion clip, read-only, with HTTP Range support.
+
+    Accepts ``?token=`` for use in ``<video>``.
+    """
+    path, media_type = service.motion_file(conn, asset_id)
+    return FileResponse(
+        path,
+        media_type=media_type,
+        content_disposition_type="inline",
+        filename=path.name,
+        headers={"Cache-Control": "private, no-cache"},
+    )
+
+
 @router.get("/timeline", response_model=Timeline, operation_id="getTimeline")
 def get_timeline(
     conn: Connection,

@@ -25,6 +25,7 @@ from lumen.library.common import (
     root_status_guard,
     set_root_status,
 )
+from lumen.library.live import pair_live_photo
 from lumen.library.search import reindex_assets
 from lumen.library.tags import get_or_create_tag, normalize_tag_name, tag_assets
 from lumen.media import thumbnails
@@ -400,6 +401,10 @@ def _store_results(conn: sqlite3.Connection, items: list[WorkItem], tools: Tools
     with transaction(conn):
         for item in items:
             _store_item(conn, item, extractor_version, now)
+        # After storing: pairing needs the metadata of both halves, wherever they were read.
+        for item in items:
+            if item.metadata is not None and not (item.error or item.vanished):
+                pair_live_photo(conn, item.file_id, now)
         # Asset ids may have been assigned in this batch (also to sidecars' siblings).
         touched = (
             {
@@ -472,9 +477,9 @@ def _store_metadata(
         INSERT INTO media_metadata
             (file_id, width, height, orientation, duration_ms, capture_time, camera_make,
              camera_model, lens_model, focal_length_mm, aperture, exposure_time_s, iso,
-             video_codec, frame_rate, keywords, xmp_rating, raw_json, extractor,
-             extractor_version, extracted_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'exiftool+ffprobe', ?, ?)
+             video_codec, frame_rate, keywords, xmp_rating, content_identifier, raw_json,
+             extractor, extractor_version, extracted_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'exiftool+ffprobe', ?, ?)
         ON CONFLICT (file_id) DO UPDATE SET
             width = excluded.width, height = excluded.height,
             orientation = excluded.orientation, duration_ms = excluded.duration_ms,
@@ -484,6 +489,7 @@ def _store_metadata(
             exposure_time_s = excluded.exposure_time_s, iso = excluded.iso,
             video_codec = excluded.video_codec, frame_rate = excluded.frame_rate,
             keywords = excluded.keywords, xmp_rating = excluded.xmp_rating,
+            content_identifier = excluded.content_identifier,
             raw_json = excluded.raw_json, extractor = excluded.extractor,
             extractor_version = excluded.extractor_version, extracted_at = excluded.extracted_at
         """,
@@ -493,7 +499,7 @@ def _store_metadata(
             meta.focal_length_mm, meta.aperture, meta.exposure_time_s, meta.iso,
             meta.video_codec, meta.frame_rate,
             json.dumps(meta.keywords, ensure_ascii=False) if meta.keywords else None,
-            meta.xmp_rating, meta.raw_json(), version, now,
+            meta.xmp_rating, meta.content_identifier, meta.raw_json(), version, now,
         ),
     )  # fmt: skip
 

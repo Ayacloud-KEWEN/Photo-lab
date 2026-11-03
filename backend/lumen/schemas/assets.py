@@ -49,6 +49,7 @@ class AssetSummary(BaseModel):
     width: int | None
     height: int | None
     duration_ms: int | None
+    is_live: bool = Field(description="A Live Photo: has a motion clip (see /motion)")
     cover_extension: str = Field(description="Lower-case extension of the cover file")
     rendition_version: str = Field(
         description="Changes whenever the cover's content changes; use as cache-buster"
@@ -185,6 +186,7 @@ class AssetDetail(BaseModel):
     notes: str | None
     tags: list[AssetTag]
     cover_file_id: int | None = Field(description="File shown as thumbnail and by /original")
+    motion_file_id: int | None = Field(description="Live Photo clip, served by /motion")
     rendition_version: str | None
     metadata: AssetMetadata
     location: AssetLocation | None

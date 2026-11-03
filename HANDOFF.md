@@ -1,6 +1,6 @@
 # LUMEN Studio — 交接文档（HANDOFF）
 
-> 给接手的开发者或新的 Claude 会话：先读本文，再按需读 `docs/`。最后更新：2026-11-03（Phase 4 完成时）。
+> 给接手的开发者或新的 Claude 会话：先读本文，再按需读 `docs/`。最后更新：2026-11-03（Phase 4 之后：视频导入修复、实况照片配对）。
 
 ## 1. 一句话现状
 
@@ -22,7 +22,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–4 已完成并合并进
 | `docs/PROJECT_SPEC.md` | 产品需求（原始需求，勿随意改动） |
 | `docs/phases.md` | 阶段划分 |
 | `docs/Project_Initialization.md` | Phase 1 任务书（工作方式：先查环境、提方案、经确认再实施） |
-| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-016）**，改动架构前先读 |
+| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-017）**，改动架构前先读 |
 | `README.md` | 安装、开发、测试、API 列表、快捷键 |
 
 ## 3. 环境（用户的开发机）
@@ -50,7 +50,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **97** 个测试、前端 **37** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **104** 个测试、前端 **40** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ## 5. 代码地图
 
@@ -127,8 +127,8 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 6. 重复文件只有 API（`GET /duplicates`），还没有界面；失败任务没有专门的查看/重试界面。
 7. AI 标签名固定为中文（不随界面语言变化）。
 8. 外接硬盘换盘符后，需要手动处理（已记录卷序列号，未自动重定位）；删除来源后缩略图缓存不会自动清理。
-9. **iPhone 实况照片**：同名的 HEIC + MOV 目前是两个独立资产（照片墙上会多出很多 3 秒小视频），
-   应该像 RAW+JPEG 那样配对（MOV 作为 companion）。用户的样本库里 547 个 MOV 中有 381 个属于这种情况。
+9. **iPhone 实况照片**已配对（ADR-017，`library/live.py`）。待验证：WebView2 里悬停播放 HEVC 片段
+   （依赖系统 HEVC 扩展，用户机器已装）；没有做转码兜底。用户库里 547 个 MOV 中 388 个是实况片段。
 10. 性能：导入并行线程数上限是 4（`ingest_workers`，用户机器有 20 线程）；HEIC 没有降采样解码（12MP 约 1 秒/张）；
    缩略图用 LANCZOS 缩放，是 JPEG 处理中最耗时的一步。AI 索引约 44 张/秒（瓶颈是 CPU 端预处理，可换 torchvision 快速处理器）；前端主包 675 KB（可懒加载 AI 页面）。
 
