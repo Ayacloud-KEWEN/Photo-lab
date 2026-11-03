@@ -43,6 +43,7 @@ Photo-lab/
 │  │  ├─ library/           扫描与入库流水线、全文索引、标签（文件系统 ⇄ 数据库）
 │  │  ├─ tasks/             持久化任务队列与后台执行器
 │  │  ├─ ai/                AI 引擎：模型注册、编码器、向量索引、标签、云端分析、对照工具
+│  │  ├─ develop/           显影：编辑配方、渲染器（numpy + OpenCV）、编辑后的缩略图（不访问数据库）
 │  │  ├─ schemas/           Pydantic 请求/响应模型
 │  │  ├─ db/                连接、事务、迁移器、migrations/*.sql
 │  │  ├─ core/              配置、结构化日志、令牌鉴权、卷信息
@@ -52,7 +53,7 @@ Photo-lab/
    ├─ src/
    │  ├─ api/               API 客户端、React Query hooks、生成的 schema.d.ts
    │  ├─ components/        layout/（顶栏、侧栏、检查器、状态栏）、library/（照片墙、筛选栏、
-   │  │                     批量操作条、星级、标签输入）、viewer/（全屏浏览）、
+   │  │                     批量操作条、星级、标签输入）、viewer/（全屏浏览）、develop/（显影）、
    │  │                     ai/（云端分析确认框）、settings/（AI 设置）、ui/
    │  ├─ library/           布局算法、多选、共享筛选状态、照片墙逻辑
    │  ├─ pages/             图库、时间轴、地图、AI 搜索、设置、占位页
@@ -201,6 +202,10 @@ cd backend
 | GET | `/api/v1/assets/{id}` | 资产详情：元数据、位置、全部文件 |
 | GET | `/api/v1/assets/{id}/thumbnail?variant=thumb\|preview` | 缩略图（400px）或预览图（2048px） |
 | GET | `/api/v1/assets/{id}/original` | 原文件（只读，支持 Range，用于视频播放和原图查看） |
+| GET | `/api/v1/assets/{id}/motion` | 实况照片的视频片段（只读，支持 Range） |
+| GET/PUT | `/api/v1/assets/{id}/edit` | 当前编辑配方与历史 / 保存新的一步（非破坏性，不写原文件） |
+| POST | `/api/v1/assets/{id}/edit/undo` · `/redo` · `/select` | 撤销、重做、回到历史中的某一步（`null` 为原图） |
+| POST | `/api/v1/assets/{id}/develop/preview` | 按未保存的配方渲染 JPEG（`X-Histogram` 头为 RGB 直方图） |
 | GET | `/api/v1/timeline?granularity=year\|month\|day&…` | 按时间段统计数量 |
 | GET | `/api/v1/map/points?…` | 带位置的资产坐标 |
 | GET/POST | `/api/v1/tags` · PATCH/DELETE `/api/v1/tags/{id}` | 标签列表、新建、重命名、删除 |
@@ -231,6 +236,9 @@ cd backend
 | Enter / 空格 / 双击 | 全屏浏览 |
 | 0–5 · F | 打星（0 为清除）· 收藏/取消收藏（作用于所有选中项） |
 | 全屏中：← → · Z · I · Esc | 上一张/下一张 · 原始尺寸 · 信息面板 · 关闭 |
+| 全屏中：D | 进入 / 退出显影（编辑） |
+| 显影中：Ctrl Z · Ctrl Shift Z（Ctrl Y） · \ · C · Enter · Esc | 撤销 · 重做 · 对比原图 · 裁剪 · 完成裁剪 · 取消裁剪 / 退出显影 |
+| 显影中：双击滑块或其名称 | 恢复该项默认值 |
 
 ## 数据安全原则
 

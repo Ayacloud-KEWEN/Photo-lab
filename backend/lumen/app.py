@@ -141,6 +141,6 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         allow_origins=settings.allowed_origins,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["Authorization", "Content-Type", "X-Request-Id"],
-        expose_headers=["X-Request-Id"],
+        expose_headers=["X-Request-Id", "X-Histogram"],
     )
     return app

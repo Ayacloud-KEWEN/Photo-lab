@@ -83,6 +83,18 @@ describe("LibraryPage", () => {
     expect(screen.getAllByRole("img", { name: "实况" })).toHaveLength(1);
   });
 
+  it("marks edited photos on the wall", async () => {
+    stubBackend({
+      roots: [{ ...root, status: "ready" }],
+      assets: [makeAsset(1, { is_edited: true }), makeAsset(2)],
+    });
+    fakeViewport();
+    renderPage();
+
+    await screen.findByRole("img", { name: "IMG_1.JPG" });
+    expect(screen.getAllByRole("img", { name: "已编辑" })).toHaveLength(1);
+  });
+
   it("plays a Live Photo's clip on the wall while its badge is hovered", async () => {
     stubBackend({
       roots: [{ ...root, status: "ready" }],

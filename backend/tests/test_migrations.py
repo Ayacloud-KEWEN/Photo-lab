@@ -23,6 +23,7 @@ EXPECTED_TABLES = {
     "embeddings",
     "ai_analysis",
     "ai_analysis_assets",
+    "edit_history",
     "schema_migrations",
 }
 

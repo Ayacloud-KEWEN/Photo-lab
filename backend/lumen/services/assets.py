@@ -7,14 +7,18 @@ import json
 import logging
 import os
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
 
 from lumen.core.errors import LumenError, NotFoundError
+from lumen.develop.engine import DevelopError
+from lumen.develop.recipe import EditRecipe
+from lumen.develop.renditions import edited_rendition_paths, render_edited
 from lumen.library.live import CLIP_EXTENSION
 from lumen.library.search import like_pattern, search_terms
 from lumen.media import thumbnails
 from lumen.media.fingerprint import fingerprint_digest
-from lumen.media.formats import format_for
+from lumen.media.formats import MediaFormat, format_for
 from lumen.schemas.assets import (
     AssetDetail,
     AssetFacets,
@@ -45,8 +49,12 @@ class RenditionUnavailableError(LumenError):
     code = "rendition_unavailable"
 
 
-def _version(fingerprint: str | None) -> str:
-    return fingerprint_digest(fingerprint)[:16] if fingerprint else ""
+def rendition_version(fingerprint: str | None, edit_hash: str | None = None) -> str:
+    """Cache-buster for an asset's renditions: changes with the content and with its edit."""
+    if not fingerprint:
+        return ""
+    version = fingerprint_digest(fingerprint)[:16]
+    return f"{version}-{edit_hash[:8]}" if edit_hash else version
 
 
 # Every listable asset has a processed, present cover file and a capture time.
@@ -55,6 +63,7 @@ _BASE_FROM = """
     JOIN media_files c ON c.id = a.cover_file_id
          AND c.ingest_state = 'done' AND c.status = 'present'
     LEFT JOIN media_metadata m ON m.file_id = c.id
+    LEFT JOIN edit_history e ON e.id = a.current_edit_id
 """
 _BASE_WHERE = "a.capture_time IS NOT NULL"
 
@@ -135,6 +144,7 @@ def _decode_cursor(cursor: str, sort: str) -> list[object]:
 _SUMMARY_COLUMNS = """
     a.id, a.media_type, a.capture_time, a.rating, a.is_favorite,
     c.file_name, c.extension, c.fingerprint, m.width, m.height, m.duration_ms,
+    e.recipe_hash AS edit_hash,
     EXISTS (SELECT 1 FROM media_files lf WHERE lf.asset_id = a.id
             AND lf.file_role = 'companion' AND lf.extension = 'mov') AS is_live,
     (SELECT GROUP_CONCAT(ext, ',') FROM (
@@ -157,8 +167,9 @@ def _summary(row: sqlite3.Row) -> AssetSummary:
         height=row["height"],
         duration_ms=row["duration_ms"],
         is_live=bool(row["is_live"]),
+        is_edited=bool(row["edit_hash"]),
         cover_extension=row["extension"],
-        rendition_version=_version(row["fingerprint"]),
+        rendition_version=rendition_version(row["fingerprint"], row["edit_hash"]),
     )
 
 
@@ -246,7 +257,7 @@ def map_points(conn: sqlite3.Connection, query: AssetQuery, *, limit: int) -> Ma
     clauses, params = _filters(query)
     rows = conn.execute(
         f"""
-        SELECT a.id, l.latitude, l.longitude, c.fingerprint
+        SELECT a.id, l.latitude, l.longitude, c.fingerprint, e.recipe_hash
         {_BASE_FROM}
         JOIN media_locations l ON l.asset_id = a.id
         WHERE {" AND ".join(clauses)}
@@ -256,7 +267,10 @@ def map_points(conn: sqlite3.Connection, query: AssetQuery, *, limit: int) -> Ma
         (*params, limit),
     )
     return MapPoints(
-        points=[MapPoint(id=row[0], lat=row[1], lon=row[2], v=_version(row[3])) for row in rows]
+        points=[
+            MapPoint(id=row[0], lat=row[1], lon=row[2], v=rendition_version(row[3], row[4]))
+            for row in rows
+        ]
     )
 
 
@@ -368,6 +382,7 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
     ).fetchone()
     cover = next((f for f in files if f["id"] == asset["cover_file_id"]), None)
     motion = next((f for f in files if _is_motion(f)), None)
+    edit_hash = current_edit_hash(conn, asset_id)
 
     return AssetDetail(
         id=asset["id"],
@@ -388,7 +403,8 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
         ],
         cover_file_id=asset["cover_file_id"],
         motion_file_id=motion["id"] if motion else None,
-        rendition_version=_version(cover["fingerprint"]) if cover else None,
+        is_edited=bool(edit_hash),
+        rendition_version=rendition_version(cover["fingerprint"], edit_hash) if cover else None,
         metadata=metadata,
         location=AssetLocation(
             latitude=location_row["latitude"],
@@ -416,11 +432,75 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
     )
 
 
+def current_edit_hash(conn: sqlite3.Connection, asset_id: int) -> str:
+    """Hash of the edit in effect; '' when the asset shows its original."""
+    row = conn.execute(
+        "SELECT e.recipe_hash FROM media_assets a "
+        "JOIN edit_history e ON e.id = a.current_edit_id WHERE a.id = ?",
+        (asset_id,),
+    ).fetchone()
+    return str(row[0]) if row else ""
+
+
+class DevelopUnavailableError(LumenError):
+    status_code = 409
+    code = "develop_unavailable"
+
+
+@dataclass(frozen=True)
+class DevelopSource:
+    path: Path
+    format: MediaFormat
+    extension: str
+    fingerprint: str
+
+
+def develop_source(conn: sqlite3.Connection, asset_id: int) -> DevelopSource:
+    """The file a photo is developed from: its primary (the RAW of a RAW+JPEG pair)."""
+    asset = conn.execute(
+        "SELECT media_type, cover_file_id FROM media_assets WHERE id = ?", (asset_id,)
+    ).fetchone()
+    if asset is None:
+        raise NotFoundError("Asset not found", details={"id": asset_id})
+    if asset["media_type"] != "photo":
+        raise DevelopUnavailableError("Only photos can be developed", details={"id": asset_id})
+    candidates = sorted(
+        (f for f in _file_rows(conn, asset_id) if f["file_role"] != "sidecar"),
+        key=lambda f: (f["file_role"] != "primary", f["id"] != asset["cover_file_id"]),
+    )
+    for file in candidates:
+        media_format = format_for(file["extension"])
+        path = Path(file["root_path"]) / file["relative_path"]
+        if (
+            media_format is not None
+            and media_format.media_type == "photo"
+            and file["fingerprint"]
+            and file["status"] == "present"
+            and path.is_file()
+        ):
+            return DevelopSource(path, media_format, file["extension"], file["fingerprint"])
+    raise DevelopUnavailableError("The original file is not available", details={"id": asset_id})
+
+
 def rendition_path(
     conn: sqlite3.Connection, cache_dir: Path, asset_id: int, variant: RenditionVariant,
     *, ffmpeg: str | None,
 ) -> Path:  # fmt: skip
-    """Path of the asset's thumbnail/preview, re-rendering it if the cache was cleared."""
+    """Path of the asset's thumbnail/preview, re-rendering it if the cache was cleared.
+
+    Edited photos get renditions of the edit, developed from their primary file.
+    """
+    edited = conn.execute(
+        "SELECT e.recipe, e.recipe_hash FROM media_assets a "
+        "JOIN edit_history e ON e.id = a.current_edit_id "
+        "WHERE a.id = ? AND e.recipe_hash != ''",
+        (asset_id,),
+    ).fetchone()
+    if edited is not None:
+        return _edited_rendition_path(
+            conn, cache_dir, asset_id, variant, edited["recipe"], edited["recipe_hash"]
+        )
+
     row = conn.execute(
         """
         SELECT c.fingerprint, c.relative_path, c.extension, c.status, r.path AS root_path
@@ -450,6 +530,27 @@ def rendition_path(
     except (thumbnails.RenderError, OSError) as exc:
         logger.warning("on-demand render failed", extra={"asset_id": asset_id, "error": str(exc)})
         raise RenditionUnavailableError(f"Cannot render preview: {exc}") from exc
+    return path
+
+
+def _edited_rendition_path(
+    conn: sqlite3.Connection, cache_dir: Path, asset_id: int, variant: RenditionVariant,
+    recipe_json: str, recipe_hash: str,
+) -> Path:  # fmt: skip
+    try:
+        source = develop_source(conn, asset_id)
+    except DevelopUnavailableError as exc:
+        raise RenditionUnavailableError(str(exc)) from exc
+    target = edited_rendition_paths(cache_dir, source.fingerprint, recipe_hash)
+    path = target.thumb if variant == "thumb" else target.preview
+    if path.exists():
+        return path
+    try:
+        recipe = EditRecipe.model_validate_json(recipe_json)
+        render_edited(source.path, source.format, recipe, target)
+    except (DevelopError, ValueError, OSError) as exc:
+        logger.warning("edited render failed", extra={"asset_id": asset_id, "error": str(exc)})
+        raise RenditionUnavailableError(f"Cannot render edited preview: {exc}") from exc
     return path
 
 

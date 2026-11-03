@@ -4,7 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { useBackendStatus } from "./backend-context";
 import { api, type BackendConnection } from "./client";
@@ -16,6 +16,8 @@ import type {
   AssetDetail,
   AssetUpdate,
   CloudRequest,
+  EditRecipe,
+  EditState,
   StorageRootCreate,
   Task,
 } from "./types";
@@ -38,6 +40,7 @@ export const queryKeys = {
   aiSearch: (text: string, query: AssetQuery) => ["library", "ai-search", text, query] as const,
   similar: (id: number, query: AssetQuery) => ["library", "similar", id, query] as const,
   analyses: (id: number) => ["library", "analyses", id] as const,
+  edit: (id: number) => ["library", "edit", id] as const,
 };
 
 const ASSET_PAGE_SIZE = 300;
@@ -253,6 +256,51 @@ export function useUpdateAsset() {
       });
     },
   });
+}
+
+export function useEditState(id: number | null) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.edit(id ?? 0),
+    queryFn: () => api.getEdit(requireConnection(conn), id!),
+    enabled: conn !== null && id !== null,
+    staleTime: Infinity, // only this session changes it
+  });
+}
+
+/**
+ * Saving, undoing and redoing edits. They resolve with the new state and keep the
+ * cache current; they are plain functions, so a save still lands after its caller
+ * unmounted (e.g. when moving to the next photo mid-edit).
+ */
+export function useEditActions() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  return useMemo(() => {
+    const settle = (state: EditState) => {
+      queryClient.setQueryData(queryKeys.edit(state.asset_id), state);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.asset(state.asset_id) });
+      return state;
+    };
+    const run = (call: (conn: BackendConnection) => Promise<EditState>) =>
+      call(requireConnection(conn)).then(settle);
+    return {
+      save: (id: number, recipe: EditRecipe) => run((c) => api.saveEdit(c, id, recipe)),
+      undo: (id: number) => run((c) => api.undoEdit(c, id)),
+      redo: (id: number) => run((c) => api.redoEdit(c, id)),
+      select: (id: number, editId: number | null) => run((c) => api.selectEdit(c, id, editId)),
+    };
+  }, [conn, queryClient]);
+}
+
+/** Refresh lists, the timeline and the map (e.g. after edits changed thumbnails). */
+export function useRefreshLibraryLists() {
+  const queryClient = useQueryClient();
+  return () =>
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.library,
+      predicate: (query) => query.queryKey[1] !== "asset" && query.queryKey[1] !== "edit",
+    });
 }
 
 export function useBatchUpdate() {

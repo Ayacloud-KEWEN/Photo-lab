@@ -14,6 +14,8 @@ import type {
   CloudPreview,
   CloudRequest,
   CloudTestResult,
+  EditRecipe,
+  EditState,
   ErrorBody,
   HealthResponse,
   MapPoints,
@@ -90,6 +92,52 @@ async function request<T>(
   return payload as T;
 }
 
+/** A binary response (rendered images); aborted requests reject with an AbortError. */
+async function requestBinary(
+  conn: BackendConnection,
+  path: string,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(`${conn.baseUrl}${path}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${conn.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+    });
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+    throw new ApiError(0, {
+      code: "network_error",
+      message: cause instanceof Error ? cause.message : String(cause),
+    });
+  }
+  if (!response.ok) {
+    const payload: unknown = await response.json().catch(() => null);
+    throw new ApiError(
+      response.status,
+      isErrorEnvelope(payload)
+        ? payload.error
+        : { code: "http_error", message: `HTTP ${response.status}` },
+    );
+  }
+  return response;
+}
+
+export interface DevelopPreview {
+  image: Blob;
+  /** Pixel counts per channel (R, G, B), or null if the backend sent none. */
+  histogram: number[][] | null;
+}
+
+function parseHistogram(header: string | null): number[][] | null {
+  if (!header) return null;
+  const channels = header.split(";").map((channel) => channel.split(",").map(Number));
+  return channels.length === 3 && channels.every((c) => c.every(Number.isFinite)) ? channels : null;
+}
+
 const filters = (query: AssetQuery): Record<string, QueryValue> => ({ ...query });
 
 export const api = {
@@ -141,6 +189,36 @@ export const api = {
 
   batchUpdate: (conn: BackendConnection, body: AssetBatchUpdate) =>
     request<BatchResult>(conn, "POST", "/api/v1/assets/batch", body),
+
+  getEdit: (conn: BackendConnection, id: number) =>
+    request<EditState>(conn, "GET", `/api/v1/assets/${id}/edit`),
+
+  saveEdit: (conn: BackendConnection, id: number, recipe: EditRecipe) =>
+    request<EditState>(conn, "PUT", `/api/v1/assets/${id}/edit`, recipe),
+
+  undoEdit: (conn: BackendConnection, id: number) =>
+    request<EditState>(conn, "POST", `/api/v1/assets/${id}/edit/undo`),
+
+  redoEdit: (conn: BackendConnection, id: number) =>
+    request<EditState>(conn, "POST", `/api/v1/assets/${id}/edit/redo`),
+
+  selectEdit: (conn: BackendConnection, id: number, editId: number | null) =>
+    request<EditState>(conn, "POST", `/api/v1/assets/${id}/edit/select`, { edit_id: editId }),
+
+  /** The photo developed with an unsaved recipe, as a JPEG. */
+  renderDevelopPreview: (
+    conn: BackendConnection,
+    id: number,
+    recipe: EditRecipe,
+    edge: number,
+    signal?: AbortSignal,
+  ): Promise<DevelopPreview> =>
+    requestBinary(conn, `/api/v1/assets/${id}/develop/preview`, { recipe, edge }, signal).then(
+      async (response) => ({
+        image: await response.blob(),
+        histogram: parseHistogram(response.headers.get("X-Histogram")),
+      }),
+    ),
 
   getTimeline: (
     conn: BackendConnection,

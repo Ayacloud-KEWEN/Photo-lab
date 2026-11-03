@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import { vi } from "vitest";
 
 import { StaticBackendProvider } from "@/api/backend-context";
-import type { AssetDetail, AssetSummary, StorageRoot } from "@/api/types";
+import type { AssetDetail, AssetSummary, EditRecipe, EditState, StorageRoot } from "@/api/types";
+import { DEFAULT_RECIPE, recipeKey } from "@/components/develop/recipe";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { BackendStatus } from "@/lib/backend";
 import { LibraryStateProvider } from "@/library/state";
@@ -37,6 +38,7 @@ export function makeAsset(id: number, overrides: Partial<AssetSummary> = {}): As
     height: 400,
     duration_ms: null,
     is_live: false,
+    is_edited: false,
     cover_extension: "jpg",
     rendition_version: `v${id}`,
     ...overrides,
@@ -56,6 +58,7 @@ export function makeDetail(summary: AssetSummary): AssetDetail {
     tags: [],
     cover_file_id: summary.id * 10,
     motion_file_id: summary.is_live ? summary.id * 10 + 1 : null,
+    is_edited: summary.is_edited,
     rendition_version: summary.rendition_version,
     metadata: { width: summary.width, height: summary.height },
     location: null,
@@ -113,6 +116,32 @@ export function stubBackend(options: StubOptions = {}) {
   const assets = options.assets ?? [];
   const requests: Request[] = [];
   const json = (body: unknown, status = 200) => Promise.resolve(Response.json(body, { status }));
+  // Edit history per asset: saved recipes and the index in effect (-1: the original).
+  const edits = new Map<number, { steps: EditRecipe[]; current: number }>();
+  const editState = (id: number): EditState => {
+    const history = edits.get(id) ?? { steps: [], current: -1 };
+    const recipe = history.steps[history.current] ?? DEFAULT_RECIPE;
+    return {
+      asset_id: id,
+      recipe,
+      current_edit_id: history.current >= 0 ? history.current + 1 : null,
+      steps: history.steps.map((step, index) => ({
+        id: index + 1,
+        created_at: "2026-11-03T08:00:00.000Z",
+        changes: Object.keys(step).filter(
+          (key) =>
+            JSON.stringify(step[key as keyof EditRecipe]) !==
+            JSON.stringify((history.steps[index - 1] ?? DEFAULT_RECIPE)[key as keyof EditRecipe]),
+        ),
+      })),
+      can_undo: history.current >= 0,
+      can_redo: history.current < history.steps.length - 1,
+      is_edited: recipeKey(recipe) !== recipeKey(DEFAULT_RECIPE),
+      source_format: "JPG",
+      is_raw: false,
+      rendition_version: `v${id}`,
+    };
+  };
 
   const fetch = vi.fn((input: string, init?: RequestInit) => {
     const url = new URL(input);
@@ -200,6 +229,36 @@ export function stubBackend(options: StubOptions = {}) {
       }); // prettier-ignore
     }
     if (/\/analyses$/.test(path)) return json([]);
+    const editMatch = /^\/api\/v1\/assets\/(\d+)\/(edit(?:\/undo|\/redo|\/select)?|develop\/preview)$/.exec(path);
+    if (editMatch) {
+      const id = Number(editMatch[1]);
+      const action = editMatch[2];
+      if (assets.find((asset) => asset.id === id)?.media_type !== "photo") {
+        return json({ error: { code: "develop_unavailable", message: "not a photo" } }, 409);
+      }
+      if (action === "develop/preview") {
+        const bins = Array.from({ length: 64 }, (_, i) => String(i)).join(",");
+        return Promise.resolve(
+          new Response(new Blob(["jpeg"], { type: "image/jpeg" }), {
+            headers: { "Content-Type": "image/jpeg", "X-Histogram": [bins, bins, bins].join(";") },
+          }),
+        );
+      }
+      const history = edits.get(id) ?? { steps: [], current: -1 };
+      edits.set(id, history);
+      if (action === "edit" && method === "PUT") {
+        history.steps = [...history.steps.slice(0, history.current + 1), body as EditRecipe];
+        history.current = history.steps.length - 1;
+      } else if (action === "edit/undo") {
+        history.current = Math.max(-1, history.current - 1);
+      } else if (action === "edit/redo") {
+        history.current = Math.min(history.steps.length - 1, history.current + 1);
+      } else if (action === "edit/select") {
+        const editId = (body as { edit_id: number | null }).edit_id;
+        history.current = editId === null ? -1 : editId - 1;
+      }
+      return json(editState(id));
+    }
     if (path === "/api/v1/tags") return json([]);
     if (path === "/api/v1/timeline") {
       return json({ granularity: "year", buckets: [{ period: "2024", count: assets.length }] });

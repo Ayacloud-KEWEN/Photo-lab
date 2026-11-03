@@ -23,3 +23,10 @@ class ResizeObserverStub {
   disconnect() {}
 }
 globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+
+// Object URLs for develop previews (Node's own only accept Node's Blob, not jsdom's).
+let nextObjectUrl = 0;
+Object.assign(URL, {
+  createObjectURL: () => `blob:lumen/${++nextObjectUrl}`,
+  revokeObjectURL: () => undefined,
+});

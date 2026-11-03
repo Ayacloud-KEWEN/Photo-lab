@@ -38,3 +38,7 @@ export type CloudRequest = Schemas["CloudRequest"];
 export type CloudPreview = Schemas["CloudPreview"];
 export type AnalysisResult = Schemas["AnalysisResult"];
 export type AnalysisKind = CloudRequest["kind"];
+export type EditRecipe = Schemas["EditRecipe"];
+export type Crop = Schemas["Crop"];
+export type EditState = Schemas["EditState"];
+export type EditStep = Schemas["EditStep"];

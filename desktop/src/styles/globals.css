@@ -140,3 +140,21 @@
     @apply font-semibold text-foreground;
   }
 }
+
+/* Develop sliders: a thin neutral track (or the --track gradient) and a small round thumb. */
+@layer components {
+  .develop-slider {
+    @apply h-4 cursor-pointer appearance-none bg-transparent outline-none;
+  }
+  .develop-slider::-webkit-slider-runnable-track {
+    height: 2px;
+    border-radius: 1px;
+    background: var(--track, var(--border));
+  }
+  .develop-slider::-webkit-slider-thumb {
+    @apply -mt-[5px] size-3 appearance-none rounded-full border border-black/40 bg-foreground;
+  }
+  .develop-slider:focus-visible::-webkit-slider-thumb {
+    @apply ring-2 ring-highlight;
+  }
+}

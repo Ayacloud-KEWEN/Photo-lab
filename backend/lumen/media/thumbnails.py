@@ -97,13 +97,13 @@ def _render(
     elif media_format.kind == "raw":
         image = _raw_image(source)
     elif media_format.kind in ("jpeg", "heic", "png", "tiff"):
-        image = _still_image(source)
+        image = decode_still(source)
     else:
         raise RenderError(f"cannot render {media_format.kind} files")
 
     preview = _fit(image, PREVIEW_EDGE)
-    _save_jpeg(preview, target.preview)
-    _save_jpeg(_fit(preview, THUMB_EDGE), target.thumb)
+    save_jpeg(preview, target.preview)
+    save_jpeg(_fit(preview, THUMB_EDGE), target.thumb)
 
 
 def _fit(image: Image.Image, edge: int) -> Image.Image:
@@ -128,12 +128,13 @@ def _to_rgb(image: Image.Image) -> Image.Image:
     return image.convert("RGB")
 
 
-def _still_image(source: Path) -> Image.Image:
+def decode_still(source: Path, edge: int | None = PREVIEW_EDGE) -> Image.Image:
+    """An oriented RGB image, decoded at no less than ``edge`` (full size if ``None``)."""
     try:
         with Image.open(source) as opened:
-            if opened.format == "JPEG":
+            if opened.format == "JPEG" and edge is not None:
                 # Let libjpeg decode at reduced scale: much faster for large files.
-                opened.draft("RGB", (PREVIEW_EDGE, PREVIEW_EDGE))
+                opened.draft("RGB", (edge, edge))
             oriented = ImageOps.exif_transpose(opened)
             return _to_rgb(oriented)
     except (OSError, ValueError, Image.DecompressionBombError) as exc:
@@ -234,7 +235,7 @@ def _grab_frame(
     return None, stderr
 
 
-def _save_jpeg(image: Image.Image, target: Path) -> None:
+def save_jpeg(image: Image.Image, target: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     handle, temp_name = tempfile.mkstemp(dir=target.parent, suffix=".tmp")
     try:

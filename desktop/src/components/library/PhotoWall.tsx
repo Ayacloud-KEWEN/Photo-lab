@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Check, Heart, Play, Star } from "lucide-react";
+import { Check, Heart, Play, SlidersHorizontal, Star } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -352,10 +352,21 @@ const Tile = memo(function Tile({
 
       <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-1 bg-gradient-to-t from-black/55 to-transparent px-1.5 pb-1 pt-4 opacity-0 transition-opacity group-hover:opacity-100 data-[pinned=true]:opacity-100"
         data-pinned={
-          asset.rating > 0 || asset.is_favorite || asset.media_type === "video" || asset.is_live
+          asset.rating > 0 ||
+          asset.is_favorite ||
+          asset.media_type === "video" ||
+          asset.is_live ||
+          asset.is_edited
         }
       >
         <span className="flex items-center gap-1">
+          {asset.is_edited && (
+            <SlidersHorizontal
+              role="img"
+              aria-label={t("develop.edited")}
+              className="size-3 text-white"
+            />
+          )}
           {asset.is_favorite && <Heart className="size-3 fill-white text-white" />}
           {asset.rating > 0 && (
             <span className="flex text-white" aria-label={`${asset.rating}★`}>

@@ -354,6 +354,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assets/{asset_id}/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Edit
+         * @description The edit in effect and its history. Unedited photos have the default recipe.
+         */
+        get: operations["getEdit"];
+        /**
+         * Save Edit
+         * @description Save ``recipe`` as a new history step and put it in effect. Originals are not touched.
+         */
+        put: operations["saveEdit"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{asset_id}/edit/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo Edit */
+        post: operations["undoEdit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{asset_id}/edit/redo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Redo Edit */
+        post: operations["redoEdit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{asset_id}/edit/select": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Select Edit
+         * @description Return to a history step (``null``: the original) without discarding later steps.
+         */
+        post: operations["selectEdit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{asset_id}/develop/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render Preview
+         * @description JPEG of the photo developed with an unsaved recipe (for live slider feedback).
+         *
+         *     The ``X-Histogram`` header holds its RGB histogram: three ``;``-separated lists of
+         *     comma-separated pixel counts.
+         */
+        post: operations["renderDevelopPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tags": {
         parameters: {
             query?: never;
@@ -760,6 +861,11 @@ export interface components {
              * @description Live Photo clip, served by /motion
              */
             motion_file_id: number | null;
+            /**
+             * Is Edited
+             * @description Shown with a non-destructive edit applied
+             */
+            is_edited: boolean;
             /** Rendition Version */
             rendition_version: string | null;
             metadata: components["schemas"]["AssetMetadata"];
@@ -916,6 +1022,11 @@ export interface components {
              * @description A Live Photo: has a motion clip (see /motion)
              */
             is_live: boolean;
+            /**
+             * Is Edited
+             * @description Shown with a non-destructive edit applied
+             */
+            is_edited: boolean;
             /**
              * Cover Extension
              * @description Lower-case extension of the cover file
@@ -1091,6 +1202,20 @@ export interface components {
              */
             vision: boolean | null;
         };
+        /**
+         * Crop
+         * @description A rectangle in the rotated and straightened frame, as fractions of its size.
+         */
+        Crop: {
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+        };
         /** DatabaseHealth */
         DatabaseHealth: {
             /**
@@ -1102,6 +1227,15 @@ export interface components {
             schema_version: number;
             /** Detail */
             detail?: string | null;
+        };
+        /** DevelopPreviewRequest */
+        DevelopPreviewRequest: {
+            recipe: components["schemas"]["EditRecipe"];
+            /**
+             * Edge
+             * @default 1600
+             */
+            edge: number;
         };
         /** DuplicateFile */
         DuplicateFile: {
@@ -1132,6 +1266,157 @@ export interface components {
              * @description Bytes used by redundant copies in these groups
              */
             reclaimable_bytes: number;
+        };
+        /**
+         * EditRecipe
+         * @description Slider values are in the ranges the UI shows; 0 (or None) means unchanged.
+         */
+        EditRecipe: {
+            /**
+             * Version
+             * @default 1
+             * @constant
+             */
+            version: 1;
+            /**
+             * Exposure
+             * @description EV
+             * @default 0
+             */
+            exposure: number;
+            /**
+             * Contrast
+             * @default 0
+             */
+            contrast: number;
+            /**
+             * Highlights
+             * @default 0
+             */
+            highlights: number;
+            /**
+             * Shadows
+             * @default 0
+             */
+            shadows: number;
+            /**
+             * Whites
+             * @default 0
+             */
+            whites: number;
+            /**
+             * Blacks
+             * @default 0
+             */
+            blacks: number;
+            /**
+             * Temperature
+             * @description warmer when positive
+             * @default 0
+             */
+            temperature: number;
+            /**
+             * Tint
+             * @description magenta when positive
+             * @default 0
+             */
+            tint: number;
+            /**
+             * Vibrance
+             * @default 0
+             */
+            vibrance: number;
+            /**
+             * Saturation
+             * @default 0
+             */
+            saturation: number;
+            /**
+             * Clarity
+             * @default 0
+             */
+            clarity: number;
+            /**
+             * Sharpness
+             * @default 0
+             */
+            sharpness: number;
+            /**
+             * Vignette
+             * @description darker corners when negative
+             * @default 0
+             */
+            vignette: number;
+            /**
+             * Rotate
+             * @description quarter turns clockwise
+             * @default 0
+             */
+            rotate: number;
+            /**
+             * Flip Horizontal
+             * @default false
+             */
+            flip_horizontal: boolean;
+            /**
+             * Straighten
+             * @description degrees, clockwise
+             * @default 0
+             */
+            straighten: number;
+            crop?: components["schemas"]["Crop"] | null;
+        };
+        /** EditSelect */
+        EditSelect: {
+            /**
+             * Edit Id
+             * @description Step to return to; null for the original
+             */
+            edit_id: number | null;
+        };
+        /** EditState */
+        EditState: {
+            /** Asset Id */
+            asset_id: number;
+            /** @description The recipe in effect (all defaults if unedited) */
+            recipe: components["schemas"]["EditRecipe"];
+            /**
+             * Current Edit Id
+             * @description Step in effect; null shows the original
+             */
+            current_edit_id: number | null;
+            /**
+             * Steps
+             * @description Saved steps, oldest first
+             */
+            steps: components["schemas"]["EditStep"][];
+            /** Can Undo */
+            can_undo: boolean;
+            /** Can Redo */
+            can_redo: boolean;
+            /** Is Edited */
+            is_edited: boolean;
+            /**
+             * Source Format
+             * @description Upper-case extension of the developed file
+             */
+            source_format: string;
+            /** Is Raw */
+            is_raw: boolean;
+            /** Rendition Version */
+            rendition_version: string | null;
+        };
+        /** EditStep */
+        EditStep: {
+            /** Id */
+            id: number;
+            /** Created At */
+            created_at: string;
+            /**
+             * Changes
+             * @description Recipe fields changed by this step (empty for a reset)
+             */
+            changes: string[];
         };
         /** ErrorBody */
         ErrorBody: {
@@ -2256,6 +2541,312 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DuplicateReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getEdit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditState"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a photo, or its original is unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    saveEdit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditRecipe"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditState"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a photo, or its original is unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undoEdit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditState"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a photo, or its original is unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redoEdit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditState"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a photo, or its original is unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    selectEdit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditSelect"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditState"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a photo, or its original is unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    renderDevelopPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevelopPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a photo, or its original is unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Validation Error */

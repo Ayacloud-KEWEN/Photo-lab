@@ -7,6 +7,7 @@ import {
   Maximize2,
   Minimize2,
   ScanSearch,
+  SlidersHorizontal,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
@@ -15,11 +16,11 @@ import { useTranslation } from "react-i18next";
 import { api, motionUrl, originalUrl, thumbnailUrl } from "@/api/client";
 import { queryKeys, useAiStatus, useAsset, useConnection, useUpdateAsset } from "@/api/hooks";
 import type { AssetDetail } from "@/api/types";
+import { DevelopWorkspace, type DevelopKeyHandler } from "@/components/develop/DevelopWorkspace";
 import { AssetDetails } from "@/components/layout/Inspector";
 import { LiveIcon } from "@/components/library/LiveIcon";
 import { StarRating } from "@/components/library/StarRating";
-import { Button } from "@/components/ui/button";
-import { Tooltip } from "@/components/ui/tooltip";
+import { IconButton } from "@/components/ui/icon-button";
 import { useLibraryState } from "@/library/state";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,8 @@ function ViewerOverlay({
   const [index, setIndex] = useState(start);
   const [zoomed, setZoomed] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [developing, setDeveloping] = useState(false);
+  const developKeys = useRef<DevelopKeyHandler | null>(null);
   const id = ids[index]!;
   const asset = useAsset(id);
   const update = useUpdateAsset();
@@ -90,15 +93,32 @@ function ViewerOverlay({
     setIndex((current) => Math.min(ids.length - 1, Math.max(0, current + step)));
   const cover = detail?.files.find((file) => file.id === detail.cover_file_id);
   const extension = cover?.path.split(".").pop()?.toLowerCase() ?? "";
-  const canZoom = detail?.media_type === "photo" && BROWSER_IMAGE.has(extension);
+  const isPhoto = detail?.media_type === "photo";
+  const showDevelop = developing && isPhoto;
+  // 1:1 shows the original file, so not for edited photos or while developing.
+  const canZoom = isPhoto && BROWSER_IMAGE.has(extension) && !detail.is_edited && !showDevelop;
+  // Leaving develop removes the focused control: keep keyboard shortcuts working.
+  useEffect(() => {
+    if (!showDevelop) rootRef.current?.focus();
+  }, [showDevelop]);
 
   const edit = (changes: { rating?: number; is_favorite?: boolean }) =>
     update.mutate({ id, changes });
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest("input, textarea")) return;
+    const target = event.target as HTMLElement;
     const key = event.key;
-    if (key === "Escape") onClose();
+    if (target.closest("textarea, input:not([type=range])")) return;
+    // A focused slider keeps its own keys; shortcuts still work after dragging one.
+    if (target.matches("input[type=range]") && /^(Arrow|Page|Home$|End$)/.test(key)) return;
+    if (showDevelop && developKeys.current?.(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (key === "Escape" && showDevelop) setDeveloping(false);
+    else if (key === "Escape") onClose();
+    else if (key.toLowerCase() === "d" && isPhoto) setDeveloping((value) => !value);
     else if (key === "ArrowLeft") go(-1);
     else if (key === "ArrowRight" || key === " ") go(1);
     else if (key === "Home") setIndex(0);
@@ -106,11 +126,20 @@ function ViewerOverlay({
     else if (/^[0-5]$/.test(key)) edit({ rating: Number(key) });
     else if (key.toLowerCase() === "f" && detail) edit({ is_favorite: !detail.is_favorite });
     else if (key.toLowerCase() === "z" && canZoom) setZoomed((value) => !value);
-    else if (key.toLowerCase() === "i") setShowInfo((value) => !value);
+    else if (key.toLowerCase() === "i" && !showDevelop) setShowInfo((value) => !value);
     else return;
     event.preventDefault();
     event.stopPropagation();
   };
+
+  const navigation = (
+    <>
+      {index > 0 && <NavButton side="left" label={t("viewer.previous")} onClick={() => go(-1)} />}
+      {index < ids.length - 1 && (
+        <NavButton side="right" label={t("viewer.next")} onClick={() => go(1)} />
+      )}
+    </>
+  );
 
   return (
     <div
@@ -152,15 +181,44 @@ function ViewerOverlay({
               <ScanSearch />
             </IconButton>
           )}
-          <IconButton label={t("viewer.info")} active={showInfo} onClick={() => setShowInfo((v) => !v)}>
-            <Info />
-          </IconButton>
+          {isPhoto && (
+            <IconButton
+              label={showDevelop ? t("develop.done") : t("develop.edit")}
+              active={showDevelop}
+              onClick={() => setDeveloping((value) => !value)}
+            >
+              <SlidersHorizontal />
+            </IconButton>
+          )}
+          {!showDevelop && (
+            <IconButton
+              label={t("viewer.info")}
+              active={showInfo}
+              onClick={() => setShowInfo((v) => !v)}
+            >
+              <Info />
+            </IconButton>
+          )}
           <IconButton label={t("viewer.close")} onClick={onClose}>
             <X />
           </IconButton>
         </div>
       </header>
 
+      {showDevelop && conn && detail ? (
+        <DevelopWorkspace
+          key={detail.id}
+          assetId={detail.id}
+          placeholderSrc={
+            detail.rendition_version
+              ? thumbnailUrl(conn, detail.id, detail.rendition_version, "preview")
+              : undefined
+          }
+          onExit={() => setDeveloping(false)}
+          keysRef={developKeys}
+          overlay={navigation}
+        />
+      ) : (
       <div className="flex min-h-0 flex-1">
         <div className="relative min-w-0 flex-1">
           {conn && detail && (
@@ -180,12 +238,7 @@ function ViewerOverlay({
               }
             />
           )}
-          {index > 0 && (
-            <NavButton side="left" label={t("viewer.previous")} onClick={() => go(-1)} />
-          )}
-          {index < ids.length - 1 && (
-            <NavButton side="right" label={t("viewer.next")} onClick={() => go(1)} />
-          )}
+          {navigation}
         </div>
         {showInfo && detail && (
           <aside className="w-80 shrink-0 overflow-y-auto border-l border-white/10 bg-panel p-4">
@@ -193,6 +246,7 @@ function ViewerOverlay({
           </aside>
         )}
       </div>
+      )}
 
       <footer className="flex h-11 shrink-0 items-center justify-center gap-4">
         <StarRating value={detail?.rating ?? 0} onChange={(rating) => edit({ rating })} />
@@ -360,29 +414,3 @@ function NavButton({
   );
 }
 
-function IconButton({
-  label,
-  onClick,
-  active,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  active?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <Tooltip label={label}>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label={label}
-        aria-pressed={active}
-        onClick={onClick}
-        className={cn(active && "bg-accent text-foreground")}
-      >
-        {children}
-      </Button>
-    </Tooltip>
-  );
-}
