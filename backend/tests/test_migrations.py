@@ -113,6 +113,50 @@ def test_existing_database_is_backed_up_before_migrating(tmp_path: Path) -> None
         assert copy.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 1
 
 
+def test_failed_video_frames_are_retried(tmp_path: Path) -> None:
+    db = Database(tmp_path / "lumen.db")
+    migrate(db, migrations=load_migrations()[:4])
+    now = "2026-01-01T00:00:00.000Z"
+    with db.session() as conn:
+        conn.execute(
+            "INSERT INTO storage_roots (id, path, path_key, display_name, created_at, updated_at) "
+            "VALUES (1, 'D:\\Photos', 'd:\\photos', 'Photos', ?, ?)",
+            (now, now),
+        )
+        files = [  # name, state, attempts, error
+            ("timed_out.mov", "error", 3, "ffmpeg timed out"),
+            ("timed_out_once.mov", "pending", 1, "ffmpeg timed out"),
+            ("bad_colors.mp4", "error", 3, "ffmpeg could not extract a frame: b'...'"),
+            ("broken.jpg", "error", 3, "cannot decode image: truncated"),
+            ("ok.jpg", "done", 1, None),
+        ]
+        conn.executemany(
+            "INSERT INTO media_files (storage_root_id, relative_path, relative_path_key, "
+            "file_name, extension, size_bytes, modified_at, created_at, updated_at, "
+            "ingest_state, ingest_attempts, ingest_error) "
+            "VALUES (1, ?1, ?1, ?1, 'x', 1, ?2, ?2, ?2, ?3, ?4, ?5)",
+            [(name, now, state, attempts, error) for name, state, attempts, error in files],
+        )
+
+    migrate(db)
+    with db.session() as conn:
+        rows = {
+            row[0]: tuple(row[1:])
+            for row in conn.execute(
+                "SELECT file_name, ingest_state, ingest_attempts, ingest_error FROM media_files"
+            )
+        }
+        assert rows["timed_out.mov"] == ("pending", 0, None)
+        assert rows["timed_out_once.mov"] == ("pending", 0, None)
+        assert rows["bad_colors.mp4"] == ("pending", 0, None)
+        assert rows["broken.jpg"][0] == "error"  # other failures are left alone
+        assert rows["ok.jpg"] == ("done", 1, None)
+        tasks = conn.execute(
+            "SELECT kind, status, storage_root_id FROM tasks WHERE status = 'pending'"
+        ).fetchall()
+        assert [tuple(t) for t in tasks] == [("ingest_storage_root", "pending", 1)]
+
+
 def test_schema_enforces_constraints(conn: sqlite3.Connection) -> None:
     now = "2026-01-01T00:00:00.000Z"
     with pytest.raises(sqlite3.IntegrityError):

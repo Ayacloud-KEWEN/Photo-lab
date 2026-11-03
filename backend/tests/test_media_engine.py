@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -10,7 +11,12 @@ from PIL import Image
 from lumen.media import thumbnails
 from lumen.media.fingerprint import fingerprint_file
 from lumen.media.formats import format_for
-from lumen.media.metadata import ExifToolSession, parse_exiftool, parse_ffprobe
+from lumen.media.metadata import (
+    ExifToolSession,
+    parse_exiftool,
+    parse_ffprobe,
+    run_ffprobe,
+)
 from lumen.media.walker import walk_media
 from tests.media_factory import make_heic, make_jpeg, make_png, make_video
 
@@ -162,6 +168,51 @@ def test_render_heic(tmp_path: Path) -> None:
 def test_render_video_frame(tmp_path: Path) -> None:
     _, preview = _render(tmp_path, make_video(tmp_path / "v.mp4", seconds=1))
     assert preview.size == (320, 240)
+
+
+@needs_ffmpeg
+@pytest.mark.parametrize(("encoder", "codec"), [("libx264", "h264"), ("libx265", "hevc")])
+def test_render_video_with_reserved_color_codes(tmp_path: Path, encoder: str, codec: str) -> None:
+    # Code 3 is "reserved" in H.264/HEVC; ffmpeg's filter graph refuses such streams.
+    source = tmp_path / f"{codec}.mp4"
+    subprocess.run(
+        [
+            str(shutil.which("ffmpeg")), "-v", "error", "-y", "-f", "lavfi",
+            "-i", "testsrc=duration=2:size=320x240:rate=25", "-pix_fmt", "yuv420p",
+            "-c:v", encoder, "-bsf:v",
+            f"{codec}_metadata=colour_primaries=3:transfer_characteristics=3"
+            ":matrix_coefficients=3",
+            str(source),
+        ],
+        check=True,
+        capture_output=True,
+    )  # fmt: skip
+    _, preview = _render(tmp_path, source)
+    assert preview.size == (320, 240)
+
+
+@needs_ffmpeg
+def test_video_tools_never_inherit_stdin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Under the desktop shell the backend's stdin is a pipe with a read always pending
+    # (--watch-stdin). On Windows, ffmpeg polling an inherited copy of it (after its first
+    # 0.5 s stats period, so typical 4K phone videos) blocks until the timeout.
+    video = make_video(tmp_path / "v.mov", seconds=2)
+    calls: list[tuple[list[str], object]] = []
+    real_run = subprocess.run
+
+    def spy(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        calls.append((command, kwargs.get("stdin")))
+        return real_run(command, **kwargs)  # type: ignore[call-overload, no-any-return]
+
+    monkeypatch.setattr(subprocess, "run", spy)
+    run_ffprobe(str(shutil.which("ffprobe")), video)
+    _render(tmp_path, video)
+    assert len(calls) == 2  # ffprobe, then one ffmpeg frame grab
+    for command, stdin in calls:
+        assert stdin == subprocess.DEVNULL, command
+    assert "-nostdin" in calls[1][0]
 
 
 def test_render_errors(tmp_path: Path) -> None:

@@ -360,6 +360,7 @@ class ExifToolSession:
 def run_ffprobe(ffprobe: str, path: Path, timeout: float = 60) -> dict[str, Any]:
     completed = subprocess.run(
         [ffprobe, "-v", "error", "-of", "json", "-show_format", "-show_streams", str(path)],
+        stdin=subprocess.DEVNULL,  # never inherit the backend's stdin (see thumbnails)
         capture_output=True,
         timeout=timeout,
         check=True,

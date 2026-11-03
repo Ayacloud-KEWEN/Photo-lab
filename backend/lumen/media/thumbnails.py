@@ -179,16 +179,47 @@ def _embedded_preview(raw: object) -> Image.Image | None:
     return None
 
 
+# Some exported videos (e.g. from messaging apps) carry reserved colour codes, which
+# ffmpeg's filter graph rejects ("Invalid color space"). Retry with them rewritten to
+# "unspecified" by a bitstream filter on the input; a filter for another codec just fails.
+_COLOR_FIXES = tuple(
+    ["-bsf:v", f"{codec}_metadata=colour_primaries=2:transfer_characteristics=2"
+               ":matrix_coefficients=2"]
+    for codec in ("h264", "hevc")
+)  # fmt: skip
+
+
 def _video_frame(source: Path, ffmpeg: str, timeout: float = 120) -> Image.Image:
+    frame, stderr = _grab_frame(source, ffmpeg, [], timeout)
+    if frame is None and b"Invalid color space" in stderr:
+        for fix in _COLOR_FIXES:
+            frame, _ = _grab_frame(source, ffmpeg, fix, timeout)
+            if frame is not None:
+                break
+    if frame is None:
+        # The first lines name the cause; the rest is ffmpeg unwinding.
+        message = stderr.decode("utf-8", errors="replace").strip()[:300]
+        raise RenderError(f"ffmpeg could not extract a frame: {message}")
+    return frame
+
+
+def _grab_frame(
+    source: Path, ffmpeg: str, input_args: list[str], timeout: float
+) -> tuple[Image.Image | None, bytes]:
+    """Return the frame, or ``None`` and ffmpeg's error output."""
+    stderr = b""
     # Seek ~1s in to skip black lead-in frames; fall back to the first frame for short clips.
+    # No stdin: ffmpeg polls it for keys, and on Windows that blocks for as long as the
+    # backend's stdin watcher has a read pending on the inherited pipe (until the timeout).
     for seek in ("1", "0"):
         command = [
-            ffmpeg, "-v", "error", "-ss", seek, "-i", str(source),
+            ffmpeg, "-nostdin", "-v", "error", "-ss", seek, *input_args, "-i", str(source),
             "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-",
         ]  # fmt: skip
         try:
             completed = subprocess.run(
                 command,
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 timeout=timeout,
                 check=False,
@@ -198,8 +229,9 @@ def _video_frame(source: Path, ffmpeg: str, timeout: float = 120) -> Image.Image
             raise RenderError("ffmpeg timed out") from exc
         if completed.returncode == 0 and completed.stdout:
             with Image.open(io.BytesIO(completed.stdout)) as frame:
-                return _to_rgb(frame)
-    raise RenderError(f"ffmpeg could not extract a frame: {completed.stderr[-300:]!r}")
+                return _to_rgb(frame), b""
+        stderr = completed.stderr
+    return None, stderr
 
 
 def _save_jpeg(image: Image.Image, target: Path) -> None:

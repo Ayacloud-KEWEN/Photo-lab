@@ -50,7 +50,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **93** 个测试、前端 **37** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **97** 个测试、前端 **37** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ## 5. 代码地图
 
@@ -97,6 +97,16 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 - **从 Claude 桌面版里启动应用时**，Windows（MSIX 虚拟化）会把 `%LOCALAPPDATA%` 的写入重定向到
   `…\Packages\Claude_…\LocalCache\Local\`，所以那里的数据库和用户双击启动时看到的不是同一个。
   测试用临时数据目录（`LUMEN_DATA_DIR`），给用户用的数据让用户自己启动。
+  需要**只读**查看用户真实的日志/数据库时，可以走 UNC 路径绕过重定向：
+  `\\localhost\C$\Users\pc\AppData\Local\LUMEN Studio\logs\backend.log`。
+- **子进程绝不能继承后端的 stdin**：桌面版里后端的 stdin 是 Tauri 的管道，`--watch-stdin` 线程一直挂着一个读操作。
+  在 Windows 上 ffmpeg 处理超过约 0.5 秒（第一个 stats 周期）后会去轮询 stdin，然后一直卡到超时
+  （之前 iPhone 4K MOV 每个卡 120 秒 × 重试 3 次，1000 多个文件的导入要几十分钟甚至几小时）。
+  所有 `subprocess` 调用都要 `stdin=subprocess.DEVNULL`，ffmpeg 还要加 `-nostdin`。
+  pytest 下复现不了（小视频处理不到 0.5 秒），所以由 `test_video_tools_never_inherit_stdin` 检查调用参数。
+- **部分导出视频的色彩标记是保留值**（社交软件下载的 MP4 常见）：ffmpeg 报 `Invalid color space` 拒绝建滤镜图。
+  `thumbnails._video_frame` 会在这种情况下用输入端比特流过滤器（`h264_metadata` / `hevc_metadata`）
+  把标记改成“未指定”后重试。迁移 0005 会重试此前因超时或抽帧失败的文件。
 - **浏览器预览面板被遮挡时 requestAnimationFrame 会暂停**：MapLibre 不触发 `load`、截图超时。截一张图会唤醒渲染。
 - **MapLibre 的 Web Worker** 用 `?raw` 源码 + `blob:` URL 启动（`MapPage.tsx`），不要改回默认路径或 `?url`（Vite 开发模式会改写 worker）。
 - **Tauri CSP**（`tauri.conf.json`）：视频需要 `media-src`，地图需要 `worker-src blob:`，在线地图需要 `https://tiles.openfreemap.org`。
@@ -117,7 +127,10 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 6. 重复文件只有 API（`GET /duplicates`），还没有界面；失败任务没有专门的查看/重试界面。
 7. AI 标签名固定为中文（不随界面语言变化）。
 8. 外接硬盘换盘符后，需要手动处理（已记录卷序列号，未自动重定位）；删除来源后缩略图缓存不会自动清理。
-9. 性能：AI 索引约 44 张/秒（瓶颈是 CPU 端预处理，可换 torchvision 快速处理器）；前端主包 675 KB（可懒加载 AI 页面）。
+9. **iPhone 实况照片**：同名的 HEIC + MOV 目前是两个独立资产（照片墙上会多出很多 3 秒小视频），
+   应该像 RAW+JPEG 那样配对（MOV 作为 companion）。用户的样本库里 547 个 MOV 中有 381 个属于这种情况。
+10. 性能：导入并行线程数上限是 4（`ingest_workers`，用户机器有 20 线程）；HEIC 没有降采样解码（12MP 约 1 秒/张）；
+   缩略图用 LANCZOS 缩放，是 JPEG 处理中最耗时的一步。AI 索引约 44 张/秒（瓶颈是 CPU 端预处理，可换 torchvision 快速处理器）；前端主包 675 KB（可懒加载 AI 页面）。
 
 ## 9. Phase 5 起点建议
 
