@@ -83,6 +83,52 @@ describe("LibraryPage", () => {
     expect(screen.getAllByRole("img", { name: "实况" })).toHaveLength(1);
   });
 
+  it("plays a Live Photo's clip on the wall while its badge is hovered", async () => {
+    stubBackend({
+      roots: [{ ...root, status: "ready" }],
+      assets: [makeAsset(1, { is_live: true, formats: ["HEIC", "MOV"] })],
+    });
+    fakeViewport();
+    renderPage();
+
+    const badge = await screen.findByRole("img", { name: "实况" });
+    const tile = screen.getByRole("gridcell");
+    expect(tile.querySelector("video")).toBeNull(); // nothing preloaded
+
+    fireEvent.mouseEnter(badge);
+    expect(tile.querySelector("video")).toBeNull(); // not before the hover delay
+    await waitFor(() => expect(tile.querySelector("video")).not.toBeNull());
+    const video = tile.querySelector("video")!;
+    expect(new URL(video.src).pathname).toBe("/api/v1/assets/1/motion");
+    expect(video.muted).toBe(true);
+    fireEvent.playing(video);
+    expect(badge).toHaveAttribute("data-playing", "true");
+
+    fireEvent.mouseLeave(badge);
+    expect(tile.querySelector("video")).toBeNull();
+
+    fireEvent.mouseEnter(badge);
+    await waitFor(() => expect(tile.querySelector("video")).not.toBeNull());
+    fireEvent.error(tile.querySelector("video")!); // e.g. no HEVC decoder
+    expect(tile.querySelector("video")).toBeNull();
+    expect(screen.getByRole("img", { name: "IMG_1.JPG" })).toBeInTheDocument();
+  });
+
+  it("does not load a clip when the badge is only swept past", async () => {
+    stubBackend({
+      roots: [{ ...root, status: "ready" }],
+      assets: [makeAsset(1, { is_live: true, formats: ["HEIC", "MOV"] })],
+    });
+    fakeViewport();
+    renderPage();
+
+    const badge = await screen.findByRole("img", { name: "实况" });
+    fireEvent.mouseEnter(badge);
+    fireEvent.mouseLeave(badge);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(screen.getByRole("gridcell").querySelector("video")).toBeNull();
+  });
+
   it("rates the selection from the keyboard and selects all with Ctrl+A", async () => {
     const { requests } = stubBackend({
       roots: [{ ...root, status: "ready" }],

@@ -50,7 +50,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **104** 个测试、前端 **40** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **104** 个测试、前端 **42** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ## 5. 代码地图
 
@@ -127,8 +127,9 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 6. 重复文件只有 API（`GET /duplicates`），还没有界面；失败任务没有专门的查看/重试界面。
 7. AI 标签名固定为中文（不随界面语言变化）。
 8. 外接硬盘换盘符后，需要手动处理（已记录卷序列号，未自动重定位）；删除来源后缩略图缓存不会自动清理。
-9. **iPhone 实况照片**已配对（ADR-017，`library/live.py`）。待验证：WebView2 里悬停播放 HEVC 片段
-   （依赖系统 HEVC 扩展，用户机器已装）；没有做转码兜底。用户库里 547 个 MOV 中 388 个是实况片段。
+9. **iPhone 实况照片**已配对（ADR-017，`library/live.py`）。查看器和图库瓦片悬停 LIVE 标记都会播放片段
+   （瓦片悬停 250ms 后才挂载 `<video>`，不预加载）；用户已确认 WebView2 能播 HEVC（依赖系统 HEVC 扩展），
+   没有做转码兜底，解码失败时只显示静态图。用户库里 547 个 MOV 中 388 个是实况片段。
 10. 性能：导入并行线程数上限是 4（`ingest_workers`，用户机器有 20 线程）；HEIC 没有降采样解码（12MP 约 1 秒/张）；
    缩略图用 LANCZOS 缩放，是 JPEG 处理中最耗时的一步。AI 索引约 44 张/秒（瓶颈是 CPU 端预处理，可换 torchvision 快速处理器）；前端主包 675 KB（可懒加载 AI 页面）。
 

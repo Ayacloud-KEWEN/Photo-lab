@@ -13,7 +13,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 
-import { thumbnailUrl } from "@/api/client";
+import { motionUrl, thumbnailUrl } from "@/api/client";
 import { useConnection } from "@/api/hooks";
 import type { AssetSummary } from "@/api/types";
 import { LiveIcon } from "@/components/library/LiveIcon";
@@ -34,6 +34,8 @@ const PADDING_X = 24;
 const TARGET_ROW_HEIGHT = 220;
 const MIN_GRID_CELL = 168;
 const HEADER_HEIGHT = 48;
+/** How long the LIVE badge must be hovered before the clip loads, so sweeping past it does not. */
+const LIVE_HOVER_DELAY_MS = 250;
 
 export interface WallGroup {
   key: string;
@@ -271,6 +273,21 @@ const Tile = memo(function Tile({
   const [failed, setFailed] = useState(false);
   const src = conn ? thumbnailUrl(conn, asset.id, asset.rendition_version) : undefined;
 
+  // The clip is only mounted while the LIVE badge is hovered: no preloading across the wall.
+  const [motion, setMotion] = useState<"off" | "loading" | "playing">("off");
+  const [motionFailed, setMotionFailed] = useState(false);
+  const motionTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(motionTimer.current), []);
+  const startMotion = () => {
+    if (motionFailed) return;
+    window.clearTimeout(motionTimer.current);
+    motionTimer.current = window.setTimeout(() => setMotion("loading"), LIVE_HOVER_DELAY_MS);
+  };
+  const stopMotion = () => {
+    window.clearTimeout(motionTimer.current);
+    setMotion("off");
+  };
+
   const handleClick = (event: MouseEvent) =>
     onSelect(asset.id, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey });
 
@@ -302,6 +319,24 @@ const Tile = memo(function Tile({
         <span className="flex size-full items-center justify-center p-2 text-[11px] text-subtle-foreground">
           {asset.file_name}
         </span>
+      )}
+      {conn && motion !== "off" && (
+        <video
+          src={motionUrl(conn, asset.id, asset.rendition_version)}
+          muted
+          playsInline
+          autoPlay
+          onPlaying={() => setMotion("playing")}
+          onEnded={stopMotion}
+          onError={() => {
+            setMotionFailed(true); // e.g. no HEVC decoder: keep the thumbnail
+            stopMotion();
+          }}
+          className={cn(
+            "pointer-events-none absolute inset-0 size-full object-cover transition-opacity duration-150",
+            motion === "playing" ? "opacity-100" : "opacity-0",
+          )}
+        />
       )}
 
       {multi && selected && (
@@ -340,7 +375,11 @@ const Tile = memo(function Tile({
           <span
             role="img"
             aria-label={t("viewer.live")}
-            className="flex items-center gap-1 text-[10.5px] font-medium text-white"
+            title={t("viewer.livePlay")}
+            data-playing={motion === "playing"}
+            onMouseEnter={startMotion}
+            onMouseLeave={stopMotion}
+            className="pointer-events-auto -m-1 flex items-center rounded-full p-1 text-white hover:bg-black/40 data-[playing=true]:bg-black/50"
           >
             <LiveIcon />
           </span>
