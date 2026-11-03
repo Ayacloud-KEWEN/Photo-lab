@@ -15,9 +15,18 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { useTranslation } from "react-i18next";
 
 import { api, motionUrl, originalUrl, thumbnailUrl } from "@/api/client";
-import { queryKeys, useAiStatus, useAsset, useConnection, useUpdateAsset } from "@/api/hooks";
+import {
+  queryKeys,
+  useAiStatus,
+  useAsset,
+  useConnection,
+  useUpdateAsset,
+  useVideoEdit,
+} from "@/api/hooks";
 import type { AssetDetail } from "@/api/types";
 import { DevelopWorkspace, type DevelopKeyHandler } from "@/components/develop/DevelopWorkspace";
+import { TrimmedVideo } from "@/components/develop/TrimmedVideo";
+import { VideoWorkspace } from "@/components/develop/VideoWorkspace";
 import { AssetDetails } from "@/components/layout/Inspector";
 import { LiveIcon } from "@/components/library/LiveIcon";
 import { StarRating } from "@/components/library/StarRating";
@@ -95,7 +104,8 @@ function ViewerOverlay({
   const cover = detail?.files.find((file) => file.id === detail.cover_file_id);
   const extension = cover?.path.split(".").pop()?.toLowerCase() ?? "";
   const isPhoto = detail?.media_type === "photo";
-  const showDevelop = developing && isPhoto;
+  const isVideo = detail?.media_type === "video";
+  const showDevelop = developing && (isPhoto || isVideo);
   // 1:1 shows the original file, so not for edited photos or while developing.
   const canZoom = isPhoto && BROWSER_IMAGE.has(extension) && !detail.is_edited && !showDevelop;
   // Leaving develop removes the focused control: keep keyboard shortcuts working.
@@ -119,7 +129,7 @@ function ViewerOverlay({
     }
     if (key === "Escape" && showDevelop) setDeveloping(false);
     else if (key === "Escape") onClose();
-    else if (key.toLowerCase() === "d" && isPhoto) setDeveloping((value) => !value);
+    else if (key.toLowerCase() === "d" && (isPhoto || isVideo)) setDeveloping((value) => !value);
     else if (key === "ArrowLeft") go(-1);
     else if (key === "ArrowRight" || key === " ") go(1);
     else if (key === "Home") setIndex(0);
@@ -182,7 +192,7 @@ function ViewerOverlay({
               <ScanSearch />
             </IconButton>
           )}
-          {isPhoto && (
+          {(isPhoto || isVideo) && (
             <IconButton
               label={showDevelop ? t("develop.done") : t("develop.edit")}
               active={showDevelop}
@@ -191,7 +201,7 @@ function ViewerOverlay({
               <SlidersHorizontal />
             </IconButton>
           )}
-          {isPhoto && (
+          {detail && (
             <IconButton label={t("export.action")} onClick={() => openExport([id])}>
               <Download />
             </IconButton>
@@ -211,7 +221,20 @@ function ViewerOverlay({
         </div>
       </header>
 
-      {showDevelop && conn && detail ? (
+      {showDevelop && conn && detail && isVideo ? (
+        <VideoWorkspace
+          key={detail.id}
+          detail={detail}
+          posterSrc={
+            detail.rendition_version
+              ? thumbnailUrl(conn, detail.id, detail.rendition_version, "preview")
+              : undefined
+          }
+          onExit={() => setDeveloping(false)}
+          keysRef={developKeys}
+          overlay={navigation}
+        />
+      ) : showDevelop && conn && detail ? (
         <DevelopWorkspace
           key={detail.id}
           assetId={detail.id}
@@ -293,15 +316,24 @@ function Stage({
   originalSrc: string;
   motionSrc: string | undefined;
 }) {
-  const { t } = useTranslation();
   const [videoFailed, setVideoFailed] = useState(false);
 
+  if (detail.media_type === "video" && detail.is_edited) {
+    return videoFailed ? (
+      <VideoUnsupported previewSrc={previewSrc} />
+    ) : (
+      <EditedVideo
+        key={detail.id}
+        assetId={detail.id}
+        src={originalSrc}
+        poster={previewSrc}
+        onError={() => setVideoFailed(true)}
+      />
+    );
+  }
   if (detail.media_type === "video") {
     return videoFailed ? (
-      <div className="flex size-full flex-col items-center justify-center gap-4 text-sm text-muted-foreground">
-        {previewSrc && <img src={previewSrc} alt="" className="max-h-[60%] max-w-[80%] opacity-60" />}
-        {t("viewer.videoUnsupported")}
-      </div>
+      <VideoUnsupported previewSrc={previewSrc} />
     ) : (
       <video
         key={detail.id}
@@ -392,6 +424,35 @@ function LivePhoto({ still, motionSrc }: { still: ReactNode; motionSrc: string }
         </>
       )}
     </div>
+  );
+}
+
+function VideoUnsupported({ previewSrc }: { previewSrc: string | undefined }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex size-full flex-col items-center justify-center gap-4 text-sm text-muted-foreground">
+      {previewSrc && <img src={previewSrc} alt="" className="max-h-[60%] max-w-[80%] opacity-60" />}
+      {t("viewer.videoUnsupported")}
+    </div>
+  );
+}
+
+/** An edited video plays as edited: its kept part, turned, muted if chosen. */
+function EditedVideo({
+  assetId,
+  src,
+  poster,
+  onError,
+}: {
+  assetId: number;
+  src: string;
+  poster: string | undefined;
+  onError: () => void;
+}) {
+  const edit = useVideoEdit(assetId);
+  if (!edit.data) return null;
+  return (
+    <TrimmedVideo src={src} poster={poster} recipe={edit.data.recipe} autoPlay onError={onError} />
   );
 }
 

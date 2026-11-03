@@ -82,7 +82,11 @@ def make_heic(path: Path, size: tuple[int, int] = (640, 480)) -> Path:
 
 
 def make_video(
-    path: Path, *, seconds: int = 2, creation_time: str = "2024-06-01T09:30:00Z"
+    path: Path,
+    *,
+    seconds: int = 2,
+    creation_time: str = "2024-06-01T09:30:00Z",
+    audio: bool = False,
 ) -> Path:
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:
@@ -92,6 +96,7 @@ def make_video(
         [
             ffmpeg, "-v", "error", "-y", "-f", "lavfi",
             "-i", f"testsrc=duration={seconds}:size=320x240:rate=25",
+            *(["-f", "lavfi", "-i", f"sine=duration={seconds}", "-c:a", "aac"] if audio else []),
             "-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "ultrafast",
             "-metadata", f"creation_time={creation_time}", str(path),
         ],

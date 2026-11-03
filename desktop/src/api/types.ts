@@ -48,3 +48,7 @@ export type RecipeField = EditBatch["fields"][number];
 export type ExportRequest = Schemas["ExportRequest"];
 export type ExportStatus = Schemas["ExportStatus"];
 export type ExportResult = Schemas["ExportResult"];
+export type VideoRecipe = Schemas["VideoRecipe"];
+export type VideoEditState = Schemas["VideoEditState"];
+export type VideoMode = ExportRequest["video_mode"];
+export type FrameExportResult = Schemas["FrameExportResult"];

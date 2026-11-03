@@ -15,6 +15,14 @@ export function formatDuration(ms: number): string {
     : `${minutes}:${seconds}`;
 }
 
+/** A position in a video, to a tenth of a second: "1:05.3". */
+export function formatClock(ms: number): string {
+  const tenths = Math.max(0, Math.round(ms / 100));
+  const minutes = Math.floor(tenths / 600);
+  const seconds = ((tenths % 600) / 10).toFixed(1).padStart(4, "0");
+  return `${minutes}:${seconds}`;
+}
+
 export function formatExposure(seconds: number): string {
   if (seconds >= 1) return `${Number(seconds.toFixed(1))}s`;
   return `1/${Math.round(1 / seconds)}s`;

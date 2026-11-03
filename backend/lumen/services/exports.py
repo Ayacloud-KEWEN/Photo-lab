@@ -2,27 +2,20 @@
 
 from __future__ import annotations
 
-import os
 import sqlite3
-from pathlib import Path
 
-from lumen.core.errors import InvalidPathError, NotFoundError
+from lumen.core.errors import NotFoundError
 from lumen.library.exports import EXPORT_TASK
 from lumen.schemas.exports import ExportRequest, ExportResult, ExportStatus
+from lumen.services.folders import check_folder
 from lumen.services.tasks import get_task
 from lumen.tasks import queue
 
 
 def start_export(conn: sqlite3.Connection, request: ExportRequest) -> int:
     """Queue an export of ``request.asset_ids`` into an existing folder; returns the task id."""
-    path = Path(request.destination)
-    if not path.is_absolute():
-        raise InvalidPathError("Choose a full folder path", details={"path": request.destination})
-    if not path.is_dir():
-        raise InvalidPathError("The folder does not exist", details={"path": request.destination})
-    if not os.access(path, os.W_OK):
-        raise InvalidPathError("The folder is not writable", details={"path": request.destination})
-    payload = request.model_copy(update={"destination": str(path.resolve())}).model_dump()
+    folder = check_folder(request.destination)
+    payload = request.model_copy(update={"destination": str(folder)}).model_dump()
     return queue.enqueue(conn, EXPORT_TASK, payload=payload, unique=False)
 
 

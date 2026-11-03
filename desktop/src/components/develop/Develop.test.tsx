@@ -151,10 +151,54 @@ describe("Develop", () => {
     );
   });
 
-  it("offers no editing for videos", async () => {
-    stubBackend({ assets: [makeAsset(1, { media_type: "video", file_name: "clip.mp4" })] });
+  it("trims, turns and mutes a video, and exports a frame", async () => {
+    localStorage.setItem("lumen.export", JSON.stringify({ destination: "D:\\Exports" }));
+    const { requests } = stubBackend({
+      assets: [makeAsset(1, { media_type: "video", file_name: "clip.mp4" })],
+    });
     renderViewer([1]);
-    await screen.findByRole("dialog", { name: "clip.mp4" });
-    expect(screen.queryByRole("button", { name: "编辑 (D)" })).not.toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: "clip.mp4" });
+    fireEvent.click(screen.getByRole("button", { name: "编辑 (D)" }));
+    const panel = await screen.findByRole("complementary", { name: "视频剪辑" });
+    const videoSaves = () =>
+      requests.filter((r) => r.method === "PUT" && r.url.pathname.endsWith("/video-edit"));
+
+    fireEvent.change(await within(panel).findByLabelText("起点"), { target: { value: "1000" } });
+    expect(within(panel).getByText("保留 0:03.0 / 共 0:04.0")).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole("button", { name: "静音" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "向右旋转" }));
+    await waitFor(() =>
+      expect(videoSaves().at(-1)?.body).toEqual({
+        version: 1, kind: "video", trim_start_ms: 1000, trim_end_ms: null, rotate: 1, mute: true,
+      }), // prettier-ignore
+    );
+    expect(videoSaves()).toHaveLength(1); // the changes were saved together
+
+    fireEvent.click(within(panel).getByRole("button", { name: "导出当前帧" }));
+    expect(await within(panel).findByText(/已保存：D:\\Exports/)).toBeInTheDocument();
+    expect(requests.find((r) => r.url.pathname.endsWith("/frame-export"))?.body).toEqual({
+      time_ms: 1000, // setting the start moved the playhead there
+      destination: "D:\\Exports",
+    });
+
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByRole("complementary", { name: "视频剪辑" })).not.toBeInTheDocument(),
+    );
+    localStorage.clear();
+  });
+
+  it("plays an edited video as edited", async () => {
+    stubBackend({
+      assets: [makeAsset(1, { media_type: "video", file_name: "clip.mp4", is_edited: true })],
+      videoEdits: { 1: { trim_start_ms: 500, rotate: 1, mute: true } },
+    });
+    renderViewer([1]);
+    const dialog = await screen.findByRole("dialog", { name: "clip.mp4" });
+    await waitFor(() => expect(dialog.querySelector("video")).not.toBeNull());
+    const video = dialog.querySelector("video")!;
+    expect(video.muted).toBe(true);
+    expect(video.parentElement?.style.transform).toContain("rotate(90deg)");
+    expect(within(dialog).getByRole("button", { name: "播放" })).toBeInTheDocument();
   });
 });

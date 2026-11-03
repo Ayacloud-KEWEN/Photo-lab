@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Path
+from fastapi import APIRouter, Path, Request
 from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
 
 from lumen.api.deps import Connection
-from lumen.develop.recipe import EditRecipe
+from lumen.core.config import Settings
+from lumen.develop.recipe import EditRecipe, VideoRecipe
 from lumen.schemas.common import ErrorResponse
 from lumen.schemas.develop import (
     DevelopPreviewRequest,
@@ -15,6 +16,9 @@ from lumen.schemas.develop import (
     EditBatchResult,
     EditSelect,
     EditState,
+    FrameExport,
+    FrameExportResult,
+    VideoEditState,
 )
 from lumen.services import develop as service
 
@@ -44,6 +48,41 @@ def get_edit(conn: Connection, asset_id: int = Path(ge=1)) -> EditState:
 def save_edit(conn: Connection, recipe: EditRecipe, asset_id: int = Path(ge=1)) -> EditState:
     """Save ``recipe`` as a new history step and put it in effect. Originals are not touched."""
     return service.save_edit(conn, asset_id, recipe)
+
+
+@router.get(
+    "/assets/{asset_id}/video-edit", response_model=VideoEditState, operation_id="getVideoEdit",
+    responses=ERRORS,
+)  # fmt: skip
+def get_video_edit(conn: Connection, asset_id: int = Path(ge=1)) -> VideoEditState:
+    """A video's trim, rotation and sound (defaults if unedited)."""
+    return service.get_video_edit(conn, asset_id)
+
+
+@router.put(
+    "/assets/{asset_id}/video-edit", response_model=VideoEditState, operation_id="saveVideoEdit",
+    responses=ERRORS,
+)  # fmt: skip
+def save_video_edit(
+    conn: Connection, recipe: VideoRecipe, asset_id: int = Path(ge=1)
+) -> VideoEditState:
+    """Save a video's edit as a new history step. The original file is not touched."""
+    return service.save_video_edit(conn, asset_id, recipe)
+
+
+@router.post(
+    "/assets/{asset_id}/frame-export", response_model=FrameExportResult,
+    operation_id="exportVideoFrame", responses=ERRORS,
+)  # fmt: skip
+async def export_frame(
+    conn: Connection, request: Request, body: FrameExport, asset_id: int = Path(ge=1)
+) -> FrameExportResult:
+    """Save one frame of a video (turned like its edit) as a new JPEG in a folder."""
+    settings: Settings = request.app.state.settings
+    path = await run_in_threadpool(
+        service.export_frame, conn, asset_id, body, ffmpeg=settings.tool("ffmpeg")
+    )
+    return FrameExportResult(path=str(path))
 
 
 @router.post("/edits/batch", response_model=EditBatchResult, operation_id="applyEdits")

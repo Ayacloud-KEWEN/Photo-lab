@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
 import { useCancelTask, useExportStatus, useStartExport } from "@/api/hooks";
-import type { ExportRequest } from "@/api/types";
+import type { ExportRequest, VideoMode } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLibraryState, type ExportDialogRequest } from "@/library/state";
@@ -18,9 +18,16 @@ interface Remembered {
   long_edge: number | null;
   quality: number;
   include_metadata: boolean;
+  video_mode: VideoMode;
 }
 
-const DEFAULTS: Remembered = { destination: "", long_edge: null, quality: 90, include_metadata: true };
+const DEFAULTS: Remembered = {
+  destination: "",
+  long_edge: null,
+  quality: 90,
+  include_metadata: true,
+  video_mode: "copy",
+};
 
 /** The last choices (not the location setting: that is opted into for each export). */
 function remembered(): Remembered {
@@ -38,6 +45,15 @@ function remember(options: Remembered) {
   } catch {
     // Private mode or storage disabled: the defaults are fine next time.
   }
+}
+
+/** The folder of the last export (also used for saving video frames). */
+export function rememberedExportFolder(): string {
+  return remembered().destination;
+}
+
+export function rememberExportFolder(destination: string) {
+  remember({ ...remembered(), destination });
 }
 
 /** Export photos (with their edits) as new JPEG files, then follow the background task. */
@@ -81,6 +97,7 @@ function ExportDialogBody({
       quality: options.quality,
       include_metadata: options.include_metadata,
       include_location: options.include_metadata && includeLocation,
+      video_mode: options.video_mode,
     };
     remember({ ...options, destination: body.destination });
     start.mutate(body, { onSuccess: (started) => setTaskId(started.task.id) });
@@ -172,6 +189,18 @@ function ExportDialogBody({
                 onChange={(event) => set({ quality: Number(event.target.value) })}
                 className="develop-slider w-full"
               />
+            </label>
+
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">{t("export.videos")}</span>
+              <select
+                value={options.video_mode}
+                onChange={(event) => set({ video_mode: event.target.value as VideoMode })}
+                className="h-8 rounded-md border border-input bg-background/60 px-2"
+              >
+                <option value="copy">{t("export.videoCopy")}</option>
+                <option value="h264">{t("export.videoH264")}</option>
+              </select>
             </label>
 
             <div className="space-y-2">

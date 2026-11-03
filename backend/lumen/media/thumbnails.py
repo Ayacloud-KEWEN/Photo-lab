@@ -190,11 +190,22 @@ _COLOR_FIXES = tuple(
 )  # fmt: skip
 
 
-def _video_frame(source: Path, ffmpeg: str, timeout: float = 120) -> Image.Image:
-    frame, stderr = _grab_frame(source, ffmpeg, [], timeout)
+# Seek ~1s in to skip black lead-in frames; fall back to the first frame for short clips.
+_POSTER_SEEKS = ("1", "0")
+
+
+def video_frame_at(source: Path, ffmpeg: str, seconds: float, timeout: float = 120) -> Image.Image:
+    """The (upright) frame shown at ``seconds`` into the video."""
+    return _video_frame(source, ffmpeg, timeout, seeks=(f"{max(0.0, seconds):.3f}",))
+
+
+def _video_frame(
+    source: Path, ffmpeg: str, timeout: float = 120, *, seeks: tuple[str, ...] = _POSTER_SEEKS
+) -> Image.Image:
+    frame, stderr = _grab_frame(source, ffmpeg, [], timeout, seeks)
     if frame is None and b"Invalid color space" in stderr:
         for fix in _COLOR_FIXES:
-            frame, _ = _grab_frame(source, ffmpeg, fix, timeout)
+            frame, _ = _grab_frame(source, ffmpeg, fix, timeout, seeks)
             if frame is not None:
                 break
     if frame is None:
@@ -205,14 +216,14 @@ def _video_frame(source: Path, ffmpeg: str, timeout: float = 120) -> Image.Image
 
 
 def _grab_frame(
-    source: Path, ffmpeg: str, input_args: list[str], timeout: float
+    source: Path, ffmpeg: str, input_args: list[str], timeout: float, seeks: tuple[str, ...]
 ) -> tuple[Image.Image | None, bytes]:
-    """Return the frame, or ``None`` and ffmpeg's error output."""
+    """Return the frame at the first position that works, or ``None`` and ffmpeg's error
+    output."""
     stderr = b""
-    # Seek ~1s in to skip black lead-in frames; fall back to the first frame for short clips.
     # No stdin: ffmpeg polls it for keys, and on Windows that blocks for as long as the
     # backend's stdin watcher has a read pending on the inherited pipe (until the timeout).
-    for seek in ("1", "0"):
+    for seek in seeks:
         command = [
             ffmpeg, "-nostdin", "-v", "error", "-ss", seek, *input_args, "-i", str(source),
             "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-",

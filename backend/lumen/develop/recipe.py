@@ -28,10 +28,29 @@ class Crop(BaseModel):
         return self
 
 
-class EditRecipe(BaseModel):
-    """Slider values are in the ranges the UI shows; 0 (or None) means unchanged."""
+class _Recipe(BaseModel):
+    """Shared by photo and video recipes: identity, stable serialisation and hashing."""
 
     model_config = ConfigDict(extra="forbid")
+
+    def is_identity(self) -> bool:
+        return self == type(self)()
+
+    def canonical_json(self) -> str:
+        """Stable serialisation: equal recipes give equal strings (and hashes)."""
+        data = self.model_dump(mode="json")
+        return json.dumps(_rounded(data), sort_keys=True, separators=(",", ":"))
+
+    def content_hash(self) -> str:
+        """'' for a recipe that changes nothing, so it is treated as "not edited"."""
+        if self.is_identity():
+            return ""
+        return hashlib.sha256(self.canonical_json().encode()).hexdigest()[:16]
+
+
+class EditRecipe(_Recipe):
+    """A photo's edit. Slider values are in the ranges the UI shows; 0 (or None) means
+    unchanged."""
 
     version: Literal[1] = RECIPE_VERSION
     # Tone
@@ -56,19 +75,33 @@ class EditRecipe(BaseModel):
     straighten: float = Field(default=0, ge=-45, le=45, description="degrees, clockwise")
     crop: Crop | None = None
 
-    def is_identity(self) -> bool:
-        return self == IDENTITY
 
-    def canonical_json(self) -> str:
-        """Stable serialisation: equal recipes give equal strings (and hashes)."""
-        data = self.model_dump(mode="json")
-        return json.dumps(_rounded(data), sort_keys=True, separators=(",", ":"))
+MIN_CLIP_MS = 100
 
-    def content_hash(self) -> str:
-        """'' for a recipe that changes nothing, so it is treated as "not edited"."""
-        if self.is_identity():
-            return ""
-        return hashlib.sha256(self.canonical_json().encode()).hexdigest()[:16]
+
+class VideoRecipe(_Recipe):
+    """A video's edit: the part to keep, extra quarter turns and whether to drop the sound."""
+
+    version: Literal[1] = RECIPE_VERSION
+    kind: Literal["video"] = "video"
+    trim_start_ms: int = Field(default=0, ge=0)
+    trim_end_ms: int | None = Field(default=None, gt=0, description="null: to the end")
+    rotate: int = Field(default=0, ge=0, le=3, description="quarter turns clockwise")
+    mute: bool = False
+
+    @model_validator(mode="after")
+    def _valid_range(self) -> VideoRecipe:
+        if self.trim_end_ms is not None and self.trim_end_ms < self.trim_start_ms + MIN_CLIP_MS:
+            raise ValueError("the end must come after the start")
+        return self
+
+
+def parse_recipe(text: str) -> EditRecipe | VideoRecipe:
+    """A stored recipe (photo recipes predate ``kind`` and have none)."""
+    data = json.loads(text)
+    if isinstance(data, dict) and data.get("kind") == "video":
+        return VideoRecipe.model_validate(data)
+    return EditRecipe.model_validate(data)
 
 
 def _rounded(value: object) -> object:

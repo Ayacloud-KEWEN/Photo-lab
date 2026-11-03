@@ -37,13 +37,13 @@ describe("ExportDialog", () => {
   it("exports with the chosen options and reports the outcome", async () => {
     const { requests } = stubBackend({ assets: [1, 2, 3].map((id) => makeAsset(id)) });
     renderDialog();
-    const dialog = await screen.findByRole("dialog", { name: "导出照片" });
+    const dialog = await screen.findByRole("dialog", { name: "导出" });
     const start = within(dialog).getByRole("button", { name: "导出 3 项" });
     expect(start).toBeDisabled(); // no folder yet
 
     await userEvent.click(within(dialog).getByRole("button", { name: "选择…" }));
     expect(within(dialog).getByDisplayValue("D:\\Exports")).toBeInTheDocument();
-    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "2048" } });
+    fireEvent.change(within(dialog).getAllByRole("combobox")[0]!, { target: { value: "2048" } });
     // Location is off by default, and only possible with the photo information.
     const location = within(dialog).getByRole("checkbox", { name: "包含位置（GPS）" });
     expect(location).not.toBeChecked();
@@ -59,9 +59,10 @@ describe("ExportDialog", () => {
         quality: 90,
         include_metadata: false,
         include_location: false,
+        video_mode: "copy",
       }),
     );
-    expect(await within(dialog).findByText("已导出 2 张到 D:\\Exports")).toBeInTheDocument();
+    expect(await within(dialog).findByText("已导出 2 项到 D:\\Exports")).toBeInTheDocument();
     expect(within(dialog).getByText(/跳过 1 项/)).toBeInTheDocument();
 
     // The choices (but not the location) are remembered for next time.
@@ -77,7 +78,7 @@ describe("ExportDialog", () => {
   it("shows why a folder cannot be used", async () => {
     stubBackend({ assets: [makeAsset(1)] });
     renderDialog([1]);
-    const dialog = await screen.findByRole("dialog", { name: "导出照片" });
+    const dialog = await screen.findByRole("dialog", { name: "导出" });
     await userEvent.type(within(dialog).getByRole("textbox"), "relative\\folder");
     await userEvent.click(within(dialog).getByRole("button", { name: "导出 1 项" }));
     expect(await within(dialog).findByText("The folder does not exist")).toBeInTheDocument();

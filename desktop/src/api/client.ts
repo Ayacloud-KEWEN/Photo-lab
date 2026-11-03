@@ -21,6 +21,9 @@ import type {
   ErrorBody,
   ExportRequest,
   ExportStatus,
+  FrameExportResult,
+  VideoEditState,
+  VideoRecipe,
   HealthResponse,
   MapPoints,
   RenditionVariant,
@@ -209,6 +212,19 @@ export const api = {
   /** Apply some settings (pasted, or a preset) to many photos. */
   applyEdits: (conn: BackendConnection, body: EditBatch) =>
     request<EditBatchResult>(conn, "POST", "/api/v1/edits/batch", body),
+
+  getVideoEdit: (conn: BackendConnection, id: number) =>
+    request<VideoEditState>(conn, "GET", `/api/v1/assets/${id}/video-edit`),
+
+  saveVideoEdit: (conn: BackendConnection, id: number, recipe: VideoRecipe) =>
+    request<VideoEditState>(conn, "PUT", `/api/v1/assets/${id}/video-edit`, recipe),
+
+  /** Save one video frame as a new JPEG in ``destination``. */
+  exportFrame: (conn: BackendConnection, id: number, timeMs: number, destination: string) =>
+    request<FrameExportResult>(conn, "POST", `/api/v1/assets/${id}/frame-export`, {
+      time_ms: timeMs,
+      destination,
+    }),
 
   startExport: (conn: BackendConnection, body: ExportRequest) =>
     request<ExportStatus>(conn, "POST", "/api/v1/exports", body),

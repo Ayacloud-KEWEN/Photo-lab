@@ -378,6 +378,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assets/{asset_id}/video-edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Video Edit
+         * @description A video's trim, rotation and sound (defaults if unedited).
+         */
+        get: operations["getVideoEdit"];
+        /**
+         * Save Video Edit
+         * @description Save a video's edit as a new history step. The original file is not touched.
+         */
+        put: operations["saveVideoEdit"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{asset_id}/frame-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Frame
+         * @description Save one frame of a video (turned like its edit) as a new JPEG in a folder.
+         */
+        post: operations["exportVideoFrame"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/edits/batch": {
         parameters: {
             query?: never;
@@ -1353,7 +1397,8 @@ export interface components {
         };
         /**
          * EditRecipe
-         * @description Slider values are in the ranges the UI shows; 0 (or None) means unchanged.
+         * @description A photo's edit. Slider values are in the ranges the UI shows; 0 (or None) means
+         *     unchanged.
          */
         EditRecipe: {
             /**
@@ -1564,6 +1609,13 @@ export interface components {
              * @default false
              */
             include_location: boolean;
+            /**
+             * Video Mode
+             * @description Videos: copy the streams (original quality, fast) or re-encode to H.264
+             * @default copy
+             * @enum {string}
+             */
+            video_mode: "copy" | "h264";
         };
         /**
          * ExportResult
@@ -1576,7 +1628,7 @@ export interface components {
             exported: number;
             /**
              * Skipped
-             * @description Videos and photos whose original is unavailable
+             * @description Items whose original is unavailable
              */
             skipped: number;
             /** Failed */
@@ -1594,6 +1646,29 @@ export interface components {
             value: string;
             /** Count */
             count: number;
+        };
+        /** FrameExport */
+        FrameExport: {
+            /**
+             * Time Ms
+             * @description Position in the original video
+             */
+            time_ms: number;
+            /**
+             * Destination
+             * @description An existing folder (absolute path)
+             */
+            destination: string;
+            /**
+             * Quality
+             * @default 92
+             */
+            quality: number;
+        };
+        /** FrameExportResult */
+        FrameExportResult: {
+            /** Path */
+            path: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1882,6 +1957,58 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VideoEditState */
+        VideoEditState: {
+            /** Asset Id */
+            asset_id: number;
+            /** @description The edit in effect (defaults if unedited) */
+            recipe: components["schemas"]["VideoRecipe"];
+            /** Duration Ms */
+            duration_ms: number | null;
+            /** Is Edited */
+            is_edited: boolean;
+            /** Rendition Version */
+            rendition_version: string | null;
+        };
+        /**
+         * VideoRecipe
+         * @description A video's edit: the part to keep, extra quarter turns and whether to drop the sound.
+         */
+        VideoRecipe: {
+            /**
+             * Version
+             * @default 1
+             * @constant
+             */
+            version: 1;
+            /**
+             * Kind
+             * @default video
+             * @constant
+             */
+            kind: "video";
+            /**
+             * Trim Start Ms
+             * @default 0
+             */
+            trim_start_ms: number;
+            /**
+             * Trim End Ms
+             * @description null: to the end
+             */
+            trim_end_ms?: number | null;
+            /**
+             * Rotate
+             * @description quarter turns clockwise
+             * @default 0
+             */
+            rotate: number;
+            /**
+             * Mute
+             * @default false
+             */
+            mute: boolean;
         };
     };
     responses: never;
@@ -2781,6 +2908,161 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EditState"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a photo, or its original is unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getVideoEdit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoEditState"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a photo, or its original is unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    saveVideoEdit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VideoRecipe"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoEditState"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a photo, or its original is unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    exportVideoFrame: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FrameExport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FrameExportResult"];
                 };
             };
             /** @description Not Found */

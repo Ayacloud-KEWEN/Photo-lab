@@ -10,9 +10,11 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+from PIL import Image
+
 from lumen.core.errors import LumenError, NotFoundError
 from lumen.develop.engine import DevelopError
-from lumen.develop.recipe import EditRecipe
+from lumen.develop.recipe import EditRecipe, VideoRecipe, parse_recipe
 from lumen.develop.renditions import edited_rendition_paths, render_edited
 from lumen.library.live import CLIP_EXTENSION
 from lumen.library.search import like_pattern, search_terms
@@ -482,13 +484,47 @@ def develop_source(conn: sqlite3.Connection, asset_id: int) -> DevelopSource:
     raise DevelopUnavailableError("The original file is not available", details={"id": asset_id})
 
 
+@dataclass(frozen=True)
+class VideoSource:
+    path: Path
+    extension: str
+    duration_ms: int | None
+
+
+def video_source(conn: sqlite3.Connection, asset_id: int) -> VideoSource:
+    """A video asset's file (its cover), for editing and exporting."""
+    row = conn.execute(
+        """
+        SELECT a.media_type, c.relative_path, c.extension, c.status, r.path AS root_path,
+               m.duration_ms
+        FROM media_assets a
+        JOIN media_files c ON c.id = a.cover_file_id
+        JOIN storage_roots r ON r.id = c.storage_root_id
+        LEFT JOIN media_metadata m ON m.file_id = c.id
+        WHERE a.id = ?
+        """,
+        (asset_id,),
+    ).fetchone()
+    if row is None:
+        raise NotFoundError("Asset not found", details={"id": asset_id})
+    if row["media_type"] != "video":
+        raise DevelopUnavailableError("Only videos can be trimmed", details={"id": asset_id})
+    path = Path(row["root_path"]) / row["relative_path"]
+    if row["status"] != "present" or not path.is_file():
+        raise DevelopUnavailableError(
+            "The original file is not available", details={"id": asset_id}
+        )
+    return VideoSource(path, row["extension"], row["duration_ms"])
+
+
 def rendition_path(
     conn: sqlite3.Connection, cache_dir: Path, asset_id: int, variant: RenditionVariant,
     *, ffmpeg: str | None,
 ) -> Path:  # fmt: skip
     """Path of the asset's thumbnail/preview, re-rendering it if the cache was cleared.
 
-    Edited photos get renditions of the edit, developed from their primary file.
+    Edited photos get renditions of the edit, developed from their primary file; edited
+    videos get their poster frame turned like the video.
     """
     edited = conn.execute(
         "SELECT e.recipe, e.recipe_hash FROM media_assets a "
@@ -497,10 +533,20 @@ def rendition_path(
         (asset_id,),
     ).fetchone()
     if edited is not None:
+        recipe = parse_recipe(edited["recipe"])
+        if isinstance(recipe, VideoRecipe):
+            original = _original_rendition_path(conn, cache_dir, asset_id, variant, ffmpeg=ffmpeg)
+            return _turned_rendition(original, recipe.rotate, edited["recipe_hash"])
         return _edited_rendition_path(
-            conn, cache_dir, asset_id, variant, edited["recipe"], edited["recipe_hash"]
+            conn, cache_dir, asset_id, variant, recipe, edited["recipe_hash"]
         )
+    return _original_rendition_path(conn, cache_dir, asset_id, variant, ffmpeg=ffmpeg)
 
+
+def _original_rendition_path(
+    conn: sqlite3.Connection, cache_dir: Path, asset_id: int, variant: RenditionVariant,
+    *, ffmpeg: str | None,
+) -> Path:  # fmt: skip
     row = conn.execute(
         """
         SELECT c.fingerprint, c.relative_path, c.extension, c.status, r.path AS root_path
@@ -533,9 +579,20 @@ def rendition_path(
     return path
 
 
+def _turned_rendition(original: Path, quarter_turns: int, recipe_hash: str) -> Path:
+    """``original`` turned clockwise, cached beside it (unturned: ``original`` itself)."""
+    if quarter_turns == 0:
+        return original
+    path = original.with_name(f"{original.stem}_e{recipe_hash}.jpg")
+    if not path.exists():
+        with Image.open(original) as image:
+            thumbnails.save_jpeg(image.rotate(-90 * quarter_turns, expand=True), path)
+    return path
+
+
 def _edited_rendition_path(
     conn: sqlite3.Connection, cache_dir: Path, asset_id: int, variant: RenditionVariant,
-    recipe_json: str, recipe_hash: str,
+    recipe: EditRecipe, recipe_hash: str,
 ) -> Path:  # fmt: skip
     try:
         source = develop_source(conn, asset_id)
@@ -546,7 +603,6 @@ def _edited_rendition_path(
     if path.exists():
         return path
     try:
-        recipe = EditRecipe.model_validate_json(recipe_json)
         render_edited(source.path, source.format, recipe, target)
     except (DevelopError, ValueError, OSError) as exc:
         logger.warning("edited render failed", extra={"asset_id": asset_id, "error": str(exc)})

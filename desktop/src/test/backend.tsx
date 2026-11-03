@@ -3,7 +3,15 @@ import type { ReactNode } from "react";
 import { vi } from "vitest";
 
 import { StaticBackendProvider } from "@/api/backend-context";
-import type { AssetDetail, AssetSummary, EditRecipe, EditState, StorageRoot } from "@/api/types";
+import type {
+  AssetDetail,
+  AssetSummary,
+  EditRecipe,
+  EditState,
+  StorageRoot,
+  VideoRecipe,
+} from "@/api/types";
+import { DEFAULT_VIDEO_RECIPE } from "@/components/develop/VideoWorkspace";
 import { DEFAULT_RECIPE, recipeKey } from "@/components/develop/recipe";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { BackendStatus } from "@/lib/backend";
@@ -109,6 +117,8 @@ export interface StubOptions {
   ai?: { enabled?: boolean; downloaded?: boolean; installed?: boolean };
   /** Cloud behaviour: "ok" (default), "no_vision" or "not_configured". */
   cloud?: "ok" | "no_vision" | "not_configured";
+  /** Saved video edits by asset id. */
+  videoEdits?: Record<number, Partial<VideoRecipe>>;
 }
 
 export function stubBackend(options: StubOptions = {}) {
@@ -117,6 +127,12 @@ export function stubBackend(options: StubOptions = {}) {
   const requests: Request[] = [];
   const json = (body: unknown, status = 200) => Promise.resolve(Response.json(body, { status }));
   let exportRequest: unknown = null;
+  const videoEdits = new Map<number, VideoRecipe>(
+    Object.entries(options.videoEdits ?? {}).map(([id, recipe]) => [
+      Number(id),
+      { ...DEFAULT_VIDEO_RECIPE, ...recipe },
+    ]),
+  );
   // Edit history per asset: saved recipes and the index in effect (-1: the original).
   const edits = new Map<number, { steps: EditRecipe[]; current: number }>();
   const editState = (id: number): EditState => {
@@ -230,6 +246,24 @@ export function stubBackend(options: StubOptions = {}) {
       }); // prettier-ignore
     }
     if (/\/analyses$/.test(path)) return json([]);
+    const videoMatch = /^\/api\/v1\/assets\/(\d+)\/(video-edit|frame-export)$/.exec(path);
+    if (videoMatch) {
+      const id = Number(videoMatch[1]);
+      if (assets.find((asset) => asset.id === id)?.media_type !== "video") {
+        return json({ error: { code: "develop_unavailable", message: "not a video" } }, 409);
+      }
+      if (videoMatch[2] === "frame-export") {
+        const { destination } = body as { destination: string };
+        return json({ path: `${destination}\\IMG_${id}_00-00.jpg` });
+      }
+      if (method === "PUT") videoEdits.set(id, body as VideoRecipe);
+      const recipe = videoEdits.get(id) ?? DEFAULT_VIDEO_RECIPE;
+      return json({
+        asset_id: id, recipe, duration_ms: 4000,
+        is_edited: JSON.stringify(recipe) !== JSON.stringify(DEFAULT_VIDEO_RECIPE),
+        rendition_version: `v${id}`,
+      }); // prettier-ignore
+    }
     if (path === "/api/v1/edits/batch") {
       const request = body as { asset_ids: number[]; recipe: EditRecipe; fields: (keyof EditRecipe)[] };
       let updated = 0;

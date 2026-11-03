@@ -21,6 +21,8 @@ import type {
   EditState,
   ExportRequest,
   StorageRootCreate,
+  VideoEditState,
+  VideoRecipe,
   Task,
 } from "./types";
 
@@ -44,6 +46,7 @@ export const queryKeys = {
   analyses: (id: number) => ["library", "analyses", id] as const,
   edit: (id: number) => ["library", "edit", id] as const,
   export: (taskId: number) => ["export", taskId] as const,
+  videoEdit: (id: number) => ["library", "video-edit", id] as const,
 };
 
 const ASSET_PAGE_SIZE = 300;
@@ -296,6 +299,31 @@ export function useEditActions() {
   }, [conn, queryClient]);
 }
 
+export function useVideoEdit(id: number | null, enabled = true) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.videoEdit(id ?? 0),
+    queryFn: () => api.getVideoEdit(requireConnection(conn), id!),
+    enabled: enabled && conn !== null && id !== null,
+    staleTime: Infinity, // only this session changes it
+  });
+}
+
+/** Saves a video's edit; like photo edits, it still lands after the caller unmounted. */
+export function useSaveVideoEdit() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  return useMemo(
+    () => (id: number, recipe: VideoRecipe) =>
+      api.saveVideoEdit(requireConnection(conn), id, recipe).then((state: VideoEditState) => {
+        queryClient.setQueryData(queryKeys.videoEdit(state.asset_id), state);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.asset(state.asset_id) });
+        return state;
+      }),
+    [conn, queryClient],
+  );
+}
+
 /** Settings applied to many photos: every view of them (and their edits) refreshes. */
 export function useApplyEdits() {
   const conn = useConnection();
@@ -338,7 +366,7 @@ export function useRefreshLibraryLists() {
   return () =>
     queryClient.invalidateQueries({
       queryKey: queryKeys.library,
-      predicate: (query) => query.queryKey[1] !== "asset" && query.queryKey[1] !== "edit",
+      predicate: (query) => !["asset", "edit", "video-edit"].includes(String(query.queryKey[1])),
     });
 }
 

@@ -38,10 +38,10 @@ def decode_edge(recipe: EditRecipe, long_edge: int | None) -> int | None:
     return math.ceil(long_edge / fraction)
 
 
-def reserve_path(folder: Path, stem: str) -> Path:
+def reserve_path(folder: Path, stem: str, extension: str = ".jpg") -> Path:
     """Create an empty ``stem.jpg`` (or ``stem (2).jpg``, …) that did not exist before."""
     for number in itertools.count(1):
-        name = f"{stem}.jpg" if number == 1 else f"{stem} ({number}).jpg"
+        name = f"{stem}{extension}" if number == 1 else f"{stem} ({number}){extension}"
         path = folder / name
         try:
             os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY))

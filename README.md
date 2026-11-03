@@ -209,6 +209,8 @@ cd backend
 | POST | `/api/v1/edits/batch` | 把配方中的指定字段应用到多张照片（粘贴设置、预设） |
 | POST | `/api/v1/exports` | 导出照片为新的 JPEG（后台任务；长边、质量、是否保留 EXIF / GPS） |
 | GET | `/api/v1/exports/{task_id}` | 导出进度与结果（导出、跳过、失败） |
+| GET/PUT | `/api/v1/assets/{id}/video-edit` | 视频剪辑：起止时间、旋转、静音（非破坏性） |
+| POST | `/api/v1/assets/{id}/frame-export` | 把视频某一帧存成新的 JPEG |
 | GET | `/api/v1/timeline?granularity=year\|month\|day&…` | 按时间段统计数量 |
 | GET | `/api/v1/map/points?…` | 带位置的资产坐标 |
 | GET/POST | `/api/v1/tags` · PATCH/DELETE `/api/v1/tags/{id}` | 标签列表、新建、重命名、删除 |
@@ -239,7 +241,8 @@ cd backend
 | Enter / 空格 / 双击 | 全屏浏览 |
 | 0–5 · F | 打星（0 为清除）· 收藏/取消收藏（作用于所有选中项） |
 | 全屏中：← → · Z · I · Esc | 上一张/下一张 · 原始尺寸 · 信息面板 · 关闭 |
-| 全屏中：D | 进入 / 退出显影（编辑） |
+| 全屏中：D | 进入 / 退出显影（照片）或剪辑（视频） |
+| 剪辑视频中：I · O | 把当前位置设为起点 · 终点 |
 | 显影中：Ctrl Z · Ctrl Shift Z（Ctrl Y） · \ · C · Enter · Esc | 撤销 · 重做 · 对比原图 · 裁剪 · 完成裁剪 · 取消裁剪 / 退出显影 |
 | 显影中：双击滑块或其名称 | 恢复该项默认值 |
 | 显影中：Ctrl Shift C · Ctrl Shift V | 拷贝设置 · 粘贴设置（不含旋转和裁剪） |

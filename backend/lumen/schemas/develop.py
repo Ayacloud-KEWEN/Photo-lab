@@ -4,7 +4,7 @@ from typing import Literal, get_args
 
 from pydantic import BaseModel, Field
 
-from lumen.develop.recipe import EditRecipe
+from lumen.develop.recipe import EditRecipe, VideoRecipe
 
 PREVIEW_MIN_EDGE = 256
 PREVIEW_MAX_EDGE = 2560
@@ -55,3 +55,21 @@ class EditSelect(BaseModel):
 class DevelopPreviewRequest(BaseModel):
     recipe: EditRecipe
     edge: int = Field(default=1600, ge=PREVIEW_MIN_EDGE, le=PREVIEW_MAX_EDGE)
+
+
+class VideoEditState(BaseModel):
+    asset_id: int
+    recipe: VideoRecipe = Field(description="The edit in effect (defaults if unedited)")
+    duration_ms: int | None
+    is_edited: bool
+    rendition_version: str | None
+
+
+class FrameExport(BaseModel):
+    time_ms: int = Field(ge=0, description="Position in the original video")
+    destination: str = Field(min_length=1, description="An existing folder (absolute path)")
+    quality: int = Field(default=92, ge=50, le=100)
+
+
+class FrameExportResult(BaseModel):
+    path: str

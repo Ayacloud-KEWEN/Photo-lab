@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from lumen.schemas.tasks import Task
@@ -16,6 +18,10 @@ class ExportRequest(BaseModel):
     quality: int = Field(default=90, ge=50, le=100, description="JPEG quality")
     include_metadata: bool = Field(default=True, description="Copy EXIF/XMP from the original")
     include_location: bool = Field(default=False, description="Keep GPS (only with metadata)")
+    video_mode: Literal["copy", "h264"] = Field(
+        default="copy",
+        description="Videos: copy the streams (original quality, fast) or re-encode to H.264",
+    )
 
 
 class ExportFailure(BaseModel):
@@ -29,7 +35,7 @@ class ExportResult(BaseModel):
 
     destination: str
     exported: int
-    skipped: int = Field(description="Videos and photos whose original is unavailable")
+    skipped: int = Field(description="Items whose original is unavailable")
     failed: list[ExportFailure]
 
 
