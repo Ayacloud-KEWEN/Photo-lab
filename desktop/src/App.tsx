@@ -115,7 +115,7 @@ export default function App() {
           {page === "collections" && <CollectionsPage />}
           {page === "settings" && <SettingsPage />}
         </main>
-        {inspectorOpen && page !== "map" && page !== "collections" && (
+        {inspectorOpen && !["map", "collections", "settings"].includes(page) && (
           <Inspector selection={INSPECTED_VIEWS.includes(page) ? selection : null} />
         )}
       </div>

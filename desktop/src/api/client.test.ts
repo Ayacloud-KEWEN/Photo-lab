@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { api, ApiError } from "./client";
+import { api, ApiError, motionUrl, originalUrl, thumbnailUrl } from "./client";
 
 const conn = { baseUrl: "http://127.0.0.1:5000", token: "tok" };
 
@@ -50,5 +50,15 @@ describe("api client", () => {
   it("reports network failures", async () => {
     mockFetch(new TypeError("Failed to fetch"));
     await expect(api.getHealth(conn)).rejects.toMatchObject({ code: "network_error", status: 0 });
+  });
+
+  it("keeps the original's URL when only the edit changes", () => {
+    const version = (url: string) => new URL(url).searchParams.get("v");
+    // Saving an edit changes the rendition version; a video must not be reloaded for it.
+    expect(version(originalUrl(conn, 1, "abc123-9f8e7d6c"))).toBe("abc123");
+    expect(version(motionUrl(conn, 1, "abc123-9f8e7d6c"))).toBe("abc123");
+    expect(version(originalUrl(conn, 1, "abc123"))).toBe("abc123");
+    // Thumbnails show the edit, so theirs follows it.
+    expect(version(thumbnailUrl(conn, 1, "abc123-9f8e7d6c"))).toBe("abc123-9f8e7d6c");
   });
 });

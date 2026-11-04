@@ -53,7 +53,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **140** 个测试、前端 **72** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **142** 个测试、前端 **73** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ## 5. 代码地图
 
@@ -117,6 +117,11 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 - **MapLibre 标记的外层元素不能加 Tailwind 的 `scale-*`/`hover:scale-*`**：MapLibre 用行内 `transform` 定位标记，
   而 Tailwind v4 的缩放是独立的 CSS `scale` 属性，会叠加在定位之后、连平移距离一起放大，悬停时标记被推离鼠标
   （离左上角越远推得越多），于是点不中。缩放效果放在内层元素上（`MapPage.tsx` 的 `markerElement`）。
+- **媒体 URL 的版本参数**：`rendition_version` 在编辑后会变（`<指纹>-<配方哈希>`）。缩略图要跟着变，
+  但原文件/实况片段的 URL 只能用内容版本（`originalUrl`/`motionUrl` 内部已处理），否则每次自动保存都会
+  让 `<video>` 重新下载整个视频（剪辑 4K 视频时播放位置被重置，I/O 设点出错）。
+- **Windows 上 asyncio 的 `ConnectionResetError`**：webview 取消图片请求时 Proactor 事件循环会记 ERROR，
+  `__main__._quiet_connection_resets` 把这一种过滤掉了，其余异常照常记录。
 - **MapLibre 的 Web Worker** 用 `?raw` 源码 + `blob:` URL 启动（`MapPage.tsx`），不要改回默认路径或 `?url`（Vite 开发模式会改写 worker）。
 - **Tauri CSP**（`tauri.conf.json`）：视频需要 `media-src`，地图需要 `worker-src blob:`，在线地图需要 `https://tiles.openfreemap.org`。
   用浏览器验证 CSP 时，需要给脚本加 `'unsafe-inline'`（Tauri 自己会给内联脚本加哈希）。

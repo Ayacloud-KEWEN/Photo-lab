@@ -83,7 +83,9 @@ function ExportDialogBody({
   const result = status.data?.result;
   const finished = task && !["pending", "running"].includes(task.status);
 
-  useEffect(() => rootRef.current?.focus(), []);
+  // Also once the export starts: the button that had the focus is gone, and Esc must
+  // still reach the dialog.
+  useEffect(() => rootRef.current?.focus(), [taskId]);
 
   const set = (patch: Partial<Remembered>) => setOptions((current) => ({ ...current, ...patch }));
   const browse = async () => {

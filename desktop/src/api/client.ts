@@ -378,18 +378,27 @@ export function thumbnailUrl(
   })}`;
 }
 
-/** The original file (video playback, 1:1 viewing). Read-only; supports HTTP Range. */
+/**
+ * The part of a rendition version that follows the file's content only: an edit adds
+ * "-<hash>" to it. URLs of the original file and of Live Photo clips use this part, so
+ * saving an edit does not make the webview download a (large) video again.
+ */
+export function contentVersion(version: string): string {
+  return version.split("-")[0] ?? "";
+}
+
 /** A Live Photo's motion clip. */
 export function motionUrl(conn: BackendConnection, assetId: number, version: string): string {
   return `${conn.baseUrl}/api/v1/assets/${assetId}/motion${toSearchParams({
-    v: version,
+    v: contentVersion(version),
     token: conn.token,
   })}`;
 }
 
+/** The original file (video playback, 1:1 viewing). Read-only; supports HTTP Range. */
 export function originalUrl(conn: BackendConnection, assetId: number, version: string): string {
   return `${conn.baseUrl}/api/v1/assets/${assetId}/original${toSearchParams({
-    v: version,
+    v: contentVersion(version),
     token: conn.token,
   })}`;
 }

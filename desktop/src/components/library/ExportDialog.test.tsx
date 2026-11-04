@@ -72,7 +72,9 @@ describe("ExportDialog", () => {
       long_edge: 2048,
       include_metadata: false,
     });
-    await userEvent.click(within(dialog).getAllByRole("button", { name: "关闭" }).at(-1)!);
+    // Esc still closes it: the focus came back to the dialog when the export started.
+    expect(dialog).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 

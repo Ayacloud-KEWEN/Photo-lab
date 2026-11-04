@@ -169,6 +169,9 @@ storage_roots ──scan──▶ media_files (pending) ──ingest──▶ as
 - 全屏浏览显示 2048px 预览，可用滚轮以鼠标为中心缩放、拖动平移（`viewer/zoom.ts` 纯函数 + `ZoomableImage`）；
   第一次放大时加载全尺寸图：未编辑的 JPEG/PNG 直接用原文件，其余（HEIC、RAW、编辑过的照片）用
   `thumbnail?variant=full`——按编辑配方全尺寸显影、带原图 ICC，按需生成并缓存在缩略图目录（`<digest>[_e<hash>]_f1.jpg`）。
+  全尺寸图每张 2–6 MB，总量超过 2 GB 时删除最久未用的（每次打开会刷新修改时间，每次新生成后清理）。
+- 原文件和实况片段的 URL 只带内容版本（`rendition_version` 中 `-` 之前的部分，前端 `contentVersion`）：
+  编辑只改变缩略图，保存编辑不会让 webview 重新下载视频。
   视频直接播放原文件（`/original` 支持 Range）。
 - 地图使用 MapLibre；照片在前端用 Supercluster 聚合，气泡用 HTML 标记显示缩略图，因此离线
   底图不需要字体文件。离线底图来自 `world-atlas`（Natural Earth 1:50m 国界，按需加载）。

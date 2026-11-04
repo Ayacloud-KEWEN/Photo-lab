@@ -321,3 +321,24 @@ def test_full_size_renditions(api: tuple[TestClient, int, int]) -> None:
     client.put(f"/api/v1/assets/{photo}/edit", json={})
     assert full(photo).size == (800, 600)  # back to the original (cached)
     assert full(video).size == (800, 600)  # videos answer with their preview
+
+
+def test_full_size_cache_keeps_the_most_recently_used(tmp_path: Path) -> None:
+    import os
+
+    from lumen.develop.renditions import prune_full_renditions
+
+    folder = tmp_path / "renditions" / "ab"
+    folder.mkdir(parents=True)
+    names = ["ab01_f1", "ab02_e9f_f1", "ab03_f1", "ab04_f1"]  # oldest first
+    for age, name in enumerate(reversed(names)):
+        path = folder / f"{name}.jpg"
+        path.write_bytes(b"x" * 100)
+        os.utime(path, (1_000_000 - age * 10, 1_000_000 - age * 10))
+    small = folder / "ab01_p1.jpg"  # previews and thumbnails are left alone
+    small.write_bytes(b"x" * 1000)
+    keep = folder / "ab01_f1.jpg"  # the oldest, but just rendered
+
+    assert prune_full_renditions(tmp_path, limit=250, keep=keep) == 2
+    assert sorted(p.stem for p in folder.iterdir()) == ["ab01_f1", "ab01_p1", "ab04_f1"]
+    assert prune_full_renditions(tmp_path, limit=10_000) == 0

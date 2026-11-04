@@ -18,8 +18,10 @@ from lumen.develop.recipe import IDENTITY, EditRecipe, VideoRecipe, parse_recipe
 from lumen.develop.renditions import (
     edited_rendition_paths,
     full_rendition_path,
+    prune_full_renditions,
     render_edited,
     render_full,
+    touch,
 )
 from lumen.library.live import CLIP_EXTENSION
 from lumen.library.search import like_pattern, search_terms
@@ -614,8 +616,12 @@ def _full_rendition_path(
     except DevelopUnavailableError as exc:
         raise RenditionUnavailableError(str(exc)) from exc
     path = full_rendition_path(cache_dir, source.fingerprint, recipe_hash)
+    if path.exists():
+        touch(path)
+        return path
     try:
         render_full(source.path, source.format, recipe, path)
+        prune_full_renditions(cache_dir, keep=path)
     except (DevelopError, ValueError, OSError) as exc:
         logger.warning("full render failed", extra={"asset_id": asset_id, "error": str(exc)})
         raise RenditionUnavailableError(f"Cannot render the full-size photo: {exc}") from exc

@@ -46,7 +46,16 @@ def _watch_stdin(server: uvicorn.Server) -> None:
     server.should_exit = True
 
 
+def _quiet_connection_resets(loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
+    """Drop the error Windows' event loop logs when a client resets a connection (the
+    webview does so whenever it cancels an image request); report everything else."""
+    if isinstance(context.get("exception"), ConnectionResetError):
+        return
+    loop.default_exception_handler(context)
+
+
 async def _serve(server: uvicorn.Server, sock: socket.socket, generated_token: str | None) -> bool:
+    asyncio.get_running_loop().set_exception_handler(_quiet_connection_resets)
     serve_task = asyncio.create_task(server.serve(sockets=[sock]))
     while not server.started and not serve_task.done():
         await asyncio.sleep(0.02)

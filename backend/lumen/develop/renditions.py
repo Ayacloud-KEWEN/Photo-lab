@@ -6,6 +6,9 @@ version of an edit has its own files and undoing an edit finds its renditions ag
 
 from __future__ import annotations
 
+import contextlib
+import os
+import re
 from pathlib import Path
 
 from PIL import Image
@@ -30,6 +33,9 @@ def edited_rendition_paths(
 
 
 FULL_QUALITY = 90
+# Full-size renditions are 2-6 MB each: keep the most recently used ones within this.
+FULL_CACHE_LIMIT = 2 * 1024**3
+_FULL_NAME = re.compile(r"[0-9a-f]+(?:_e[0-9a-f]+)?_f\d+")
 
 
 def full_rendition_path(cache_dir: Path, fingerprint: str, recipe_hash: str) -> Path:
@@ -51,6 +57,42 @@ def render_full(source: Path, media_format: MediaFormat, recipe: EditRecipe, tar
         quality=FULL_QUALITY,
         icc_profile=engine.source_icc_profile(source, media_format),
     )
+
+
+def touch(path: Path) -> None:
+    """Mark a cached rendition as just used (pruning removes the least recently used)."""
+    with contextlib.suppress(OSError):
+        os.utime(path)
+
+
+def prune_full_renditions(
+    cache_dir: Path, limit: int = FULL_CACHE_LIMIT, *, keep: Path | None = None
+) -> int:
+    """Delete the least recently used full-size renditions beyond ``limit`` bytes (never
+    ``keep``); returns how many were deleted. Other renditions are small and stay."""
+    entries: list[tuple[float, int, Path]] = []
+    for path in (cache_dir / "renditions").glob("*/*_f*.jpg"):
+        if not _FULL_NAME.fullmatch(path.stem):
+            continue
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        entries.append((stat.st_mtime, stat.st_size, path))
+    total = sum(size for _, size, _ in entries)
+    removed = 0
+    for _, size, path in sorted(entries):  # oldest first
+        if total <= limit:
+            break
+        if keep is not None and path == keep:
+            continue
+        try:
+            path.unlink()
+        except OSError:  # e.g. being served right now: next time
+            continue
+        total -= size
+        removed += 1
+    return removed
 
 
 def render_edited(
