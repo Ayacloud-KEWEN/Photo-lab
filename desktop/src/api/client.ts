@@ -331,7 +331,7 @@ export const api = {
 
   listSimilarGroups: (
     conn: BackendConnection,
-    params: { window_minutes: number; similarity: number; pending_only: boolean },
+    params: { window_minutes: number; similarity: number; pending_only: boolean; limit: number },
   ) => request<SimilarGroups>(conn, "GET", `/api/v1/cull/similar${toSearchParams(params)}`),
 
   listSuspects: (conn: BackendConnection, pendingOnly: boolean) =>
@@ -370,6 +370,9 @@ export const api = {
     request<Task>(conn, "POST", "/api/v1/ai/model/download", {}),
 
   indexAi: (conn: BackendConnection) => request<Task>(conn, "POST", "/api/v1/ai/index"),
+
+  /** Load the model in the background so the first search does not wait for it. */
+  warmUpAi: (conn: BackendConnection) => request<void>(conn, "POST", "/api/v1/ai/warm-up"),
 
   aiSearch: (conn: BackendConnection, text: string, query: AssetQuery, limit = 200) =>
     request<SemanticPage>(

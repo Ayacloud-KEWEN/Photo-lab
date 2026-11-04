@@ -226,15 +226,15 @@ def test_ingest_resumes_after_interruption(
     library: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ingest, "BATCH_SIZE", 2)
+    monkeypatch.setattr(ingest, "STORE_SIZE", 2)
     first = TaskRunner(db, settings, HANDLERS)
-    original = ingest._process_batch
+    original = ingest._store_group
 
-    def process_then_shut_down(*args: object, **kwargs: object) -> None:
+    def store_then_shut_down(*args: object, **kwargs: object) -> None:
         original(*args, **kwargs)  # type: ignore[arg-type]
-        first._stop.set()  # simulate the app closing after the first batch
+        first._stop.set()  # simulate the app closing after the first group is saved
 
-    monkeypatch.setattr(ingest, "_process_batch", process_then_shut_down)
+    monkeypatch.setattr(ingest, "_store_group", store_then_shut_down)
     first.start()
     register(conn, first, library)
     first._thread.join(30)  # type: ignore[union-attr]
@@ -242,11 +242,17 @@ def test_ingest_resumes_after_interruption(
     states = dict(
         conn.execute("SELECT ingest_state, COUNT(*) FROM media_files GROUP BY 1").fetchall()
     )
-    assert states.get("done") == 2 and states.get("pending", 0) > 0
+    assert 1 <= states.get("done", 0) <= 2 and states.get("pending", 0) > 0
     task = conn.execute("SELECT status FROM tasks WHERE kind = 'ingest_storage_root'").fetchone()
     assert task["status"] == "pending"
 
-    monkeypatch.setattr(ingest, "_process_batch", original)
+    # Files claimed but not finished were not charged an attempt.
+    attempts = conn.execute(
+        "SELECT MAX(ingest_attempts) FROM media_files "
+        "WHERE ingest_state = 'pending' AND ingest_error IS NULL"
+    ).fetchone()[0]
+    assert attempts == 0
+    monkeypatch.setattr(ingest, "_store_group", original)
     second = TaskRunner(db, settings, HANDLERS)
     second.start()
     try:

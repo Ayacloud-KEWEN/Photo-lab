@@ -59,6 +59,10 @@ class VectorIndex:
             self._cache[model_id] = matrix
         return matrix
 
+    def matrix(self, conn: sqlite3.Connection, model_id: str) -> _Matrix:
+        """All vectors of a model (ids ascending), cached until the next write."""
+        return self._matrix(conn, model_id)
+
     def vector_of(
         self, conn: sqlite3.Connection, model_id: str, asset_id: int
     ) -> np.ndarray | None:

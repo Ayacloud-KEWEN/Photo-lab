@@ -12,12 +12,15 @@ import contextlib
 import json
 import logging
 import sqlite3
+import threading
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from lumen.ai.pipeline import AI_INDEX_TASK
+from lumen.core.volumes import incurs_seek_penalty
 from lumen.db.connection import transaction, utc_now
 from lumen.geo.tasks import GEO_TASK
 from lumen.library.common import (
@@ -46,7 +49,12 @@ from lumen.tasks.runner import TaskContext, TaskInterrupted
 
 logger = logging.getLogger(__name__)
 
-BATCH_SIZE = 24
+# Finished files are saved in groups of this size (one ExifTool call and one transaction).
+STORE_SIZE = 16
+# Files being processed at once, per worker: keeps every worker busy while a group is saved.
+WINDOW_PER_WORKER = 3
+# Parallel reads (fingerprints) on a spinning disk: more only adds seeks.
+HDD_READERS = 2
 MAX_FILE_ATTEMPTS = 3
 
 
@@ -62,6 +70,8 @@ class WorkItem:
     asset_id: int | None
     fingerprint: str | None
     metadata: Metadata | None = None
+    probed: Metadata | None = None  # FFprobe result (videos)
+    read_failed: bool = False  # could not be read or fingerprinted
     error: str | None = None
     vanished: bool = False
     warnings: list[str] = field(default_factory=list)
@@ -102,17 +112,16 @@ def _ingest(ctx: TaskContext) -> None:
             ffprobe=ctx.settings.tool("ffprobe"),
             ffmpeg=ctx.settings.tool("ffmpeg"),
         )
-        pool = stack.enter_context(
-            ThreadPoolExecutor(ctx.settings.ingest_workers, thread_name_prefix="ingest")
-        )
-        while True:
-            ctx.check()
-            items = _claim_batch(conn, root_id, root_path)
-            if not items:
-                break
-            _process_batch(ctx, items, tools, pool)
-            done += len(items)
-            ctx.progress(done, max(total, done))
+        workers = ctx.settings.ingest_workers
+        pool = stack.enter_context(ThreadPoolExecutor(workers, thread_name_prefix="ingest"))
+        spinning = incurs_seek_penalty(root_path)
+        readers = threading.BoundedSemaphore(HDD_READERS if spinning is not False else workers)
+        logger.info(
+            "ingest started",
+            extra={"storage_root_id": root_id, "pending": total, "workers": workers,
+                   "readers": HDD_READERS if spinning is not False else workers},
+        )  # fmt: skip
+        done = _run_window(ctx, root_id, root_path, tools, pool, readers, total)
 
     set_root_status(conn, root_id, "ready", scanned=True)
     ctx.progress(done, max(total, done), force=True)
@@ -135,19 +144,26 @@ def _count_pending(conn: sqlite3.Connection, root_id: int) -> int:
     return int(row[0])
 
 
-def _claim_batch(conn: sqlite3.Connection, root_id: int, root_path: Path) -> list[WorkItem]:
+def _claimable(conn: sqlite3.Connection, root_id: int) -> bool:
+    return _count_pending(conn, root_id) > 0
+
+
+def _claim_batch(
+    *, conn: sqlite3.Connection, root_id: int, root_path: Path, limit: int, exclude: list[int]
+) -> list[WorkItem]:
+    """Pending files not being processed yet (in id order, so roughly folder by folder)."""
     with transaction(conn):
         rows = conn.execute(
-            """
+            f"""
             SELECT id, relative_path, extension, size_bytes, mtime_ns, group_key, asset_id,
                    fingerprint
             FROM media_files
             WHERE storage_root_id = ? AND ingest_state = 'pending' AND status = 'present'
-              AND ingest_attempts < ?
+              AND ingest_attempts < ? AND id NOT IN ({",".join("?" * len(exclude))})
             ORDER BY id
             LIMIT ?
             """,
-            (root_id, MAX_FILE_ATTEMPTS, BATCH_SIZE),
+            (root_id, MAX_FILE_ATTEMPTS, *exclude, limit),
         ).fetchall()
         conn.executemany(
             "UPDATE media_files SET ingest_attempts = ingest_attempts + 1 WHERE id = ?",
@@ -179,28 +195,96 @@ def _claim_batch(conn: sqlite3.Connection, root_id: int, root_path: Path) -> lis
     return items
 
 
-def _process_batch(
-    ctx: TaskContext, items: list[WorkItem], tools: Tools, pool: ThreadPoolExecutor
-) -> None:
-    # 1. Fingerprints (parallel, I/O bound).
-    list(pool.map(lambda item: _fingerprint(item, ctx), items))
-    if ctx.should_stop():
-        raise TaskInterrupted()
-    ok = [i for i in items if not i.error and not i.vanished]
+def _run_window(
+    ctx: TaskContext,
+    root_id: int,
+    root_path: Path,
+    tools: Tools,
+    pool: ThreadPoolExecutor,
+    readers: threading.BoundedSemaphore,
+    total: int,
+) -> int:
+    """Process pending files as a sliding window and return how many were stored.
 
-    # 2. Group into assets (serialized by SQLite transactions).
+    Each file is fingerprinted (reads gated by ``readers``), probed and rendered on its
+    own as soon as a worker is free, so reading one file overlaps decoding another.
+    Finished files are saved in claim order (assets are created in file order, as
+    before), up to ``STORE_SIZE`` at a time, while the workers keep going ahead.
+    """
+    window = ctx.settings.ingest_workers * WINDOW_PER_WORKER
+    queued: deque[tuple[WorkItem, Future[None]]] = deque()  # claimed, in file order
+    done = 0
+    exhausted = False
+    try:
+        while True:
+            ctx.check()
+            if not exhausted and len(queued) < window:
+                claimed = _claim_batch(
+                    conn=ctx.conn, root_id=root_id, root_path=root_path,
+                    limit=window - len(queued), exclude=[item.file_id for item, _ in queued],
+                )  # fmt: skip
+                exhausted = not claimed
+                for item in claimed:
+                    queued.append((item, pool.submit(_prepare, item, ctx, tools, readers)))
+            if not queued:
+                if exhausted and _claimable(ctx.conn, root_id):
+                    exhausted = False  # failed files go back to pending: retry them
+                    continue
+                break
+            if not queued[0][1].done():
+                wait([queued[0][1]], timeout=1.0)
+                if ctx.should_stop():
+                    raise TaskInterrupted()
+                continue
+            group: list[WorkItem] = []
+            while queued and len(group) < STORE_SIZE and queued[0][1].done():
+                item, future = queued.popleft()
+                future.result()  # _prepare records errors on the item; re-raise bugs
+                group.append(item)
+            _store_group(ctx, group, tools)
+            done += len(group)
+            ctx.progress(done, max(total, done))
+    finally:
+        # Claimed but not finished (cancelled or shutting down): not charged an attempt.
+        unfinished = [item.file_id for item, _ in queued]
+        if unfinished:
+            with transaction(ctx.conn):
+                ctx.conn.executemany(
+                    "UPDATE media_files SET ingest_attempts = MAX(ingest_attempts - 1, 0) "
+                    "WHERE id = ? AND ingest_state = 'pending'",
+                    [(file_id,) for file_id in unfinished],
+                )
+    return done
+
+
+def _prepare(
+    item: WorkItem, ctx: TaskContext, tools: Tools, readers: threading.BoundedSemaphore
+) -> None:
+    """The per-file work that needs no database: fingerprint, probe, render."""
+    with readers:
+        _fingerprint(item, ctx)
+    item.read_failed = item.error is not None
+    if item.error or item.vanished or ctx.should_stop() or item.format.media_type is None:
+        return
+    if item.format.kind == "video" and tools.ffprobe:
+        try:
+            item.probed = parse_ffprobe(run_ffprobe(tools.ffprobe, item.path))
+        except Exception as exc:
+            item.warnings.append(f"ffprobe: {exc}")
+    # Thumbnails and previews (CPU bound; Pillow/LibRaw release the GIL).
+    _render(item, ctx, tools)
+
+
+def _store_group(ctx: TaskContext, items: list[WorkItem], tools: Tools) -> None:
+    # Read and fingerprinted (a failed thumbnail still belongs to its asset, e.g. a RAW
+    # next to its JPEG; the error is recorded when storing).
+    ok = [i for i in items if i.fingerprint and not i.vanished and not i.read_failed]
+    # Group into assets (serialized by SQLite transactions).
     for item in ok:
         _assign_asset(ctx.conn, item)
-
-    # 3. Metadata: one ExifTool call for the batch, FFprobe per video. Sidecars are read
-    #    too: Lightroom keeps RAW ratings and keywords in the .xmp next to the file.
-    media = [i for i in ok if i.format.media_type is not None]
-    _extract_metadata(ok, tools, pool)
-
-    # 4. Thumbnails and previews (parallel, CPU bound; Pillow/LibRaw release the GIL).
-    list(pool.map(lambda item: _render(item, ctx, tools), media))
-
-    # 5. Persist results.
+    # Metadata: one ExifTool call for the group. Sidecars are read too: Lightroom keeps
+    # RAW ratings and keywords in the .xmp next to the file.
+    _extract_metadata(ok, tools)
     _store_results(ctx.conn, items, tools)
 
 
@@ -346,22 +430,13 @@ def _attach_orphan_sidecars(
     )
 
 
-def _extract_metadata(items: list[WorkItem], tools: Tools, pool: ThreadPoolExecutor) -> None:
+def _extract_metadata(items: list[WorkItem], tools: Tools) -> None:
     records: dict[str, object] = {}
     if tools.exiftool is not None and items:
         records = dict(tools.exiftool.read(item.path for item in items))
 
-    def probe(item: WorkItem) -> Metadata | None:
-        if item.format.kind != "video" or not tools.ffprobe:
-            return None
-        try:
-            return parse_ffprobe(run_ffprobe(tools.ffprobe, item.path))
-        except Exception as exc:
-            item.warnings.append(f"ffprobe: {exc}")
-            return None
-
-    probes = list(pool.map(probe, items))
-    for item, probed in zip(items, probes, strict=True):
+    for item in items:
+        probed = item.probed
         record = records.get(str(item.path))
         if isinstance(record, dict):
             metadata = parse_exiftool(record)

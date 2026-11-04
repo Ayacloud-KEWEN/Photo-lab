@@ -70,6 +70,13 @@ def index_assets(conn: Connection, request: Request) -> Task:
     return task_service.get_task(conn, task_id)
 
 
+@router.post("/ai/warm-up", status_code=status.HTTP_204_NO_CONTENT, operation_id="warmUpAi")
+def warm_up(conn: Connection, request: Request) -> Response:
+    """Start loading the model and vectors in the background (no-op when AI is off)."""
+    service.warm_up(conn, _settings(request), request.app.state.db.path)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/ai/search", response_model=SemanticPage, operation_id="aiSearch", responses=ERRORS)
 async def ai_search(
     conn: Connection,

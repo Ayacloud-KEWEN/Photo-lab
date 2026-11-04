@@ -9,6 +9,7 @@ import type {
   EditRecipe,
   EditState,
   StorageRoot,
+  Task,
   VideoRecipe,
 } from "@/api/types";
 import { DEFAULT_VIDEO_RECIPE } from "@/components/develop/VideoWorkspace";
@@ -121,6 +122,8 @@ export interface StubOptions {
   ai?: { enabled?: boolean; downloaded?: boolean; installed?: boolean };
   /** The online map setting. */
   mapOnline?: boolean;
+  /** Active background tasks reported by /tasks. */
+  tasks?: Task[];
   /** One group of similar photos (asset ids; the second is recommended). */
   similar?: number[];
   /** Likely rejects (asset ids). */
@@ -272,7 +275,7 @@ export function stubBackend(options: StubOptions = {}) {
     requests.push({ method, url, body });
     const path = url.pathname;
 
-    if (path.startsWith("/api/v1/tasks")) return json({ items: [] });
+    if (path.startsWith("/api/v1/tasks")) return json({ items: options.tasks ?? [] });
     if (path === "/api/v1/settings") {
       return json({
         map_online_tiles: options.mapOnline ?? false,

@@ -27,7 +27,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–5 及之后的扩展（
 | `docs/PROJECT_SPEC.md` | 产品需求（原始需求，勿随意改动） |
 | `docs/phases.md` | 阶段划分 |
 | `docs/Project_Initialization.md` | Phase 1 任务书（工作方式：先查环境、提方案、经确认再实施） |
-| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-026）**，改动架构前先读 |
+| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-027）**，改动架构前先读 |
 | `README.md` | 安装、开发、测试、API 列表、快捷键 |
 
 ## 3. 环境（用户的开发机）
@@ -62,7 +62,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **157** 个测试、前端 **82** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **160** 个测试、前端 **83** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ### 4.1 在浏览器面板里用真实图库副本测试（推荐的验收方式）
 
@@ -179,7 +179,7 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 8. 外接硬盘换盘符后需手动处理（已记录卷序列号，未自动重定位）；删除来源后缩略图缓存不会自动清理
    （全尺寸图有 2 GB 上限，缩略图/预览图没有）。
 9. AI 标签名固定为中文（不随界面语言变化）。
-10. 性能：导入并行线程数上限 4（`ingest_workers`）；HEIC 无降采样解码（12MP 约 1 秒/张）；AI 索引约 44 张/秒；
+10. 性能：导入默认 8 线程（`ingest_workers`，ADR-027）；HEIC 无降采样解码（12MP 约 1 秒/张）；AI 索引约 44 张/秒；
     前端主包超过 500 KB（构建时 Vite 会提示，可懒加载 AI/作品集页面）。第一次 `GET /ai/status` 约 6 秒（导入 torch）。
 
 ## 9. 最近完成的工作（2026-11-03 ~ 04）
@@ -207,6 +207,12 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
   （`library/quality.py`）、相似照片分组与推荐（`services/cull.py`）、整理页（Ctrl 6）。
 - **重复文件**（`duplicates-ui`，ADR-026）：整理页“重复文件”标签，合并副本为一张照片（只改数据库），
   扫描时封面换到仍在场的副本（`scan.switch_missing_covers`）。用户库副本上 9 组、约 85 MB。
+- **大图库性能**（`fix-import-performance`，ADR-027）：实况配对查询不再全表扫描；导入改为滑动窗口
+  （8 线程，机械硬盘 2 个并发读）；导入期间界面少刷新；统计/地图/旅行建议/重复文件按写入代数缓存；
+  相似照片用内存向量并缓存分组、分页；AI 搜索页打开时预热模型。G: 盘实测导入约快 2 倍。
+
+**用户的图库（2026-11-04 晚）**：来源 `D:\照片`（SSD）、`G:\照片整理202507`、`G:\照片整理`（USB 机械硬盘，
+14.4 万个文件、678 GB，当时仍在导入）；约 19 万个文件。性能问题先在这个规模上验证（方法见 4.1，副本 + 关闭后台任务）。
 
 **注意（2026-11-04 测试时发现）**：用户的图库根目录 `D:\Photo 20260612` 当时不存在（被移动或改名？）。
 数据库和缓存都在，缩略图照常显示，但编辑过的照片、原图查看、导出、在资源管理器中显示都要等原文件回来。

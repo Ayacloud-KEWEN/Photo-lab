@@ -148,3 +148,16 @@ def test_backup_settings(client: TestClient, tmp_path: Path) -> None:
     ] is None
     assert client.patch("/api/v1/settings", json={"backup_folder": "relative"}).status_code == 422
     assert client.patch("/api/v1/settings", json={"backup_keep": 0}).status_code == 422
+
+
+def test_library_views_are_cached_until_the_next_write(
+    client: TestClient, conn: sqlite3.Connection, photos: list[int]
+) -> None:
+    first = client.get("/api/v1/assets/facets").json()
+    assert first["favorites"] == 0
+    # A write outside the API (no transaction) is not seen: the cached result stays...
+    conn.execute("UPDATE media_assets SET is_favorite = 1 WHERE id = ?", (photos[0],))
+    assert client.get("/api/v1/assets/facets").json()["favorites"] == 0
+    # ...until the next committed write through the application.
+    client.patch(f"/api/v1/assets/{photos[1]}", json={"rating": 3})
+    assert client.get("/api/v1/assets/facets").json()["favorites"] == 1

@@ -903,6 +903,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/warm-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Warm Up
+         * @description Start loading the model and vectors in the background (no-op when AI is off).
+         */
+        post: operations["warmUpAi"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/search": {
         parameters: {
             query?: never;
@@ -4661,6 +4681,8 @@ export interface operations {
                 window_minutes?: number;
                 similarity?: number;
                 pending_only?: boolean;
+                /** @description Groups returned (newest first) */
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -5062,6 +5084,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Task"];
                 };
+            };
+        };
+    };
+    warmUpAi: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

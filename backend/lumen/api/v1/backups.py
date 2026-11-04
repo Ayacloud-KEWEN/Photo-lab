@@ -9,6 +9,7 @@ from lumen.api.deps import Connection, get_database, wake_task_runner
 from lumen.core.config import Settings
 from lumen.core.errors import ConflictError, LumenError
 from lumen.core.reveal import reveal_in_explorer
+from lumen.db.connection import bump_write_generation
 from lumen.db.migrator import current_version
 from lumen.geo.tasks import GEO_TASK, needs_locating
 from lumen.schemas.backups import (
@@ -65,6 +66,7 @@ def restore_backup(conn: Connection, request: Request, body: RestoreRequest) -> 
     except RunnerBusyError as exc:
         raise ConflictError("A background task is busy; try again in a moment") from exc
     index.clear()
+    bump_write_generation()  # cached library views are out of date
     with db.session() as fresh:
         if needs_locating(fresh):
             queue.enqueue(fresh, GEO_TASK)

@@ -14,7 +14,7 @@ import os
 import sqlite3
 
 from lumen.core.errors import LumenError
-from lumen.db.connection import transaction, utc_now
+from lumen.db.connection import GenerationCache, transaction, utc_now
 from lumen.library.live import merge_user_data
 from lumen.library.search import reindex_assets
 from lumen.schemas.assets import AssetSummary
@@ -83,7 +83,14 @@ def _rank(asset: AssetSummary, tags: int, collections: int) -> tuple[object, ...
     )
 
 
+_cache = GenerationCache(size=4)
+
+
 def find_duplicates(conn: sqlite3.Connection, *, limit: int = 500) -> DuplicateReport:
+    return _cache.get(("duplicates", limit), lambda: _find_duplicates(conn, limit=limit))
+
+
+def _find_duplicates(conn: sqlite3.Connection, *, limit: int) -> DuplicateReport:
     components = _components(conn)
     ids = [asset_id for group in components for asset_id in group]
     if not ids:

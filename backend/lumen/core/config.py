@@ -51,8 +51,11 @@ class Settings(BaseSettings):
     exiftool_path: Path | None = None
     ffmpeg_path: Path | None = None
     ffprobe_path: Path | None = None
-    # Parallel file workers used while ingesting media.
-    ingest_workers: int = Field(default_factory=lambda: max(1, min(4, os.cpu_count() or 1)), ge=1)
+    # Parallel file workers used while ingesting media (decoding photos is CPU bound;
+    # reads from a spinning disk are limited separately, see ingest.HDD_READERS).
+    ingest_workers: int = Field(
+        default_factory=lambda: max(1, min(8, (os.cpu_count() or 2) // 2)), ge=1
+    )
     # Background task processing; disabled in some tests.
     run_tasks: bool = True
     # Local AI: "auto" uses the GPU when available; the model is unloaded when idle.

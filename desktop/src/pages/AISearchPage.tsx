@@ -1,8 +1,8 @@
 import { ArrowLeft, Loader2, Search, Sparkles } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ApiError, thumbnailUrl } from "@/api/client";
+import { api, ApiError, thumbnailUrl } from "@/api/client";
 import {
   useActiveTasks,
   useAiSearch,
@@ -29,6 +29,14 @@ export function AISearchPage({ onSelect }: AISearchPageProps) {
   const status = useAiStatus();
   const local = status.data?.local;
   const ready = !!local && local.installed && local.enabled && local.model_downloaded;
+  const conn = useConnection();
+  const warmedUp = useRef(false);
+  // Load the model while the user types (the first search would wait ~20 s for it).
+  useEffect(() => {
+    if (!ready || !conn || warmedUp.current) return;
+    warmedUp.current = true;
+    api.warmUpAi(conn).catch(() => {});
+  }, [ready, conn]);
 
   return (
     <div className="flex h-full flex-col">

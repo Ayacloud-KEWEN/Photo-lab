@@ -13,6 +13,7 @@ from pathlib import Path
 from PIL import Image
 
 from lumen.core.errors import LumenError, NotFoundError
+from lumen.db.connection import GenerationCache
 from lumen.develop.engine import DevelopError
 from lumen.develop.recipe import IDENTITY, EditRecipe, VideoRecipe, parse_recipe
 from lumen.develop.renditions import (
@@ -284,7 +285,18 @@ def timeline(conn: sqlite3.Connection, query: AssetQuery, granularity: str) -> T
     )
 
 
+# Library-wide results kept until the next write (they are re-asked often, e.g. after
+# every page switch, and take hundreds of milliseconds on a large library).
+_cache = GenerationCache()
+
+
 def map_points(conn: sqlite3.Connection, query: AssetQuery, *, limit: int) -> MapPoints:
+    return _cache.get(
+        ("map", query.model_dump_json(), limit), lambda: _map_points(conn, query, limit=limit)
+    )
+
+
+def _map_points(conn: sqlite3.Connection, query: AssetQuery, *, limit: int) -> MapPoints:
     clauses, params = _filters(query)
     rows = conn.execute(
         f"""
@@ -308,8 +320,8 @@ def map_points(conn: sqlite3.Connection, query: AssetQuery, *, limit: int) -> Ma
         points=[
             MapPoint(
                 id=row[0],
-                lat=row[1],
-                lon=row[2],
+                lat=round(row[1], 5),  # ~1 m: smaller response on large libraries
+                lon=round(row[2], 5),
                 v=rendition_version(row[3], row[4]),
                 p=row["place_id"],
             )
@@ -347,6 +359,10 @@ def _place_facets(conn: sqlite3.Connection, cities_per_country: int = 50) -> lis
 
 
 def facets(conn: sqlite3.Connection) -> AssetFacets:
+    return _cache.get("facets", lambda: _facets(conn))
+
+
+def _facets(conn: sqlite3.Connection) -> AssetFacets:
     """Values available for filtering, with counts, over the whole library."""
     where = f"WHERE {_BASE_WHERE} AND a.cull_flag != 'reject'"
     totals = conn.execute(

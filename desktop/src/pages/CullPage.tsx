@@ -100,13 +100,13 @@ export function CullPage({ onShowLibrary }: { onShowLibrary: () => void }) {
 
 function SimilarTab() {
   const { t } = useTranslation();
-  const [params, setParams] = useState<SimilarParams>({
+  const [params, setParams] = useState<Omit<SimilarParams, "limit">>({
     window_minutes: 10,
     similarity: 0.9,
     pending_only: true,
   });
   const [shown, setShown] = useState(PAGE);
-  const groups = useSimilarGroups(params);
+  const groups = useSimilarGroups({ ...params, limit: shown });
   const data = groups.data;
 
   return (
@@ -172,9 +172,11 @@ function SimilarTab() {
           <GroupCard key={group.items.map((item) => item.asset.id).join("-")} group={group} />
         ))}
       </div>
-      {data && data.groups.length > shown && (
+      {data && (params.pending_only ? data.pending_count : data.group_count) > shown && (
         <Button className="mt-4" size="sm" variant="secondary" onClick={() => setShown(shown + PAGE)}>
-          {t("cull.more", { count: data.groups.length - shown })}
+          {t("cull.more", {
+            count: (params.pending_only ? data.pending_count : data.group_count) - shown,
+          })}
         </Button>
       )}
     </section>

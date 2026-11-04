@@ -7,12 +7,24 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from lumen.ai.index import index
 from lumen.app import create_app
 from lumen.core.config import Settings
-from lumen.db.connection import Database
+from lumen.db.connection import Database, bump_write_generation
 from lumen.db.migrator import migrate
 
 TOKEN = "test-token"
+
+
+@pytest.fixture(autouse=True)
+def _fresh_caches() -> Iterator[None]:
+    """In-memory caches are per process (one database); each test has its own database."""
+    from lumen.services import cull
+
+    index.clear()
+    cull._clusters_cache.clear()
+    bump_write_generation()  # results cached from another test's database are stale
+    yield
 
 
 @pytest.fixture

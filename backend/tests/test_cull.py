@@ -176,3 +176,7 @@ def test_similar_groups_need_the_local_ai(client: TestClient) -> None:
     assert client.get("/api/v1/cull/similar").json() == {
         "available": False, "groups": [], "group_count": 0, "pending_count": 0,
     }  # fmt: skip
+
+
+def test_ai_warm_up_is_a_no_op_without_the_local_ai(client: TestClient) -> None:
+    assert client.post("/api/v1/ai/warm-up").status_code == 204

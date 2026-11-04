@@ -20,9 +20,14 @@ def similar_groups(
     window_minutes: int = Query(default=10, ge=1, le=24 * 60),
     similarity: float = Query(default=0.9, ge=0.5, le=0.995),
     pending_only: bool = Query(default=True),
+    limit: int = Query(default=60, ge=1, le=5000, description="Groups returned (newest first)"),
 ) -> SimilarGroups:
     return service.similar_groups(
-        conn, window_minutes=window_minutes, similarity=similarity, pending_only=pending_only
+        conn,
+        window_minutes=window_minutes,
+        similarity=similarity,
+        pending_only=pending_only,
+        limit=limit,
     )
 
 

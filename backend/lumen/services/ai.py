@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
+import threading
+from pathlib import Path
 
 from lumen.ai import pipeline
 from lumen.ai.engine import device_info, get_engine, model_downloaded, torch_installed
@@ -10,10 +13,14 @@ from lumen.ai.index import index
 from lumen.ai.models import MODELS, get_spec
 from lumen.core.config import Settings
 from lumen.core.errors import LumenError, NotFoundError
+from lumen.db.connection import Database
 from lumen.schemas.ai import AIStatus, CloudStatus, LocalAIStatus, ModelInfo, SemanticPage
 from lumen.schemas.assets import AssetQuery
 from lumen.services import assets
 from lumen.services.settings import get_settings
+
+logger = logging.getLogger(__name__)
+_warming = threading.Lock()
 
 MAX_CANDIDATES = 200_000
 
@@ -115,6 +122,31 @@ def _page(
         relevant_count=sum(1 for score in ranked if score >= threshold),
         model_id=model_id,
     )
+
+
+def warm_up(conn: sqlite3.Connection, settings: Settings, db_path: Path) -> bool:
+    """Load the model and the vectors in the background (the AI search page opened): the
+    first search otherwise waits ~20 s. Returns False when the local AI is not ready."""
+    try:
+        model_id = _ready_model(conn)
+    except LumenError:
+        return False
+
+    if not _warming.acquire(blocking=False):
+        return True  # already loading
+
+    def load() -> None:
+        try:
+            get_engine(settings.ai_idle_unload_s, settings.ai_device).encoder(model_id)
+            with Database(db_path).session() as own:
+                index.matrix(own, model_id)
+        except Exception:
+            logger.exception("AI warm-up failed")
+        finally:
+            _warming.release()
+
+    threading.Thread(target=load, name="ai-warm-up", daemon=True).start()
+    return True
 
 
 def search(

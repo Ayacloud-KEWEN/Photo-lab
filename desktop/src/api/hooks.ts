@@ -164,15 +164,27 @@ export function tasksByRoot(tasks: Task[] | undefined): Map<number, Task> {
   return map;
 }
 
+/** While tasks run: root statistics, the grid and timeline, then the heavier views. */
+const ROOTS_REFRESH_MS = 5_000;
+const GRID_REFRESH_MS = 15_000;
+const VIEWS_REFRESH_MS = 60_000;
+/** Cheap library queries refreshed on the grid's schedule; the rest (facets, map,
+ * similar photos, trip suggestions…) wait for the slower one, then everything at the end. */
+const GRID_QUERIES = new Set(["assets", "timeline", "asset"]);
+
 /**
- * Keeps library views fresh while background tasks run: root statistics follow
- * every poll, the photo grid refreshes every few seconds and once work finishes.
+ * Keeps library views fresh while background tasks run, without competing with the
+ * import: a 100 000-file import takes hours, and each refresh re-runs the visible
+ * queries (facets alone take ~0.5 s on a large library). Everything reloads once
+ * the work finishes.
  */
 export function useLibraryRefresh() {
   const queryClient = useQueryClient();
   const tasks = useActiveTasks();
   const roots = useStorageRoots();
+  const lastRootsRefresh = useRef(0);
   const lastGridRefresh = useRef(0);
+  const lastViewsRefresh = useRef(0);
   const wasActive = useRef(false);
   const lastScans = useRef<string | null>(null);
   const active = (tasks.data?.length ?? 0) > 0;
@@ -190,15 +202,29 @@ export function useLibraryRefresh() {
   useEffect(() => {
     if (!tasks.data) return;
     const now = Date.now();
-    if (active || wasActive.current) {
+    const finished = !active && wasActive.current;
+    wasActive.current = active;
+    if (finished) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.storageRoots });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.library });
+      return;
+    }
+    if (!active) return;
+    if (now - lastRootsRefresh.current >= ROOTS_REFRESH_MS) {
+      lastRootsRefresh.current = now;
       void queryClient.invalidateQueries({ queryKey: queryKeys.storageRoots });
     }
-    if ((active && now - lastGridRefresh.current > 4000) || (!active && wasActive.current)) {
-      lastGridRefresh.current = now;
+    if (now - lastViewsRefresh.current >= VIEWS_REFRESH_MS) {
+      lastViewsRefresh.current = lastGridRefresh.current = now;
       void queryClient.invalidateQueries({ queryKey: queryKeys.library });
+    } else if (now - lastGridRefresh.current >= GRID_REFRESH_MS) {
+      lastGridRefresh.current = now;
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.library,
+        predicate: (query) => GRID_QUERIES.has(String(query.queryKey[1])),
+      });
     }
-    wasActive.current = active;
-  }, [tasks.data, active, queryClient]);
+  }, [tasks.dataUpdatedAt, tasks.data, active, queryClient]);
 }
 
 export function useAssets(query: AssetQuery) {
@@ -481,6 +507,8 @@ export interface SimilarParams {
   window_minutes: number;
   similarity: number;
   pending_only: boolean;
+  /** Groups to fetch (newest first). */
+  limit: number;
 }
 
 export function useSimilarGroups(params: SimilarParams) {

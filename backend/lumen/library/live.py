@@ -22,11 +22,14 @@ CLIP_EXTENSION = "mov"
 # Apple's names for edited versions: IMG_E1234 (device), ABCDE1234 (Photos export).
 _EDITED = re.compile(r"(?:_|^[^\W\d_]{4})E\d+$", re.IGNORECASE)  # group keys are case-folded
 
-_FILE = """
+_COLUMNS = """
     SELECT f.id, f.storage_root_id, f.group_key, f.extension, f.asset_id,
            m.content_identifier, m.duration_ms, a.media_type,
            (SELECT COUNT(*) FROM media_files o
             WHERE o.asset_id = f.asset_id AND o.file_role != 'sidecar') AS asset_files
+"""
+_FILE = f"""
+    {_COLUMNS}
     FROM media_files f
     JOIN media_assets a ON a.id = f.asset_id
     JOIN media_metadata m ON m.file_id = f.id
@@ -68,20 +71,33 @@ def pair_live_photo(conn: sqlite3.Connection, file_id: int, now: str) -> bool:
         return False
 
     wanted = STILL_EXTENSIONS if is_clip else (CLIP_EXTENSION,)
-    rows = conn.execute(
-        f"""
-        {_FILE}
-        WHERE f.storage_root_id = ? AND f.id != ? AND f.status = 'present'
-          AND f.file_role != 'sidecar' AND f.ingest_state = 'done'
-          AND f.extension IN ({",".join("?" * len(wanted))})
-          AND (f.group_key = ? OR m.content_identifier = ?)
-        """,
-        (me["storage_root_id"], file_id, *wanted, me["group_key"], me["content_identifier"]),
-    ).fetchall()
+    # Two indexed lookups (same name; same ContentIdentifier) rather than one OR across
+    # two tables, which made SQLite scan the whole storage root for every imported file.
+    others = f"""
+        AND f.storage_root_id = ? AND f.id != ? AND f.status = 'present'
+        AND f.file_role != 'sidecar' AND f.ingest_state = 'done'
+        AND f.extension IN ({",".join("?" * len(wanted))})
+    """
+    common = (me["storage_root_id"], file_id, *wanted)
+    rows = conn.execute(f"{_FILE} WHERE f.group_key = ? {others}", (me["group_key"], *common))
+    found = {row["id"]: row for row in rows}
+    if me["content_identifier"]:
+        # CROSS JOIN keeps media_metadata first, so its content_identifier index is used.
+        by_id = conn.execute(
+            f"""
+            {_COLUMNS}
+            FROM media_metadata m
+            CROSS JOIN media_files f ON f.id = m.file_id
+            JOIN media_assets a ON a.id = f.asset_id
+            WHERE m.content_identifier = ? {others}
+            """,
+            (me["content_identifier"], *common),
+        )
+        found.update((row["id"], row) for row in by_id)
 
     folder = os.path.dirname(me["group_key"])
     candidates = []
-    for other in rows:
+    for other in found.values():
         if os.path.dirname(other["group_key"]) != folder:
             continue
         still, clip = (other, me) if is_clip else (me, other)

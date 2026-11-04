@@ -184,3 +184,23 @@ def test_user_data_of_the_clip_is_merged(conn: sqlite3.Connection) -> None:
         "SELECT latitude FROM media_locations WHERE asset_id = ?", (photo_asset,)
     ).fetchone()
     assert location[0] == 30.0
+
+
+def test_pairing_does_not_scan_the_whole_root(conn: sqlite3.Connection, root: int) -> None:
+    """Regression: an OR across two tables made every pairing scan all files of the root."""
+    for index in range(2000):
+        add(conn, f"DCIM/other/IMG_{index:04d}.JPG", content_id=f"id-{index}")
+    still = add(conn, "DCIM/live/IMG_9000.HEIC", content_id=SAME_ID)
+    clip = add(conn, "DCIM/live/IMG_9000.MOV", content_id=SAME_ID, duration_ms=2000)
+    steps = 0
+
+    def count() -> int:
+        nonlocal steps
+        steps += 1
+        return 0
+
+    conn.set_progress_handler(count, 100)  # called every 100 virtual machine steps
+    assert pair_live_photo(conn, clip, NOW)
+    conn.set_progress_handler(None, 0)
+    assert asset_of(conn, clip) == asset_of(conn, still)
+    assert steps < 50  # a scan of the 2000 other files takes thousands

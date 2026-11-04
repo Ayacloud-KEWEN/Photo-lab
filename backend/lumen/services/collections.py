@@ -9,7 +9,7 @@ from collections.abc import Iterable
 from datetime import datetime
 
 from lumen.core.errors import LumenError, NotFoundError
-from lumen.db.connection import transaction, utc_now
+from lumen.db.connection import GenerationCache, transaction, utc_now
 from lumen.library.trips import Shot, find_trips, spread
 from lumen.schemas.assets import PlaceName
 from lumen.schemas.collections import (
@@ -253,7 +253,14 @@ def set_caption(
             )
 
 
+_cache = GenerationCache(size=1)
+
+
 def suggest_trips(conn: sqlite3.Connection) -> TripSuggestions:
+    return _cache.get("trips", lambda: _suggest_trips(conn))
+
+
+def _suggest_trips(conn: sqlite3.Connection) -> TripSuggestions:
     """Trips found in the library that no trip collection covers yet."""
     rows = conn.execute(
         """
