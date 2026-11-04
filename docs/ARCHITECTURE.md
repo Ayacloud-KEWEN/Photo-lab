@@ -175,6 +175,9 @@ storage_roots ──scan──▶ media_files (pending) ──ingest──▶ as
   视频直接播放原文件（`/original` 支持 Range）。
 - 地图使用 MapLibre；照片在前端用 Supercluster 聚合，气泡用 HTML 标记显示缩略图，因此离线
   底图不需要字体文件。离线底图来自 `world-atlas`（Natural Earth 1:50m 国界，按需加载）。
+- 底图样式是设置项 `map_style`（`dark` 默认 / `liberty` / `bright` / `positron`）：在线时就是 OpenFreeMap
+  同名样式（同一域名，CSP 不变）；离线时 `dark` 用深色国界图，其余用浅色国界图。设置页和地图页左下角都能切换；
+  切换时用 `map.setStyle()` 原地换底图，视野和照片标记（HTML 元素，不在样式图层里）都保留。
 - MapLibre 的 Web Worker 以原始源码（`?raw`）通过 `blob:` URL 启动：MapLibre 默认按自身模块
   路径寻找 worker，打包后会失效；CSP 中对应放开 `worker-src blob:`。
 - CSP 中新增 `media-src`（视频）和 `https://tiles.openfreemap.org`（仅在线地图使用）。

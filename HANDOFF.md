@@ -16,7 +16,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–5 全部完成并合并
 | Phase 3 | 照片墙、全屏浏览、时间轴、地图、星级/收藏/标签/备注、搜索筛选 | ✅ |
 | Phase 4 | SigLIP2 语义搜索/相似照片/自动标签、OpenCLIP 对照工具、DeepSeek 云端分析 | ✅ |
 | Phase 5 | 显影（非破坏性编辑）、导出与预设、视频剪辑与导出、旅行作品集 | ✅ |
-| 之后 | 实况照片配对、图库悬停播放实况、地图标记修复、全屏滚轮缩放、测试中发现的问题修复 | ✅ |
+| 之后 | 实况照片配对、图库悬停播放实况、地图标记修复、全屏滚轮缩放、测试中发现的问题修复、可选底图样式 | ✅ |
 
 `docs/phases.md` 只规划到 Phase 5，**没有 Phase 6**。下一步做什么由用户决定（候选见第 9 节末尾）。
 
@@ -62,7 +62,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **142** 个测试、前端 **73** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **142** 个测试、前端 **75** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ### 4.1 在浏览器面板里用真实图库副本测试（推荐的验收方式）
 
@@ -197,6 +197,8 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
   放大时加载全尺寸图（未编辑的 JPEG/PNG 用原文件，其余用 `thumbnail?variant=full`）。
 - **全面测试后的修复**（`fix-review-issues`）：视频剪辑时反复重新加载、全尺寸缓存 2 GB 上限、导出后 Esc、
   设置页空检查器、日志里的连接重置噪音。测试方法见 4.1；当时用户真实日志里修复后没有任务/渲染/导出错误。
+- **可选底图样式**（`map-basemaps`）：设置项 `map_style`（深色/彩色/明亮/浅灰 = OpenFreeMap 同名样式；离线时深色/浅色），
+  设置页和地图页左下角切换，`setStyle` 原地换底图（见 ARCHITECTURE 第 16 节）。
 
 **下一步候选**（等用户选，按价值排序的建议）：
 1. 数据库备份与恢复（SPEC 的 MVP 要求，唯一没做的 MVP 项）。

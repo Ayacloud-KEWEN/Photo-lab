@@ -351,6 +351,15 @@ const en: LocaleResource = {
     photosHere_one: "{{count, number}} photo here",
     photosHere_other: "{{count, number}} photos here",
     clearSelection: "Close",
+    basemap: "Basemap",
+    styles: {
+      dark: "Dark",
+      liberty: "Colorful",
+      bright: "Bright",
+      positron: "Light gray",
+      offlineDark: "Dark",
+      offlineLight: "Light",
+    },
   },
   aiSearch: {
     title: "AI Search",
@@ -441,6 +450,8 @@ const en: LocaleResource = {
     mapOnline: "Use the online street map",
     mapOnlineHint:
       "By default a built-in offline world map is used. When enabled, the visible map area is sent to OpenFreeMap to download map tiles; your photos are never uploaded.",
+    mapStyle: "Basemap style",
+    mapStyleHint: "You can also switch it in the bottom-left corner of the map. Offline, there is a dark and a light map.",
     title: "Settings",
     language: "Interface language",
     languageHint: "Changes apply immediately.",

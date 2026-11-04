@@ -18,6 +18,7 @@ import { thumbnailUrl, type BackendConnection } from "@/api/client";
 import { useConnection, useMapPoints, useSettings } from "@/api/hooks";
 import type { MapPoint } from "@/api/types";
 import { FilterBar } from "@/components/library/FilterBar";
+import { BasemapPicker, offlinePalette, type MapStyle } from "@/components/map/BasemapPicker";
 import { Button } from "@/components/ui/button";
 import { useLibraryState } from "@/library/state";
 
@@ -25,8 +26,13 @@ maplibregl.setWorkerUrl(
   URL.createObjectURL(new Blob([workerSource], { type: "text/javascript" })),
 );
 
-const ONLINE_STYLE = "https://tiles.openfreemap.org/styles/dark";
+const onlineStyle = (style: MapStyle) => `https://tiles.openfreemap.org/styles/${style}`;
 const MAX_MARKERS = 300;
+
+const OFFLINE_COLORS = {
+  dark: { ocean: "#0e1114", land: "#1d2024", borders: "#353a40" },
+  light: { ocean: "#d4dde2", land: "#f5f4f0", borders: "#b9c0c6" },
+};
 
 interface PointProps {
   id: number;
@@ -34,27 +40,31 @@ interface PointProps {
 }
 
 /** Offline basemap: country shapes from Natural Earth (bundled, ~750 KB, loaded on demand). */
-async function offlineStyle(attribution: string): Promise<StyleSpecification> {
+async function offlineStyle(
+  palette: "dark" | "light",
+  attribution: string,
+): Promise<StyleSpecification> {
   const topology = (await import("world-atlas/countries-50m.json")).default as unknown as Topology<{
     countries: GeometryCollection;
   }>;
   const countries = feature(topology, topology.objects.countries) as FeatureCollection<Geometry>;
+  const colors = OFFLINE_COLORS[palette];
   return {
     version: 8,
     sources: { countries: { type: "geojson", data: countries, attribution } },
     layers: [
-      { id: "ocean", type: "background", paint: { "background-color": "#0e1114" } },
+      { id: "ocean", type: "background", paint: { "background-color": colors.ocean } },
       {
         id: "land",
         type: "fill",
         source: "countries",
-        paint: { "fill-color": "#1d2024", "fill-antialias": true },
+        paint: { "fill-color": colors.land, "fill-antialias": true },
       },
       {
         id: "borders",
         type: "line",
         source: "countries",
-        paint: { "line-color": "#353a40", "line-width": 0.6 },
+        paint: { "line-color": colors.borders, "line-width": 0.6 },
       },
     ],
   };
@@ -69,10 +79,14 @@ export function MapPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const attributionRef = useRef<maplibregl.AttributionControl | null>(null);
   const fittedRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [picked, setPicked] = useState<PointProps[] | null>(null);
   const online = settings.data?.map_online_tiles ?? false;
+  const mapStyle = settings.data?.map_style ?? "dark";
+  // What is drawn: an online style URL, or the dark / light offline map.
+  const basemap = online ? onlineStyle(mapStyle) : offlinePalette(mapStyle);
 
   const index = useMemo(() => {
     const cluster = new Supercluster<PointProps>({ radius: 70, maxZoom: 17 });
@@ -86,44 +100,58 @@ export function MapPage() {
     return cluster;
   }, [points.data]);
 
-  // Create the map (re-created when switching between offline and online basemaps).
+  // Remove the map when leaving the page.
+  useEffect(
+    () => () => {
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = [];
+      mapRef.current?.remove();
+      mapRef.current = null;
+      attributionRef.current = null;
+      fittedRef.current = false;
+      setReady(false);
+    },
+    [],
+  );
+
+  // Create the map, or swap the basemap in place when it changes: the view and the photo
+  // markers (HTML elements, not style layers) stay as they are.
   useEffect(() => {
     if (!containerRef.current || settings.isPending) return;
     let cancelled = false;
-    let map: maplibregl.Map | null = null;
     void (async () => {
-      const style = online ? ONLINE_STYLE : await offlineStyle(t("map.attributionOffline"));
+      const style =
+        basemap === "dark" || basemap === "light"
+          ? await offlineStyle(basemap, t("map.attributionOffline"))
+          : basemap;
       if (cancelled || !containerRef.current) return;
-      map = new maplibregl.Map({
-        container: containerRef.current,
-        style,
-        center: [110, 30],
-        zoom: 1.6,
-        attributionControl: false,
-        renderWorldCopies: false,
-      });
-      map.addControl(
-        new maplibregl.AttributionControl(
-          online ? { compact: true, customAttribution: t("map.attributionOnline") } : { compact: true },
-        ),
+      let map = mapRef.current;
+      if (map) {
+        map.setStyle(style);
+        if (attributionRef.current) map.removeControl(attributionRef.current);
+      } else {
+        map = new maplibregl.Map({
+          container: containerRef.current,
+          style,
+          center: [110, 30],
+          zoom: 1.6,
+          attributionControl: false,
+          renderWorldCopies: false,
+        });
+        // Top left: the panel of a clicked cluster opens on the right.
+        map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
+        map.on("load", () => setReady(true));
+        mapRef.current = map;
+      }
+      attributionRef.current = new maplibregl.AttributionControl(
+        online ? { compact: true, customAttribution: t("map.attributionOnline") } : { compact: true },
       );
-      // Top left: the panel of a clicked cluster opens on the right.
-      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
-      map.on("load", () => {
-        if (!cancelled) setReady(true);
-      });
-      mapRef.current = map;
+      map.addControl(attributionRef.current);
     })();
     return () => {
       cancelled = true;
-      setReady(false);
-      markersRef.current.forEach((marker) => marker.remove());
-      markersRef.current = [];
-      map?.remove();
-      mapRef.current = null;
-      fittedRef.current = false;
     };
-  }, [online, settings.isPending, t]);
+  }, [basemap, online, settings.isPending, t]);
 
   // Fit the view to the photos the first time they arrive.
   useEffect(() => {
@@ -197,6 +225,9 @@ export function MapPage() {
       <div className="relative min-h-0 flex-1 border-t">
         {/* maplibre's CSS makes the container position:relative, so size it explicitly. */}
         <div ref={containerRef} className="h-full w-full" />
+        <div className="absolute bottom-3 left-3 rounded-lg border bg-panel/95 p-0.5 shadow-lg">
+          <BasemapPicker compact />
+        </div>
         {empty && (
           <div className="pointer-events-none absolute inset-x-0 top-8 flex justify-center">
             <span className="flex items-center gap-2 rounded-md bg-background/80 px-3 py-2 text-xs text-muted-foreground">

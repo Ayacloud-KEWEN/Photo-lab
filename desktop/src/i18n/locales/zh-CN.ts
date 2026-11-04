@@ -349,6 +349,15 @@ const zhCN = {
     photosHere_one: "这里有 {{count, number}} 张",
     photosHere_other: "这里有 {{count, number}} 张",
     clearSelection: "关闭",
+    basemap: "底图",
+    styles: {
+      dark: "深色",
+      liberty: "彩色",
+      bright: "明亮",
+      positron: "浅灰",
+      offlineDark: "深色",
+      offlineLight: "浅色",
+    },
   },
   aiSearch: {
     title: "AI 搜索",
@@ -439,6 +448,8 @@ const zhCN = {
     mapOnline: "使用在线街道地图",
     mapOnlineHint:
       "默认使用内置的离线世界地图。开启后，地图可视范围会发送给 OpenFreeMap 以下载地图图块；照片本身不会上传。",
+    mapStyle: "底图样式",
+    mapStyleHint: "也可以在地图页左下角切换。离线时只有深色和浅色两种。",
     title: "设置",
     language: "界面语言",
     languageHint: "更改会立即生效。",

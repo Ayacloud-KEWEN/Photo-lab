@@ -115,6 +115,8 @@ export interface StubOptions {
   assets?: AssetSummary[];
   /** Local AI state reported by /ai/status. */
   ai?: { enabled?: boolean; downloaded?: boolean; installed?: boolean };
+  /** The online map setting. */
+  mapOnline?: boolean;
   /** Cloud behaviour: "ok" (default), "no_vision" or "not_configured". */
   cloud?: "ok" | "no_vision" | "not_configured";
   /** Saved video edits by asset id. */
@@ -260,7 +262,8 @@ export function stubBackend(options: StubOptions = {}) {
     if (path.startsWith("/api/v1/tasks")) return json({ items: [] });
     if (path === "/api/v1/settings") {
       return json({
-        map_online_tiles: false,
+        map_online_tiles: options.mapOnline ?? false,
+        map_style: "dark",
         ai_enabled: options.ai?.enabled ?? false,
         ai_model: "siglip2-so400m-patch14-384",
         cloud_enabled: options.cloud !== "not_configured",

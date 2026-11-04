@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { useBackendStatus } from "@/api/backend-context";
 import { useHealth, useSettings, useUpdateSettings } from "@/api/hooks";
+import { BasemapPicker } from "@/components/map/BasemapPicker";
 import { CloudSettings, LocalAiSettings } from "@/components/settings/AiSettings";
 import { LANGUAGES, setLanguage, type LanguageCode } from "@/i18n";
 import { cn } from "@/lib/utils";
@@ -69,6 +70,11 @@ export function SettingsPage() {
             </span>
           </span>
         </label>
+        <div className="mt-4">
+          <span className="mb-2 block text-[13px]">{t("settings.mapStyle")}</span>
+          <BasemapPicker />
+          <p className="mt-2 text-xs text-subtle-foreground">{t("settings.mapStyleHint")}</p>
+        </div>
       </Section>
 
       <Section title={t("settings.ai")}>

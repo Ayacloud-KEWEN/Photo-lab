@@ -351,6 +351,15 @@ const fr: LocaleResource = {
     photosHere_one: "{{count, number}} photo ici",
     photosHere_other: "{{count, number}} photos ici",
     clearSelection: "Fermer",
+    basemap: "Fond de carte",
+    styles: {
+      dark: "Sombre",
+      liberty: "Coloré",
+      bright: "Lumineux",
+      positron: "Gris clair",
+      offlineDark: "Sombre",
+      offlineLight: "Clair",
+    },
   },
   aiSearch: {
     title: "Recherche IA",
@@ -441,6 +450,8 @@ const fr: LocaleResource = {
     mapOnline: "Utiliser la carte routière en ligne",
     mapOnlineHint:
       "Par défaut, une carte du monde hors ligne intégrée est utilisée. Si activé, la zone visible est envoyée à OpenFreeMap pour télécharger les tuiles ; vos photos ne sont jamais envoyées.",
+    mapStyle: "Style du fond de carte",
+    mapStyleHint: "Vous pouvez aussi le changer en bas à gauche de la carte. Hors ligne, il existe une carte sombre et une carte claire.",
     title: "Réglages",
     language: "Langue de l’interface",
     languageHint: "Les changements s’appliquent immédiatement.",

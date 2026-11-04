@@ -7,7 +7,7 @@
 - Phase 1：桌面外壳、界面框架、本地后端、SQLite 数据库与迁移、照片文件夹登记。
 - Phase 2：文件夹扫描、RAW/JPEG/HEIC/PNG/TIFF/视频识别、EXIF 与视频元数据、内容指纹、
   RAW+JPEG 配对、缩略图与预览图、文件移动与重复检测、可断点续跑的后台任务、缩略图网格。
-- Phase 3：等高行照片墙与多选批量操作、全屏浏览与视频播放、时间轴、地图（离线底图，可选在线）、
+- Phase 3：等高行照片墙与多选批量操作、全屏浏览与视频播放、时间轴、地图（离线底图，可选在线；深色/浅色等多种底图样式）、
   星级/收藏/标签/备注、全文搜索（支持中文）与元数据筛选、只读导入 XMP/EXIF 关键词与星级。
 - Phase 4：本机 GPU 上的 SigLIP2 语义搜索（中文可直接搜索）、相似照片、自动场景标签；
   OpenCLIP 模型对照实验工具；DeepSeek 云端分析（描述、点评、选片、旅行故事，逐次确认后才上传）。
@@ -220,7 +220,7 @@ cd backend
 | GET | `/api/v1/timeline?granularity=year\|month\|day&…` | 按时间段统计数量 |
 | GET | `/api/v1/map/points?…` | 带位置的资产坐标 |
 | GET/POST | `/api/v1/tags` · PATCH/DELETE `/api/v1/tags/{id}` | 标签列表、新建、重命名、删除 |
-| GET/PATCH | `/api/v1/settings` | 应用设置（在线地图、AI、云端） |
+| GET/PATCH | `/api/v1/settings` | 应用设置（在线地图、底图样式、AI、云端） |
 | GET | `/api/v1/ai/status` | 本地 AI（GPU、模型、已分析数量）与云端配置状态 |
 | POST | `/api/v1/ai/model/download` · `/api/v1/ai/index` | 下载模型 / 分析照片（后台任务） |
 | GET | `/api/v1/ai/search?text=&…` | 语义搜索（可叠加筛选条件），返回相似度和明显相关的数量 |

@@ -1010,6 +1010,13 @@ export interface components {
              */
             map_online_tiles: boolean;
             /**
+             * Map Style
+             * @description Basemap style
+             * @default dark
+             * @enum {string}
+             */
+            map_style: "dark" | "liberty" | "bright" | "positron";
+            /**
              * Ai Enabled
              * @description Index photos with the local AI model
              * @default false
@@ -1048,6 +1055,8 @@ export interface components {
         AppSettingsUpdate: {
             /** Map Online Tiles */
             map_online_tiles?: boolean | null;
+            /** Map Style */
+            map_style?: ("dark" | "liberty" | "bright" | "positron") | null;
             /** Ai Enabled */
             ai_enabled?: boolean | null;
             /** Ai Model */

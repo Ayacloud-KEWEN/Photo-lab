@@ -245,11 +245,16 @@ def test_batch_update_and_tags(client: TestClient) -> None:
 def test_settings(client: TestClient) -> None:
     defaults = client.get("/api/v1/settings").json()
     assert defaults["map_online_tiles"] is False
+    assert defaults["map_style"] == "dark"
     assert (defaults["ai_enabled"], defaults["cloud_enabled"]) == (False, False)
     assert defaults["cloud_include_location"] is False  # GPS is never sent by default
     updated = client.patch("/api/v1/settings", json={"map_online_tiles": True}).json()
     assert updated["map_online_tiles"] is True
     assert client.patch("/api/v1/settings", json={"map_online_tiles": None}).json() == updated
+    assert client.patch("/api/v1/settings", json={"map_style": "positron"}).json()["map_style"] == (
+        "positron"
+    )
+    assert client.patch("/api/v1/settings", json={"map_style": "satellite"}).status_code == 422
     assert client.patch("/api/v1/settings", json={"ai_model": "nope"}).status_code == 422
     assert client.patch("/api/v1/settings", json={"cloud_base_url": "http://x"}).status_code == 422
     assert client.patch("/api/v1/settings", json={"unknown": 1}).status_code == 422
