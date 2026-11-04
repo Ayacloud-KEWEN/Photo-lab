@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { useLibraryState } from "@/library/state";
 import { TagInput } from "@/components/library/TagInput";
 import { formatBytes, formatDateTime, formatDuration, formatExposure } from "@/lib/format";
+import { placeLine } from "@/lib/places";
 import { cn } from "@/lib/utils";
 import type { Selection } from "@/selection";
 
@@ -142,6 +143,13 @@ export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; 
         {meta.lens_model && <Field label={t("inspector.lens")}>{meta.lens_model}</Field>}
         {exposure.length > 0 && (
           <Field label={t("inspector.exposure")}>{exposure.join(" · ")}</Field>
+        )}
+        {asset.place && (
+          <Field label={t("inspector.place")}>
+            <span className="select-text">
+              {placeLine([asset.place.city, asset.place.region, asset.place.country], i18n.language)}
+            </span>
+          </Field>
         )}
         {asset.location && (
           <Field label={t("inspector.location")}>

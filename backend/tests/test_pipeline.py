@@ -100,6 +100,7 @@ def test_full_ingest(
     assert [tuple(t) for t in tasks] == [
         ("scan_storage_root", "succeeded"),
         ("ingest_storage_root", "succeeded"),
+        ("geo_locate_assets", "succeeded"),  # place names for the located photo
     ]
 
     # RAW+JPEG pairing: one asset, RAW primary, JPEG companion and cover.

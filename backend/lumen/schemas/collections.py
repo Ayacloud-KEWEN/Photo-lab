@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 
-from lumen.schemas.assets import AssetSummary
+from lumen.schemas.assets import AssetSummary, PlaceName
 
 CollectionKind = Literal["album", "trip"]
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
@@ -94,6 +94,8 @@ class TripSuggestion(BaseModel):
     latitude: float
     longitude: float
     distance_km: float = Field(description="From home (where most located photos were taken)")
+    cities: list[PlaceName] = Field(description="Most photographed towns (up to 3), for naming")
+    countries: list[PlaceName] = Field(description="Most photographed first")
 
 
 class TripSuggestions(BaseModel):

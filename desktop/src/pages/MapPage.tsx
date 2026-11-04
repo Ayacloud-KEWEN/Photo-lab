@@ -21,6 +21,7 @@ import { FilterBar } from "@/components/library/FilterBar";
 import { BasemapPicker, offlinePalette, type MapStyle } from "@/components/map/BasemapPicker";
 import { Button } from "@/components/ui/button";
 import { useLibraryState } from "@/library/state";
+import { placeName } from "@/lib/places";
 
 maplibregl.setWorkerUrl(
   URL.createObjectURL(new Blob([workerSource], { type: "text/javascript" })),
@@ -37,6 +38,8 @@ const OFFLINE_COLORS = {
 interface PointProps {
   id: number;
   v: string;
+  /** Town (GeoNames id), if named. */
+  p: number | null;
 }
 
 /** Offline basemap: country shapes from Natural Earth (bundled, ~750 KB, loaded on demand). */
@@ -71,7 +74,7 @@ async function offlineStyle(
 }
 
 export function MapPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const conn = useConnection();
   const { query, setQuery, openViewer } = useLibraryState();
   const settings = useSettings();
@@ -94,7 +97,7 @@ export function MapPage() {
       (points.data?.points ?? []).map((point: MapPoint) => ({
         type: "Feature",
         geometry: { type: "Point", coordinates: [point.lon, point.lat] },
-        properties: { id: point.id, v: point.v },
+        properties: { id: point.id, v: point.v, p: point.p },
       })),
     );
     return cluster;
@@ -186,7 +189,7 @@ export function MapPage() {
         };
         const leaves: PointProps[] = props.cluster
           ? index.getLeaves(props.cluster_id!, 500).map((leaf) => leaf.properties)
-          : [{ id: props.id, v: props.v }];
+          : [{ id: props.id, v: props.v, p: props.p }];
         const element = markerElement(conn, leaves[0]!, props.point_count ?? 1);
         element.addEventListener("click", (event) => {
           event.stopPropagation();
@@ -209,6 +212,16 @@ export function MapPage() {
   }, [index, ready, conn, openViewer]);
 
   const empty = points.data && points.data.points.length === 0;
+  // The town most of the clicked photos were taken in.
+  const pickedPlace = useMemo(() => {
+    const counts = new Map<number, number>();
+    picked?.forEach((point) => {
+      if (point.p) counts.set(point.p, (counts.get(point.p) ?? 0) + 1);
+    });
+    const [best] = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    const place = best && points.data?.places.find((item) => item.place_id === best[0]);
+    return place ? placeName(place.name, i18n.language) : null;
+  }, [picked, points.data, i18n.language]);
 
   return (
     <div className="flex h-full flex-col">
@@ -238,8 +251,11 @@ export function MapPage() {
         )}
         {picked && conn && (
           <aside className="absolute bottom-3 right-3 top-3 flex w-64 flex-col overflow-hidden rounded-lg border bg-panel/95 shadow-xl">
-            <div className="flex h-9 shrink-0 items-center justify-between border-b px-3 text-xs">
-              {t("map.photosHere", { count: picked.length })}
+            <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b px-3 text-xs">
+              <span className="truncate">
+                {pickedPlace && <span className="font-medium">{pickedPlace} · </span>}
+                {t("map.photosHere", { count: picked.length })}
+              </span>
               <Button
                 variant="ghost"
                 size="icon-sm"

@@ -52,6 +52,7 @@ include = ["lumen*"]
 
 [tool.setuptools.package-data]
 "lumen.db" = ["migrations/*.sql"]
+"lumen.geo" = ["data/*.tsv.gz"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

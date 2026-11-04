@@ -1,4 +1,5 @@
 from lumen.ai.pipeline import AI_DOWNLOAD_TASK, AI_INDEX_TASK, download_model, index_assets
+from lumen.geo.tasks import GEO_TASK, locate_assets
 from lumen.library.common import INGEST_TASK, SCAN_TASK
 from lumen.library.exports import EXPORT_TASK, export_assets
 from lumen.library.ingest import ingest_storage_root
@@ -11,4 +12,5 @@ HANDLERS: dict[str, Handler] = {
     AI_DOWNLOAD_TASK: download_model,
     AI_INDEX_TASK: index_assets,
     EXPORT_TASK: export_assets,
+    GEO_TASK: locate_assets,
 }

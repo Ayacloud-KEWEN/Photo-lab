@@ -12,6 +12,10 @@ export interface AssetQuery {
   date_from?: string;
   date_to?: string;
   has_location?: boolean;
+  /** ISO country code of the place taken. */
+  country?: string;
+  /** GeoNames id of the town. */
+  place_id?: number;
   sort?: "capture_desc" | "capture_asc" | "added_desc";
 }
 

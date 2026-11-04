@@ -1128,6 +1128,8 @@ export interface components {
             rendition_version: string | null;
             metadata: components["schemas"]["AssetMetadata"];
             location: components["schemas"]["AssetLocation"] | null;
+            /** @description Where the location is (offline place names) */
+            place: components["schemas"]["AssetPlace"] | null;
             /** Files */
             files: components["schemas"]["AssetFile"][];
         };
@@ -1153,6 +1155,11 @@ export interface components {
             years: components["schemas"]["FacetValue"][];
             /** Tags */
             tags: components["schemas"]["Tag"][];
+            /**
+             * Places
+             * @description Countries, most photographed first
+             */
+            places: components["schemas"]["CountryFacet"][];
         };
         /** AssetFile */
         AssetFile: {
@@ -1244,6 +1251,24 @@ export interface components {
             /** Next Cursor */
             next_cursor: string | null;
         };
+        /** AssetPlace */
+        AssetPlace: {
+            /**
+             * Place Id
+             * @description GeoNames id of the town
+             */
+            place_id: number;
+            city: components["schemas"]["PlaceName"];
+            region: components["schemas"]["PlaceName"] | null;
+            /** Country Code */
+            country_code: string;
+            country: components["schemas"]["PlaceName"];
+            /**
+             * Distance Km
+             * @description From the town's centre
+             */
+            distance_km: number;
+        };
         /** AssetSummary */
         AssetSummary: {
             /** Id */
@@ -1329,6 +1354,14 @@ export interface components {
         BatchResult: {
             /** Updated */
             updated: number;
+        };
+        /** CityFacet */
+        CityFacet: {
+            /** Place Id */
+            place_id: number;
+            name: components["schemas"]["PlaceName"];
+            /** Count */
+            count: number;
         };
         /** CloudAnalyzeRequest */
         CloudAnalyzeRequest: {
@@ -1599,6 +1632,19 @@ export interface components {
             end_date?: string | null;
             /** Cover Asset Id */
             cover_asset_id?: number | null;
+        };
+        /** CountryFacet */
+        CountryFacet: {
+            /** Country Code */
+            country_code: string;
+            name: components["schemas"]["PlaceName"];
+            /** Count */
+            count: number;
+            /**
+             * Cities
+             * @description Most photographed towns first
+             */
+            cities: components["schemas"]["CityFacet"][];
         };
         /**
          * Crop
@@ -2038,11 +2084,21 @@ export interface components {
              * @description Rendition version (for thumbnail URLs)
              */
             v: string;
+            /**
+             * P
+             * @description Town (an id in ``places``)
+             */
+            p: number | null;
         };
         /** MapPoints */
         MapPoints: {
             /** Points */
             points: components["schemas"]["MapPoint"][];
+            /**
+             * Places
+             * @description Towns of the points
+             */
+            places: components["schemas"]["NamedPlace"][];
         };
         /** ModelDownload */
         ModelDownload: {
@@ -2066,6 +2122,24 @@ export interface components {
             approx_download_gb: number;
             /** Downloaded */
             downloaded: boolean;
+        };
+        /** NamedPlace */
+        NamedPlace: {
+            /** Place Id */
+            place_id: number;
+            name: components["schemas"]["PlaceName"];
+        };
+        /**
+         * PlaceName
+         * @description A place name in each interface language (the international name when untranslated).
+         */
+        PlaceName: {
+            /** Name */
+            name: string;
+            /** Zh */
+            zh: string;
+            /** Fr */
+            fr: string;
         };
         /**
          * SemanticPage
@@ -2267,6 +2341,16 @@ export interface components {
              * @description From home (where most located photos were taken)
              */
             distance_km: number;
+            /**
+             * Cities
+             * @description Most photographed towns (up to 3), for naming
+             */
+            cities: components["schemas"]["PlaceName"][];
+            /**
+             * Countries
+             * @description Most photographed first
+             */
+            countries: components["schemas"]["PlaceName"][];
         };
         /** TripSuggestions */
         TripSuggestions: {
@@ -2702,6 +2786,10 @@ export interface operations {
                 /** @description Exclusive, YYYY-MM-DD[THH:MM:SS] */
                 date_to?: string | null;
                 has_location?: boolean | null;
+                /** @description ISO country code of the place taken */
+                country?: string | null;
+                /** @description GeoNames id of the town */
+                place_id?: number | null;
                 sort?: "capture_desc" | "capture_asc" | "added_desc";
                 cursor?: string | null;
                 limit?: number;
@@ -2753,6 +2841,10 @@ export interface operations {
                 /** @description Exclusive, YYYY-MM-DD[THH:MM:SS] */
                 date_to?: string | null;
                 has_location?: boolean | null;
+                /** @description ISO country code of the place taken */
+                country?: string | null;
+                /** @description GeoNames id of the town */
+                place_id?: number | null;
                 sort?: "capture_desc" | "capture_asc" | "added_desc";
                 limit?: number;
             };
@@ -3058,6 +3150,10 @@ export interface operations {
                 /** @description Exclusive, YYYY-MM-DD[THH:MM:SS] */
                 date_to?: string | null;
                 has_location?: boolean | null;
+                /** @description ISO country code of the place taken */
+                country?: string | null;
+                /** @description GeoNames id of the town */
+                place_id?: number | null;
                 sort?: "capture_desc" | "capture_asc" | "added_desc";
                 granularity?: "year" | "month" | "day";
             };
@@ -3108,6 +3204,10 @@ export interface operations {
                 /** @description Exclusive, YYYY-MM-DD[THH:MM:SS] */
                 date_to?: string | null;
                 has_location?: boolean | null;
+                /** @description ISO country code of the place taken */
+                country?: string | null;
+                /** @description GeoNames id of the town */
+                place_id?: number | null;
                 sort?: "capture_desc" | "capture_asc" | "added_desc";
                 limit?: number;
             };
@@ -4432,6 +4532,10 @@ export interface operations {
                 /** @description Exclusive, YYYY-MM-DD[THH:MM:SS] */
                 date_to?: string | null;
                 has_location?: boolean | null;
+                /** @description ISO country code of the place taken */
+                country?: string | null;
+                /** @description GeoNames id of the town */
+                place_id?: number | null;
                 sort?: "capture_desc" | "capture_asc" | "added_desc";
                 /** @description What to look for */
                 text: string;
@@ -4511,6 +4615,10 @@ export interface operations {
                 /** @description Exclusive, YYYY-MM-DD[THH:MM:SS] */
                 date_to?: string | null;
                 has_location?: boolean | null;
+                /** @description ISO country code of the place taken */
+                country?: string | null;
+                /** @description GeoNames id of the town */
+                place_id?: number | null;
                 sort?: "capture_desc" | "capture_asc" | "added_desc";
                 limit?: number;
             };

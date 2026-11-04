@@ -27,6 +27,10 @@ class AssetQuery(BaseModel):
     date_from: str | None = Field(default=None, description="Inclusive, YYYY-MM-DD[THH:MM:SS]")
     date_to: str | None = Field(default=None, description="Exclusive, YYYY-MM-DD[THH:MM:SS]")
     has_location: bool | None = None
+    country: str | None = Field(
+        default=None, pattern=r"^[A-Z]{2}$", description="ISO country code of the place taken"
+    )
+    place_id: int | None = Field(default=None, ge=1, description="GeoNames id of the town")
     sort: AssetSort = "capture_desc"
 
     @field_validator("date_from", "date_to")
@@ -107,6 +111,27 @@ class FacetValue(BaseModel):
     count: int
 
 
+class PlaceName(BaseModel):
+    """A place name in each interface language (the international name when untranslated)."""
+
+    name: str
+    zh: str
+    fr: str
+
+
+class CityFacet(BaseModel):
+    place_id: int
+    name: PlaceName
+    count: int
+
+
+class CountryFacet(BaseModel):
+    country_code: str
+    name: PlaceName
+    count: int
+    cities: list[CityFacet] = Field(description="Most photographed towns first")
+
+
 class AssetFacets(BaseModel):
     total: int
     photos: int
@@ -118,6 +143,7 @@ class AssetFacets(BaseModel):
     formats: list[FacetValue]
     years: list[FacetValue]
     tags: list[Tag]
+    places: list[CountryFacet] = Field(description="Countries, most photographed first")
 
 
 class TimelineBucket(BaseModel):
@@ -135,10 +161,17 @@ class MapPoint(BaseModel):
     lat: float
     lon: float
     v: str = Field(description="Rendition version (for thumbnail URLs)")
+    p: int | None = Field(description="Town (an id in ``places``)")
+
+
+class NamedPlace(BaseModel):
+    place_id: int
+    name: PlaceName
 
 
 class MapPoints(BaseModel):
     points: list[MapPoint]
+    places: list[NamedPlace] = Field(description="Towns of the points")
 
 
 class AssetFile(BaseModel):
@@ -177,6 +210,15 @@ class AssetLocation(BaseModel):
     source: Literal["exif", "manual"]
 
 
+class AssetPlace(BaseModel):
+    place_id: int = Field(description="GeoNames id of the town")
+    city: PlaceName
+    region: PlaceName | None
+    country_code: str
+    country: PlaceName
+    distance_km: float = Field(description="From the town's centre")
+
+
 class AssetDetail(BaseModel):
     id: int
     uuid: str
@@ -193,6 +235,7 @@ class AssetDetail(BaseModel):
     rendition_version: str | None
     metadata: AssetMetadata
     location: AssetLocation | None
+    place: AssetPlace | None = Field(description="Where the location is (offline place names)")
     files: list[AssetFile]
 
 

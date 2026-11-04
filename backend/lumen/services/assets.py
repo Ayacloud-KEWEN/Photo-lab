@@ -35,15 +35,20 @@ from lumen.schemas.assets import (
     AssetLocation,
     AssetMetadata,
     AssetPage,
+    AssetPlace,
     AssetQuery,
     AssetSummary,
     AssetTag,
+    CityFacet,
+    CountryFacet,
     DuplicateFile,
     DuplicateGroup,
     DuplicateReport,
     FacetValue,
     MapPoint,
     MapPoints,
+    NamedPlace,
+    PlaceName,
     RenditionVariant,
     Tag,
     Timeline,
@@ -130,7 +135,21 @@ def _filters(query: AssetQuery) -> tuple[list[str], list[object]]:
             ("" if query.has_location else "NOT ")
             + "EXISTS (SELECT 1 FROM media_locations l WHERE l.asset_id = a.id)"
         )
+    if query.country:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM media_places p WHERE p.asset_id = a.id AND p.country_code = ?)"
+        )
+        params.append(query.country)
+    if query.place_id is not None:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM media_places p WHERE p.asset_id = a.id AND p.place_id = ?)"
+        )
+        params.append(query.place_id)
     return clauses, params
+
+
+def _names(row: sqlite3.Row, prefix: str) -> PlaceName:
+    return PlaceName(name=row[prefix], zh=row[f"{prefix}_zh"], fr=row[f"{prefix}_fr"])
 
 
 def _encode_cursor(sort: str, row: sqlite3.Row) -> str:
@@ -266,21 +285,62 @@ def map_points(conn: sqlite3.Connection, query: AssetQuery, *, limit: int) -> Ma
     clauses, params = _filters(query)
     rows = conn.execute(
         f"""
-        SELECT a.id, l.latitude, l.longitude, c.fingerprint, e.recipe_hash
+        SELECT a.id, l.latitude, l.longitude, c.fingerprint, e.recipe_hash,
+               p.place_id, p.city, p.city_zh, p.city_fr
         {_BASE_FROM}
         JOIN media_locations l ON l.asset_id = a.id
+        LEFT JOIN media_places p ON p.asset_id = a.id
         WHERE {" AND ".join(clauses)}
         ORDER BY a.capture_time DESC
         LIMIT ?
         """,
         (*params, limit),
-    )
+    ).fetchall()
+    places = {
+        row["place_id"]: NamedPlace(place_id=row["place_id"], name=_names(row, "city"))
+        for row in rows
+        if row["place_id"] is not None
+    }
     return MapPoints(
         points=[
-            MapPoint(id=row[0], lat=row[1], lon=row[2], v=rendition_version(row[3], row[4]))
+            MapPoint(
+                id=row[0],
+                lat=row[1],
+                lon=row[2],
+                v=rendition_version(row[3], row[4]),
+                p=row["place_id"],
+            )
             for row in rows
-        ]
+        ],
+        places=list(places.values()),
     )
+
+
+def _place_facets(conn: sqlite3.Connection, cities_per_country: int = 50) -> list[CountryFacet]:
+    rows = conn.execute(
+        f"""
+        SELECT p.country_code, p.country, p.country_zh, p.country_fr,
+               p.place_id, p.city, p.city_zh, p.city_fr, COUNT(*) AS count
+        {_BASE_FROM}
+        JOIN media_places p ON p.asset_id = a.id
+        WHERE {_BASE_WHERE}
+        GROUP BY p.country_code, p.place_id
+        ORDER BY count DESC, p.city
+        """
+    ).fetchall()
+    countries: dict[str, CountryFacet] = {}
+    for row in rows:
+        country = countries.get(row["country_code"])
+        if country is None:
+            country = countries[row["country_code"]] = CountryFacet(
+                country_code=row["country_code"], name=_names(row, "country"), count=0, cities=[]
+            )
+        country.count += row["count"]
+        if len(country.cities) < cities_per_country:
+            country.cities.append(
+                CityFacet(place_id=row["place_id"], name=_names(row, "city"), count=row["count"])
+            )
+    return sorted(countries.values(), key=lambda c: (-c.count, c.name.name))
 
 
 def facets(conn: sqlite3.Connection) -> AssetFacets:
@@ -335,6 +395,7 @@ def facets(conn: sqlite3.Connection) -> AssetFacets:
         formats=[FacetValue(value=r["value"], count=r["count"]) for r in formats],
         years=[FacetValue(value=r["value"], count=r["count"]) for r in years],
         tags=list_tags(conn),
+        places=_place_facets(conn),
     )
 
 
@@ -389,6 +450,9 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
     location_row = conn.execute(
         "SELECT * FROM media_locations WHERE asset_id = ?", (asset_id,)
     ).fetchone()
+    place_row = conn.execute(
+        "SELECT * FROM media_places WHERE asset_id = ?", (asset_id,)
+    ).fetchone()
     cover = next((f for f in files if f["id"] == asset["cover_file_id"]), None)
     motion = next((f for f in files if _is_motion(f)), None)
     edit_hash = current_edit_hash(conn, asset_id)
@@ -422,6 +486,16 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
             source=location_row["source"],
         )
         if location_row
+        else None,
+        place=AssetPlace(
+            place_id=place_row["place_id"],
+            city=_names(place_row, "city"),
+            region=_names(place_row, "region") if place_row["region"] is not None else None,
+            country_code=place_row["country_code"],
+            country=_names(place_row, "country"),
+            distance_km=place_row["distance_km"],
+        )
+        if place_row
         else None,
         files=[
             AssetFile(

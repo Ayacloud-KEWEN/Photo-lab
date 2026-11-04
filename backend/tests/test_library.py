@@ -138,6 +138,10 @@ def test_map_points(library_client: TestClient) -> None:
     assert len(points) == 1
     assert points[0]["lat"] == pytest.approx(31.2304, abs=1e-3)
     assert points[0]["v"]
+    # Ingest names the place (offline), so it can be searched in any language.
+    detail = library_client.get(f"/api/v1/assets/{points[0]['id']}").json()
+    assert (detail["place"]["city"]["zh"], detail["place"]["country_code"]) == ("上海", "CN")
+    assert names(library_client, q="上海") == ["IMG_0001.JPG"]
 
 
 def test_original_supports_ranges_and_query_token(library_client: TestClient) -> None:

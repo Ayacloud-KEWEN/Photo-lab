@@ -93,6 +93,7 @@ export function SettingsPage() {
             {health.data?.database.schema_version ?? "—"}
           </Row>
           <Row label={t("settings.backend")}>{backendLabel}</Row>
+          <Row label={t("settings.placeData")}>{t("settings.placeDataCredit")}</Row>
         </dl>
       </Section>
     </div>

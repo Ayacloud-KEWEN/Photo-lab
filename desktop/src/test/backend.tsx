@@ -70,6 +70,7 @@ export function makeDetail(summary: AssetSummary): AssetDetail {
     rendition_version: summary.rendition_version,
     metadata: { width: summary.width, height: summary.height },
     location: null,
+    place: null,
     files: [
       {
         id: summary.id * 10,
@@ -124,7 +125,7 @@ export interface StubOptions {
   /** Collections: name, kind and their asset ids (in order). */
   collections?: { name: string; kind?: "album" | "trip"; assetIds?: number[] }[];
   /** Trip suggestions: date ranges over asset ids. */
-  trips?: { start: string; end: string; assetIds: number[] }[];
+  trips?: { start: string; end: string; assetIds: number[]; cities?: string[] }[];
 }
 
 export function stubBackend(options: StubOptions = {}) {
@@ -169,6 +170,8 @@ export function stubBackend(options: StubOptions = {}) {
           start_date: trip.start, end_date: trip.end, asset_count: trip.assetIds.length,
           asset_ids: trip.assetIds, latitude: 46, longitude: 7.7, distance_km: 514.2,
           samples: assets.filter((a) => trip.assetIds.includes(a.id)).slice(0, 4),
+          cities: (trip.cities ?? []).map((zh) => ({ name: zh, zh, fr: zh })),
+          countries: trip.cities ? [{ name: "Switzerland", zh: "瑞士", fr: "Suisse" }] : [],
         })),
       }); // prettier-ignore
     }
@@ -176,7 +179,8 @@ export function stubBackend(options: StubOptions = {}) {
       const request = body as { name: string; kind?: "album" | "trip"; asset_ids?: number[] } & Record<string, unknown>;
       const id = collections.size + 1;
       collections.set(id, {
-        id, name: request.name, kind: request.kind ?? "album", description: null, place: null,
+        id, name: request.name, kind: request.kind ?? "album", description: null,
+        place: (request.place as string | null | undefined) ?? null,
         start_date: (request.start_date as string) ?? null, end_date: (request.end_date as string) ?? null,
         cover: null, items: (request.asset_ids ?? []).map((asset) => ({ id: asset, caption: null })),
       }); // prettier-ignore
@@ -434,7 +438,7 @@ export function stubBackend(options: StubOptions = {}) {
     if (path === "/api/v1/assets/facets") {
       return json({
         total: assets.length, photos: assets.length, videos: 0, favorites: 0, with_location: 0,
-        cameras: [], lenses: [], formats: [], years: [], tags: [],
+        cameras: [], lenses: [], formats: [], years: [], tags: [], places: [],
       }); // prettier-ignore
     }
     if (path === "/api/v1/assets/ids") return json({ ids: assets.map((asset) => asset.id) });

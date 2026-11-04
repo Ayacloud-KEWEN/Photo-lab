@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { WallMode } from "@/library/layout";
 import { cleanQuery } from "@/library/state";
+import { placeName } from "@/lib/places";
 import { cn } from "@/lib/utils";
 
 interface FilterBarProps {
@@ -28,7 +29,7 @@ export function FilterBar({
   sortable = true,
   trailing,
 }: FilterBarProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const facets = useFacets();
   const roots = useStorageRoots();
   const set = (patch: QueryPatch) => onChange(cleanQuery({ ...query, ...patch }));
@@ -69,6 +70,36 @@ export function FilterBar({
         label={t("filters.location")}
       />
 
+      {(facets.data?.places.length ?? 0) > 0 && (
+        <Select
+          label={t("inspector.place")}
+          value={
+            query.place_id ? `p:${query.place_id}` : query.country ? `c:${query.country}` : ""
+          }
+          onChange={(value) =>
+            set({
+              country: value.startsWith("c:") ? value.slice(2) : undefined,
+              place_id: value.startsWith("p:") ? Number(value.slice(2)) : undefined,
+            })
+          }
+          options={[
+            ["", t("filters.anyPlace")],
+            ...(facets.data?.places.flatMap((country) => [
+              [
+                `c:${country.country_code}`,
+                `${placeName(country.name, i18n.language)} (${country.count})`,
+              ] as const,
+              ...country.cities.map(
+                (city) =>
+                  [
+                    `p:${city.place_id}`,
+                    `   ${placeName(city.name, i18n.language)} (${city.count})`,
+                  ] as const,
+              ),
+            ]) ?? []),
+          ]}
+        />
+      )}
       <Select
         label={t("inspector.camera")}
         value={query.camera ?? ""}

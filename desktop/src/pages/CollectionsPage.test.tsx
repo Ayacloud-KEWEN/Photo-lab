@@ -36,7 +36,7 @@ describe("CollectionsPage", () => {
   it("creates an album and turns a suggested trip into a portfolio", async () => {
     const { requests } = stubBackend({
       assets,
-      trips: [{ start: "2023-02-03", end: "2023-02-05", assetIds: [2, 3, 4] }],
+      trips: [{ start: "2023-02-03", end: "2023-02-05", assetIds: [2, 3, 4], cities: ["采尔马特"] }],
     });
     renderPage();
     expect(await screen.findByText(/还没有作品集/)).toBeInTheDocument();
@@ -50,11 +50,12 @@ describe("CollectionsPage", () => {
         start_date: "2023-02-03",
         end_date: "2023-02-05",
         asset_ids: [2, 3, 4],
+        place: "采尔马特",
       }),
     );
-    // The new trip opens.
+    // The new trip opens, named after its place (offline place names).
     expect(await screen.findByRole("textbox", { name: "名称" })).toHaveValue(
-      "2023年2月3日 – 2023年2月5日 旅行",
+      "采尔马特 · 2023年2月3日 – 2023年2月5日",
     );
     await userEvent.click(screen.getByRole("button", { name: "返回作品集" }));
 

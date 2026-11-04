@@ -25,7 +25,9 @@ from lumen.core.logging import request_id_var
 from lumen.core.security import TokenAuthMiddleware
 from lumen.db.connection import Database
 from lumen.db.migrator import migrate
+from lumen.geo.tasks import GEO_TASK, needs_locating
 from lumen.library.handlers import HANDLERS
+from lumen.tasks import queue
 from lumen.tasks.runner import TaskRunner
 
 logger = logging.getLogger(__name__)
@@ -87,6 +89,10 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         runner: TaskRunner | None = None
         if settings.run_tasks:
             runner = TaskRunner(db, settings, HANDLERS)
+            with db.session() as conn:
+                # Places for assets located before this version (or new place data).
+                if needs_locating(conn):
+                    queue.enqueue(conn, GEO_TASK)
             runner.start()
         app.state.task_runner = runner
         logger.info(

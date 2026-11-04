@@ -19,6 +19,7 @@ from pathlib import Path
 
 from lumen.ai.pipeline import AI_INDEX_TASK
 from lumen.db.connection import transaction, utc_now
+from lumen.geo.tasks import GEO_TASK
 from lumen.library.common import (
     load_root,
     mtime_wall_clock,
@@ -114,6 +115,8 @@ def _ingest(ctx: TaskContext) -> None:
 
     set_root_status(conn, root_id, "ready", scanned=True)
     ctx.progress(done, max(total, done), force=True)
+    if done:
+        ctx.enqueue(GEO_TASK)
     if done and get_settings(conn).ai_enabled:
         ctx.enqueue(AI_INDEX_TASK)
 

@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { useLibraryState } from "@/library/state";
 import { confirmAction } from "@/lib/dialogs";
 import { formatNumber } from "@/lib/format";
+import { tripPlace } from "@/lib/places";
 import { cn } from "@/lib/utils";
 
 /** Portfolios: albums and trips, each an ordered selection with captions. */
@@ -89,10 +90,16 @@ function CollectionList({ onOpen }: { onOpen: (id: number) => void }) {
   const createTrip = (suggestion: TripSuggestion) =>
     void actions
       .create({
-        name: t("collections.tripName", {
-          dates: dateRange(suggestion.start_date, suggestion.end_date, i18n.language),
-        }),
+        name: tripPlace(suggestion, i18n.language)
+          ? t("collections.tripNamePlace", {
+              place: tripPlace(suggestion, i18n.language),
+              dates: dateRange(suggestion.start_date, suggestion.end_date, i18n.language),
+            })
+          : t("collections.tripName", {
+              dates: dateRange(suggestion.start_date, suggestion.end_date, i18n.language),
+            }),
         kind: "trip",
+        place: tripPlace(suggestion, i18n.language) || null,
         start_date: suggestion.start_date,
         end_date: suggestion.end_date,
         asset_ids: suggestion.asset_ids,
@@ -142,7 +149,14 @@ function CollectionList({ onOpen }: { onOpen: (id: number) => void }) {
                   ))}
                 </div>
                 <div className="space-y-1 p-3 text-[12px]">
-                  <p className="font-medium">
+                  {tripPlace(suggestion, i18n.language) && (
+                    <p className="truncate font-medium">{tripPlace(suggestion, i18n.language)}</p>
+                  )}
+                  <p
+                    className={
+                      tripPlace(suggestion, i18n.language) ? "text-muted-foreground" : "font-medium"
+                    }
+                  >
                     {dateRange(suggestion.start_date, suggestion.end_date, i18n.language)}
                   </p>
                   <p className="text-muted-foreground">

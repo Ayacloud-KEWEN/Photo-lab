@@ -11,6 +11,7 @@ from datetime import datetime
 from lumen.core.errors import LumenError, NotFoundError
 from lumen.db.connection import transaction, utc_now
 from lumen.library.trips import Shot, find_trips, spread
+from lumen.schemas.assets import PlaceName
 from lumen.schemas.collections import (
     Collection,
     CollectionCreate,
@@ -288,6 +289,7 @@ def suggest_trips(conn: sqlite3.Connection) -> TripSuggestions:
         if any(start <= until and since <= end for since, until in covered):
             continue
         ids = [shot.asset_id for shot in trip.shots]
+        cities, countries = _trip_places(conn, ids)
         suggestions.append(
             TripSuggestion(
                 start_date=start,
@@ -298,8 +300,36 @@ def suggest_trips(conn: sqlite3.Connection) -> TripSuggestions:
                 latitude=round(trip.latitude, 5),
                 longitude=round(trip.longitude, 5),
                 distance_km=round(trip.distance_km, 1),
+                cities=cities,
+                countries=countries,
             )
         )
         if len(suggestions) >= MAX_SUGGESTIONS:
             break
     return TripSuggestions(items=suggestions)
+
+
+def _trip_places(
+    conn: sqlite3.Connection, ids: list[int]
+) -> tuple[list[PlaceName], list[PlaceName]]:
+    """The trip's most photographed towns (up to 3) and its countries."""
+    marks = ",".join("?" * len(ids))
+    rows = conn.execute(
+        f"""
+        SELECT place_id, city, city_zh, city_fr, country_code, country, country_zh, country_fr,
+               COUNT(*) AS count
+        FROM media_places WHERE asset_id IN ({marks})
+        GROUP BY place_id ORDER BY count DESC, city
+        """,
+        ids,
+    ).fetchall()
+    cities = [PlaceName(name=r["city"], zh=r["city_zh"], fr=r["city_fr"]) for r in rows[:3]]
+    totals: dict[str, int] = {}
+    names: dict[str, PlaceName] = {}
+    for r in rows:
+        totals[r["country_code"]] = totals.get(r["country_code"], 0) + r["count"]
+        names[r["country_code"]] = PlaceName(
+            name=r["country"], zh=r["country_zh"], fr=r["country_fr"]
+        )
+    countries = [names[code] for code in sorted(totals, key=lambda code: -totals[code])]
+    return cities, countries

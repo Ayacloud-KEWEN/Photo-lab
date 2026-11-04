@@ -7,7 +7,7 @@
 - Phase 1：桌面外壳、界面框架、本地后端、SQLite 数据库与迁移、照片文件夹登记。
 - Phase 2：文件夹扫描、RAW/JPEG/HEIC/PNG/TIFF/视频识别、EXIF 与视频元数据、内容指纹、
   RAW+JPEG 配对、缩略图与预览图、文件移动与重复检测、可断点续跑的后台任务、缩略图网格。
-- Phase 3：等高行照片墙与多选批量操作、全屏浏览与视频播放、时间轴、地图（离线底图，可选在线；深色/浅色等多种底图样式）、
+- Phase 3：等高行照片墙与多选批量操作、全屏浏览与视频播放、时间轴、地图（离线底图，可选在线；深色/浅色等多种底图样式；离线地名）、
   星级/收藏/标签/备注、全文搜索（支持中文）与元数据筛选、只读导入 XMP/EXIF 关键词与星级。
 - Phase 4：本机 GPU 上的 SigLIP2 语义搜索（中文可直接搜索）、相似照片、自动场景标签；
   OpenCLIP 模型对照实验工具；DeepSeek 云端分析（描述、点评、选片、旅行故事，逐次确认后才上传）。
@@ -20,7 +20,7 @@
 | 层 | 技术 |
 |---|---|
 | 界面 | React 19 · TypeScript 5.9（strict）· Vite · Tailwind CSS 4 · shadcn/ui · i18next |
-| 地图 | MapLibre GL · Supercluster · Natural Earth（离线底图）· OpenFreeMap（可选在线） |
+| 地图 | MapLibre GL · Supercluster · Natural Earth（离线底图）· OpenFreeMap（可选在线）· GeoNames（离线地名） |
 | AI | PyTorch（CUDA）· transformers · SigLIP2 · OpenCLIP（对照）· DeepSeek API（可选） |
 | 桌面运行时 | Tauri 2（Rust）· tauri-plugin-dialog |
 | 本地服务 | Python 3.12+ · FastAPI · Pydantic 2 · uvicorn |
@@ -194,9 +194,9 @@ cd backend
 | POST | `/api/v1/storage-roots/{id}/scan` | 重新扫描（已有排队或进行中的扫描时直接复用） |
 | GET | `/api/v1/tasks?active=true` | 后台任务及进度 |
 | POST | `/api/v1/tasks/{id}/cancel` · `/retry` | 取消 / 重试任务 |
-| GET | `/api/v1/assets?q=&media_type=&min_rating=&favorite=&camera=&lens=&format=&tag_id=&storage_root_id=&date_from=&date_to=&has_location=&sort=&cursor=&limit=` | 资产列表：筛选、排序（`capture_desc`/`capture_asc`/`added_desc`）、游标分页 |
+| GET | `/api/v1/assets?q=&media_type=&min_rating=&favorite=&camera=&lens=&format=&tag_id=&storage_root_id=&date_from=&date_to=&has_location=&country=&place_id=&sort=&cursor=&limit=` | 资产列表：筛选、排序（`capture_desc`/`capture_asc`/`added_desc`）、游标分页 |
 | GET | `/api/v1/assets/ids?…` | 符合筛选条件的全部资产 id（全选用） |
-| GET | `/api/v1/assets/facets` | 可选的相机、镜头、格式、年份、标签及数量 |
+| GET | `/api/v1/assets/facets` | 可选的相机、镜头、格式、年份、标签、地点及数量 |
 | PATCH | `/api/v1/assets/{id}` | 修改星级、收藏、备注 |
 | POST | `/api/v1/assets/batch` | 批量修改星级、收藏，批量添加/移除标签 |
 | GET | `/api/v1/assets/{id}` | 资产详情：元数据、位置、全部文件 |
