@@ -36,6 +36,7 @@ from lumen.schemas.assets import (
     AssetMetadata,
     AssetPage,
     AssetPlace,
+    AssetQuality,
     AssetQuery,
     AssetSummary,
     AssetTag,
@@ -92,6 +93,10 @@ def _filters(query: AssetQuery) -> tuple[list[str], list[object]]:
     """WHERE clauses (ANDed) and their parameters for an asset query."""
     clauses = [_BASE_WHERE]
     params: list[object] = []
+    if query.rejected == "hide":
+        clauses.append("a.cull_flag != 'reject'")
+    elif query.rejected == "only":
+        clauses.append("a.cull_flag = 'reject'")
     for term in search_terms(query.q or ""):
         clauses.append(r"a.id IN (SELECT rowid FROM asset_search WHERE body LIKE ? ESCAPE '\')")
         params.append(like_pattern(term))
@@ -170,7 +175,7 @@ def _decode_cursor(cursor: str, sort: str) -> list[object]:
 
 
 _SUMMARY_COLUMNS = """
-    a.id, a.media_type, a.capture_time, a.rating, a.is_favorite,
+    a.id, a.media_type, a.capture_time, a.rating, a.is_favorite, a.cull_flag,
     c.file_name, c.extension, c.fingerprint, m.width, m.height, m.duration_ms,
     e.recipe_hash AS edit_hash,
     EXISTS (SELECT 1 FROM media_files lf WHERE lf.asset_id = a.id
@@ -198,6 +203,7 @@ def _summary(row: sqlite3.Row) -> AssetSummary:
         is_edited=bool(row["edit_hash"]),
         cover_extension=row["extension"],
         rendition_version=rendition_version(row["fingerprint"], row["edit_hash"]),
+        cull_flag=row["cull_flag"],
     )
 
 
@@ -323,7 +329,7 @@ def _place_facets(conn: sqlite3.Connection, cities_per_country: int = 50) -> lis
                p.place_id, p.city, p.city_zh, p.city_fr, COUNT(*) AS count
         {_BASE_FROM}
         JOIN media_places p ON p.asset_id = a.id
-        WHERE {_BASE_WHERE}
+        WHERE {_BASE_WHERE} AND a.cull_flag != 'reject'
         GROUP BY p.country_code, p.place_id
         ORDER BY count DESC, p.city
         """
@@ -345,7 +351,7 @@ def _place_facets(conn: sqlite3.Connection, cities_per_country: int = 50) -> lis
 
 def facets(conn: sqlite3.Connection) -> AssetFacets:
     """Values available for filtering, with counts, over the whole library."""
-    where = f"WHERE {_BASE_WHERE}"
+    where = f"WHERE {_BASE_WHERE} AND a.cull_flag != 'reject'"
     totals = conn.execute(
         f"""
         SELECT COUNT(*) AS total,
@@ -453,6 +459,9 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
     place_row = conn.execute(
         "SELECT * FROM media_places WHERE asset_id = ?", (asset_id,)
     ).fetchone()
+    quality_row = conn.execute(
+        "SELECT * FROM media_quality WHERE asset_id = ? AND score IS NOT NULL", (asset_id,)
+    ).fetchone()
     cover = next((f for f in files if f["id"] == asset["cover_file_id"]), None)
     motion = next((f for f in files if _is_motion(f)), None)
     edit_hash = current_edit_hash(conn, asset_id)
@@ -496,6 +505,15 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
             distance_km=place_row["distance_km"],
         )
         if place_row
+        else None,
+        cull_flag=asset["cull_flag"],
+        quality=AssetQuality(
+            sharpness=quality_row["sharpness"],
+            exposure=quality_row["exposure"],
+            score=quality_row["score"],
+            flags=[flag for flag in quality_row["flags"].split(",") if flag],
+        )
+        if quality_row
         else None,
         files=[
             AssetFile(

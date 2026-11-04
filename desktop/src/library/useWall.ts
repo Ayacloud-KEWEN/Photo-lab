@@ -89,6 +89,13 @@ export function useWall(query: AssetQuery, onFocus: (id: number | null) => void)
       const byId = new Map(items.map((item) => [item.id, item]));
       const allFavorite = ids.every((id) => byId.get(id)?.is_favorite);
       batch.mutateAsync({ asset_ids: ids, is_favorite: !allFavorite }).catch(setError);
+    } else if (key === "x" || key === "p") {
+      // Reject / pick (culling); pressing it again clears the flag.
+      event.preventDefault();
+      const flag = key === "x" ? "reject" : "pick";
+      const byId = new Map(items.map((item) => [item.id, item]));
+      const all = ids.every((id) => byId.get(id)?.cull_flag === flag);
+      batch.mutateAsync({ asset_ids: ids, cull_flag: all ? "none" : flag }).catch(setError);
     }
   };
 

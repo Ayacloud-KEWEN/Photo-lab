@@ -1,4 +1,5 @@
 import {
+  Ban,
   BookOpen,
   ClipboardPaste,
   Download,
@@ -11,6 +12,7 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { useApplyEdits, useBatchUpdate } from "@/api/hooks";
+import type { CullFlag } from "@/api/types";
 import { PRESETS, settingsFor } from "@/components/develop/presets";
 import { Button } from "@/components/ui/button";
 import { useLibraryState } from "@/library/state";
@@ -30,7 +32,12 @@ export function SelectionBar({ ids, onClear, onError }: SelectionBarProps) {
   const batch = useBatchUpdate();
   const applyEdits = useApplyEdits();
   const { openCloud, openExport, openCollect, copiedSettings } = useLibraryState();
-  const apply = (changes: { rating?: number; is_favorite?: boolean; add_tags?: string[] }) =>
+  const apply = (changes: {
+    rating?: number;
+    is_favorite?: boolean;
+    add_tags?: string[];
+    cull_flag?: CullFlag;
+  }) =>
     batch.mutateAsync({ asset_ids: ids, ...changes }).catch(onError);
   const applySettings = (settings: ReturnType<typeof settingsFor>) =>
     applyEdits.mutateAsync({ asset_ids: ids, ...settings }).catch(onError);
@@ -49,6 +56,10 @@ export function SelectionBar({ ids, onClear, onError }: SelectionBarProps) {
       <Button variant="ghost" size="sm" onClick={() => void apply({ is_favorite: false })} disabled={batch.isPending}>
         <HeartOff className="size-3.5" />
         {t("selection.unfavorite")}
+      </Button>
+      <Button variant="ghost" size="sm" onClick={() => void apply({ cull_flag: "reject" })} disabled={batch.isPending}>
+        <Ban className="size-3.5" />
+        {t("cull.reject")}
       </Button>
       <TagInput
         placeholder={t("selection.addTag")}

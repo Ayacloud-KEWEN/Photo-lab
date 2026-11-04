@@ -10,6 +10,9 @@ AssetSort = Literal["capture_desc", "capture_asc", "added_desc"]
 FileRole = Literal["primary", "companion", "sidecar"]
 # "full": the whole photo (with its edit) at full size, for zooming in.
 RenditionVariant = Literal["thumb", "preview", "full"]
+# Culling: "pick" (keep) or "reject" (hidden unless asked for; never deleted).
+CullFlag = Literal["none", "pick", "reject"]
+QualityFlag = Literal["blurry", "overexposed", "underexposed"]
 
 
 class AssetQuery(BaseModel):
@@ -31,6 +34,9 @@ class AssetQuery(BaseModel):
         default=None, pattern=r"^[A-Z]{2}$", description="ISO country code of the place taken"
     )
     place_id: int | None = Field(default=None, ge=1, description="GeoNames id of the town")
+    rejected: Literal["hide", "show", "only"] = Field(
+        default="hide", description="Rejected assets: hidden (default), shown too, or only them"
+    )
     sort: AssetSort = "capture_desc"
 
     @field_validator("date_from", "date_to")
@@ -60,6 +66,7 @@ class AssetSummary(BaseModel):
     rendition_version: str = Field(
         description="Changes whenever the cover's content changes; use as cache-buster"
     )
+    cull_flag: CullFlag
 
 
 class AssetPage(BaseModel):
@@ -90,6 +97,7 @@ class AssetUpdate(BaseModel):
     rating: int | None = Field(default=None, ge=0, le=5)
     is_favorite: bool | None = None
     notes: str | None = Field(default=None, max_length=10_000, description="Empty string clears")
+    cull_flag: CullFlag | None = None
 
 
 class AssetBatchUpdate(BaseModel):
@@ -98,6 +106,7 @@ class AssetBatchUpdate(BaseModel):
     asset_ids: list[int] = Field(min_length=1, max_length=100_000)
     rating: int | None = Field(default=None, ge=0, le=5)
     is_favorite: bool | None = None
+    cull_flag: CullFlag | None = None
     add_tags: list[str] = Field(default_factory=list, max_length=50, description="Tag names")
     remove_tag_ids: list[int] = Field(default_factory=list, max_length=50)
 
@@ -210,6 +219,13 @@ class AssetLocation(BaseModel):
     source: Literal["exif", "manual"]
 
 
+class AssetQuality(BaseModel):
+    sharpness: float = Field(description="0..1")
+    exposure: float = Field(description="0..1 (1 = nothing clipped)")
+    score: float = Field(description="0..1 overall")
+    flags: list[QualityFlag]
+
+
 class AssetPlace(BaseModel):
     place_id: int = Field(description="GeoNames id of the town")
     city: PlaceName
@@ -236,6 +252,8 @@ class AssetDetail(BaseModel):
     metadata: AssetMetadata
     location: AssetLocation | None
     place: AssetPlace | None = Field(description="Where the location is (offline place names)")
+    cull_flag: CullFlag
+    quality: AssetQuality | None = Field(description="Photos only, once measured")
     files: list[AssetFile]
 
 

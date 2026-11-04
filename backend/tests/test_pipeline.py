@@ -101,6 +101,7 @@ def test_full_ingest(
         ("scan_storage_root", "succeeded"),
         ("ingest_storage_root", "succeeded"),
         ("geo_locate_assets", "succeeded"),  # place names for the located photo
+        ("quality_score_assets", "succeeded"),  # sharpness and exposure of the photos
     ]
 
     # RAW+JPEG pairing: one asset, RAW primary, JPEG companion and cover.

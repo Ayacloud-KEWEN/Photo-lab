@@ -14,6 +14,7 @@ import { ALL_NAV, type PageId } from "@/navigation";
 import { AISearchPage } from "@/pages/AISearchPage";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { CollectionsPage } from "@/pages/CollectionsPage";
+import { CullPage } from "@/pages/CullPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { TimelinePage } from "@/pages/TimelinePage";
 import type { Selection } from "@/selection";
@@ -113,9 +114,10 @@ export default function App() {
           )}
           {page === "aiSearch" && <AISearchPage onSelect={setSelection} />}
           {page === "collections" && <CollectionsPage />}
+          {page === "cull" && <CullPage onShowLibrary={() => setPage("library")} />}
           {page === "settings" && <SettingsPage />}
         </main>
-        {inspectorOpen && !["map", "collections", "settings"].includes(page) && (
+        {inspectorOpen && !["map", "collections", "cull", "settings"].includes(page) && (
           <Inspector selection={INSPECTED_VIEWS.includes(page) ? selection : null} />
         )}
       </div>

@@ -38,6 +38,11 @@ def update_asset(conn: sqlite3.Connection, asset_id: int, data: AssetUpdate) -> 
                 "UPDATE media_assets SET is_favorite = ?, updated_at = ? WHERE id = ?",
                 (int(changes["is_favorite"]), now, asset_id),
             )
+        if changes.get("cull_flag") is not None:
+            conn.execute(
+                "UPDATE media_assets SET cull_flag = ?, updated_at = ? WHERE id = ?",
+                (changes["cull_flag"], now, asset_id),
+            )
         if "notes" in changes:
             notes = (changes["notes"] or "").strip() or None
             conn.execute(
@@ -74,6 +79,12 @@ def batch_update(conn: sqlite3.Connection, data: AssetBatchUpdate) -> int:
                     f"UPDATE media_assets SET is_favorite = ?, updated_at = ? "
                     f"WHERE id IN ({marks})",
                     (int(data.is_favorite), now, *chunk),
+                )
+            if data.cull_flag is not None:
+                conn.execute(
+                    f"UPDATE media_assets SET cull_flag = ?, updated_at = ? "
+                    f"WHERE id IN ({marks})",
+                    (data.cull_flag, now, *chunk),
                 )
             for tag_id in data.remove_tag_ids:
                 conn.execute(

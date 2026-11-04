@@ -2,13 +2,21 @@ import {
   Album,
   CalendarDays,
   Images,
+  ListChecks,
   MapPinned,
   Settings,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
-export type PageId = "library" | "timeline" | "map" | "aiSearch" | "collections" | "settings";
+export type PageId =
+  | "library"
+  | "timeline"
+  | "map"
+  | "aiSearch"
+  | "collections"
+  | "cull"
+  | "settings";
 
 export interface NavItem {
   id: PageId;
@@ -23,6 +31,7 @@ export const MAIN_NAV: NavItem[] = [
   { id: "map", icon: MapPinned, shortcut: "3" },
   { id: "aiSearch", icon: Sparkles, shortcut: "4" },
   { id: "collections", icon: Album, shortcut: "5" },
+  { id: "cull", icon: ListChecks, shortcut: "6" },
 ];
 
 export const SETTINGS_NAV: NavItem = { id: "settings", icon: Settings, shortcut: "," };

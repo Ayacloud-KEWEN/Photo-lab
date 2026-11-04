@@ -16,6 +16,8 @@ export interface AssetQuery {
   country?: string;
   /** GeoNames id of the town. */
   place_id?: number;
+  /** Rejected photos: hidden by default. */
+  rejected?: "show" | "only";
   sort?: "capture_desc" | "capture_asc" | "added_desc";
 }
 

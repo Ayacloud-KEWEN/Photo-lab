@@ -27,6 +27,7 @@ from lumen.db.connection import Database
 from lumen.db.migrator import migrate
 from lumen.geo.tasks import GEO_TASK, needs_locating
 from lumen.library.handlers import HANDLERS
+from lumen.library.quality import QUALITY_TASK, needs_scoring
 from lumen.services.backups import BACKUP_TASK, auto_backup_due
 from lumen.tasks import queue
 from lumen.tasks.runner import TaskRunner
@@ -94,6 +95,8 @@ def create_app(settings: Settings, token: str) -> FastAPI:
                 # Places for assets located before this version (or new place data).
                 if needs_locating(conn):
                     queue.enqueue(conn, GEO_TASK)
+                if needs_scoring(conn):
+                    queue.enqueue(conn, QUALITY_TASK)
                 if auto_backup_due(conn, settings):
                     queue.enqueue(conn, BACKUP_TASK)
             runner.start()

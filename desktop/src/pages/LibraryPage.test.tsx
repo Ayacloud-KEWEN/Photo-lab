@@ -158,6 +158,13 @@ describe("LibraryPage", () => {
         rating: 4,
       }),
     );
+    // X rejects (culling), P keeps.
+    fireEvent.keyDown(wall, { key: "x" });
+    await waitFor(() =>
+      expect(
+        requests.filter((r) => r.url.pathname === "/api/v1/assets/batch").map((r) => r.body),
+      ).toContainEqual({ asset_ids: [2], cull_flag: "reject" }),
+    );
 
     fireEvent.keyDown(wall, { key: "a", ctrlKey: true });
     expect(await screen.findByText("已选择 3 项")).toBeInTheDocument();

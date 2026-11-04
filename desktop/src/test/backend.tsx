@@ -49,6 +49,7 @@ export function makeAsset(id: number, overrides: Partial<AssetSummary> = {}): As
     is_edited: false,
     cover_extension: "jpg",
     rendition_version: `v${id}`,
+    cull_flag: "none",
     ...overrides,
   };
 }
@@ -71,6 +72,8 @@ export function makeDetail(summary: AssetSummary): AssetDetail {
     metadata: { width: summary.width, height: summary.height },
     location: null,
     place: null,
+    cull_flag: summary.cull_flag,
+    quality: null,
     files: [
       {
         id: summary.id * 10,
@@ -118,6 +121,10 @@ export interface StubOptions {
   ai?: { enabled?: boolean; downloaded?: boolean; installed?: boolean };
   /** The online map setting. */
   mapOnline?: boolean;
+  /** One group of similar photos (asset ids; the second is recommended). */
+  similar?: number[];
+  /** Likely rejects (asset ids). */
+  suspects?: number[];
   /** Cloud behaviour: "ok" (default), "no_vision" or "not_configured". */
   cloud?: "ok" | "no_vision" | "not_configured";
   /** Saved video edits by asset id. */
@@ -280,6 +287,23 @@ export function stubBackend(options: StubOptions = {}) {
         backup_folder: null,
         ...((body as object | undefined) ?? {}),
       });
+    }
+    if (path === "/api/v1/cull/similar") {
+      const group = (options.similar ?? []).map((id) => ({ asset: assets.find((a) => a.id === id)!, quality: null }));
+      return json({
+        available: true, group_count: group.length ? 1 : 0, pending_count: group.length ? 1 : 0,
+        groups: group.length ? [{ items: group, recommended_id: group[1]!.asset.id, pending: true }] : [],
+      }); // prettier-ignore
+    }
+    if (path === "/api/v1/cull/suspects") {
+      const items = (options.suspects ?? []).map((id) => ({
+        asset: assets.find((a) => a.id === id)!,
+        quality: { sharpness: 0.1, exposure: 1, score: 0.37, flags: ["blurry"] },
+      }));
+      return json({ items, total: items.length });
+    }
+    if (path === "/api/v1/cull/rejected-files") {
+      return json({ asset_count: 1, paths: ["D:\Photos\IMG_1.JPG", "D:\Photos\IMG_1.MOV"] });
     }
     if (path.startsWith("/api/v1/backups")) {
       const folder = "C:\Users\me\AppData\Local\LUMEN Studio\backups";

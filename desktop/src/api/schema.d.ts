@@ -704,6 +704,74 @@ export interface paths {
         patch: operations["updateCollectionItem"];
         trace?: never;
     };
+    "/api/v1/cull/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Similar Groups */
+        get: operations["listSimilarGroups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cull/suspects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Suspects */
+        get: operations["listSuspects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cull/rejected-files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rejected Files */
+        get: operations["rejectedFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{file_id}/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reveal File */
+        post: operations["revealFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tags": {
         parameters: {
             query?: never;
@@ -1163,6 +1231,8 @@ export interface components {
             rating?: number | null;
             /** Is Favorite */
             is_favorite?: boolean | null;
+            /** Cull Flag */
+            cull_flag?: ("none" | "pick" | "reject") | null;
             /**
              * Add Tags
              * @description Tag names
@@ -1215,6 +1285,13 @@ export interface components {
             location: components["schemas"]["AssetLocation"] | null;
             /** @description Where the location is (offline place names) */
             place: components["schemas"]["AssetPlace"] | null;
+            /**
+             * Cull Flag
+             * @enum {string}
+             */
+            cull_flag: "none" | "pick" | "reject";
+            /** @description Photos only, once measured */
+            quality: components["schemas"]["AssetQuality"] | null;
             /** Files */
             files: components["schemas"]["AssetFile"][];
         };
@@ -1354,6 +1431,26 @@ export interface components {
              */
             distance_km: number;
         };
+        /** AssetQuality */
+        AssetQuality: {
+            /**
+             * Sharpness
+             * @description 0..1
+             */
+            sharpness: number;
+            /**
+             * Exposure
+             * @description 0..1 (1 = nothing clipped)
+             */
+            exposure: number;
+            /**
+             * Score
+             * @description 0..1 overall
+             */
+            score: number;
+            /** Flags */
+            flags: ("blurry" | "overexposed" | "underexposed")[];
+        };
         /** AssetSummary */
         AssetSummary: {
             /** Id */
@@ -1405,6 +1502,11 @@ export interface components {
              * @description Changes whenever the cover's content changes; use as cache-buster
              */
             rendition_version: string;
+            /**
+             * Cull Flag
+             * @enum {string}
+             */
+            cull_flag: "none" | "pick" | "reject";
         };
         /** AssetTag */
         AssetTag: {
@@ -1434,6 +1536,8 @@ export interface components {
              * @description Empty string clears
              */
             notes?: string | null;
+            /** Cull Flag */
+            cull_flag?: ("none" | "pick" | "reject") | null;
         };
         /** BackupInfo */
         BackupInfo: {
@@ -1787,6 +1891,11 @@ export interface components {
             width: number;
             /** Height */
             height: number;
+        };
+        /** CullItem */
+        CullItem: {
+            asset: components["schemas"]["AssetSummary"];
+            quality: components["schemas"]["AssetQuality"] | null;
         };
         /** DatabaseHealth */
         DatabaseHealth: {
@@ -2269,6 +2378,16 @@ export interface components {
             /** Fr */
             fr: string;
         };
+        /** RejectedFiles */
+        RejectedFiles: {
+            /** Asset Count */
+            asset_count: number;
+            /**
+             * Paths
+             * @description Every file of the rejected assets that is on disk
+             */
+            paths: string[];
+        };
         /** RestoreRequest */
         RestoreRequest: {
             /**
@@ -2311,6 +2430,41 @@ export interface components {
             relevant_count: number;
             /** Model Id */
             model_id: string;
+        };
+        /** SimilarGroup */
+        SimilarGroup: {
+            /**
+             * Items
+             * @description In capture order
+             */
+            items: components["schemas"]["CullItem"][];
+            /**
+             * Recommended Id
+             * @description The photo to keep
+             */
+            recommended_id: number;
+            /**
+             * Pending
+             * @description Some photos have neither a pick nor a reject flag
+             */
+            pending: boolean;
+        };
+        /** SimilarGroups */
+        SimilarGroups: {
+            /**
+             * Available
+             * @description False until photos are indexed by the local AI
+             */
+            available: boolean;
+            /**
+             * Groups
+             * @description Newest first
+             */
+            groups: components["schemas"]["SimilarGroup"][];
+            /** Group Count */
+            group_count: number;
+            /** Pending Count */
+            pending_count: number;
         };
         /** StorageRoot */
         StorageRoot: {
@@ -2387,6 +2541,16 @@ export interface components {
              * @default 0
              */
             missing_count: number;
+        };
+        /** Suspects */
+        Suspects: {
+            /**
+             * Items
+             * @description Worst first
+             */
+            items: components["schemas"]["CullItem"][];
+            /** Total */
+            total: number;
         };
         /** Tag */
         Tag: {
@@ -2944,6 +3108,8 @@ export interface operations {
                 country?: string | null;
                 /** @description GeoNames id of the town */
                 place_id?: number | null;
+                /** @description Rejected assets: hidden (default), shown too, or only them */
+                rejected?: "hide" | "show" | "only";
                 sort?: "capture_desc" | "capture_asc" | "added_desc";
                 cursor?: string | null;
                 limit?: number;
@@ -2999,6 +3165,8 @@ export interface operations {
                 country?: string | null;
                 /** @description GeoNames id of the town */
                 place_id?: number | null;
+                /** @description Rejected assets: hidden (default), shown too, or only them */
+                rejected?: "hide" | "show" | "only";
                 sort?: "capture_desc" | "capture_asc" | "added_desc";
                 limit?: number;
             };
@@ -3308,6 +3476,8 @@ export interface operations {
                 country?: string | null;
                 /** @description GeoNames id of the town */
                 place_id?: number | null;
+                /** @description Rejected assets: hidden (default), shown too, or only them */
+                rejected?: "hide" | "show" | "only";
                 sort?: "capture_desc" | "capture_asc" | "added_desc";
                 granularity?: "year" | "month" | "day";
             };
@@ -3362,6 +3532,8 @@ export interface operations {
                 country?: string | null;
                 /** @description GeoNames id of the town */
                 place_id?: number | null;
+                /** @description Rejected assets: hidden (default), shown too, or only them */
+                rejected?: "hide" | "show" | "only";
                 sort?: "capture_desc" | "capture_asc" | "added_desc";
                 limit?: number;
             };
@@ -4368,6 +4540,119 @@ export interface operations {
             };
         };
     };
+    listSimilarGroups: {
+        parameters: {
+            query?: {
+                window_minutes?: number;
+                similarity?: number;
+                pending_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimilarGroups"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listSuspects: {
+        parameters: {
+            query?: {
+                pending_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suspects"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rejectedFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RejectedFiles"];
+                };
+            };
+        };
+    };
+    revealFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listTags: {
         parameters: {
             query?: never;
@@ -4690,6 +4975,8 @@ export interface operations {
                 country?: string | null;
                 /** @description GeoNames id of the town */
                 place_id?: number | null;
+                /** @description Rejected assets: hidden (default), shown too, or only them */
+                rejected?: "hide" | "show" | "only";
                 sort?: "capture_desc" | "capture_asc" | "added_desc";
                 /** @description What to look for */
                 text: string;
@@ -4773,6 +5060,8 @@ export interface operations {
                 country?: string | null;
                 /** @description GeoNames id of the town */
                 place_id?: number | null;
+                /** @description Rejected assets: hidden (default), shown too, or only them */
+                rejected?: "hide" | "show" | "only";
                 sort?: "capture_desc" | "capture_asc" | "added_desc";
                 limit?: number;
             };

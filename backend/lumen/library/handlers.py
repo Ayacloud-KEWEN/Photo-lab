@@ -3,6 +3,7 @@ from lumen.geo.tasks import GEO_TASK, locate_assets
 from lumen.library.common import INGEST_TASK, SCAN_TASK
 from lumen.library.exports import EXPORT_TASK, export_assets
 from lumen.library.ingest import ingest_storage_root
+from lumen.library.quality import QUALITY_TASK, score_assets
 from lumen.library.scan import scan_storage_root
 from lumen.services.backups import BACKUP_TASK, backup_task
 from lumen.tasks.runner import Handler
@@ -15,4 +16,5 @@ HANDLERS: dict[str, Handler] = {
     EXPORT_TASK: export_assets,
     GEO_TASK: locate_assets,
     BACKUP_TASK: backup_task,
+    QUALITY_TASK: score_assets,
 }

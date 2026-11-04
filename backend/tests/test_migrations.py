@@ -14,6 +14,7 @@ EXPECTED_TABLES = {
     "media_files",
     "media_metadata",
     "media_places",
+    "media_quality",
     "storage_roots",
     "tasks",
     "app_settings",

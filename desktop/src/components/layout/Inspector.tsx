@@ -14,6 +14,7 @@ import {
 } from "@/api/hooks";
 import { Result } from "@/components/ai/CloudDialog";
 import type { AssetDetail, StorageRoot } from "@/api/types";
+import { CullFlagToggle } from "@/components/library/CullFlagToggle";
 import { StarRating } from "@/components/library/StarRating";
 import { Button } from "@/components/ui/button";
 import { useLibraryState } from "@/library/state";
@@ -144,6 +145,15 @@ export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; 
         {exposure.length > 0 && (
           <Field label={t("inspector.exposure")}>{exposure.join(" · ")}</Field>
         )}
+        {asset.quality && (
+          <Field label={t("inspector.quality")}>
+            {[
+              t("cull.sharpness", { value: Math.round(asset.quality.sharpness * 100) }),
+              t("cull.exposure", { value: Math.round(asset.quality.exposure * 100) }),
+              ...asset.quality.flags.map((flag) => t(`cull.quality_${flag}`)),
+            ].join(" · ")}
+          </Field>
+        )}
         {asset.place && (
           <Field label={t("inspector.place")}>
             <span className="select-text">
@@ -231,6 +241,10 @@ function Edits({ asset }: { asset: AssetDetail }) {
             )}
           />
         </button>
+        <CullFlagToggle
+          value={asset.cull_flag}
+          onChange={(flag) => update.mutate({ id: asset.id, changes: { cull_flag: flag } })}
+        />
       </div>
 
       <div>

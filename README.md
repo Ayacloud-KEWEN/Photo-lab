@@ -194,7 +194,7 @@ cd backend
 | POST | `/api/v1/storage-roots/{id}/scan` | 重新扫描（已有排队或进行中的扫描时直接复用） |
 | GET | `/api/v1/tasks?active=true` | 后台任务及进度 |
 | POST | `/api/v1/tasks/{id}/cancel` · `/retry` | 取消 / 重试任务 |
-| GET | `/api/v1/assets?q=&media_type=&min_rating=&favorite=&camera=&lens=&format=&tag_id=&storage_root_id=&date_from=&date_to=&has_location=&country=&place_id=&sort=&cursor=&limit=` | 资产列表：筛选、排序（`capture_desc`/`capture_asc`/`added_desc`）、游标分页 |
+| GET | `/api/v1/assets?q=&media_type=&min_rating=&favorite=&camera=&lens=&format=&tag_id=&storage_root_id=&date_from=&date_to=&has_location=&country=&place_id=&rejected=&sort=&cursor=&limit=` | 资产列表：筛选、排序（`capture_desc`/`capture_asc`/`added_desc`）、游标分页 |
 | GET | `/api/v1/assets/ids?…` | 符合筛选条件的全部资产 id（全选用） |
 | GET | `/api/v1/assets/facets` | 可选的相机、镜头、格式、年份、标签、地点及数量 |
 | PATCH | `/api/v1/assets/{id}` | 修改星级、收藏、备注 |
@@ -230,6 +230,10 @@ cd backend
 | POST | `/api/v1/ai/cloud/preview` | 列出将要发送的内容（图片、字段、目标），不联网 |
 | POST | `/api/v1/ai/cloud/analyze` | 云端分析，必须带 `confirmed: true`；结果按内容缓存 |
 | GET | `/api/v1/assets/{id}/analyses` | 该照片以往的云端分析 |
+| GET | `/api/v1/cull/similar?window_minutes=&similarity=&pending_only=` | 相似照片分组与推荐保留的照片（需本地 AI 向量） |
+| GET | `/api/v1/cull/suspects?pending_only=` | 可能模糊或曝光不当的照片（最差的在前） |
+| GET | `/api/v1/cull/rejected-files` | 淘汰照片在磁盘上的全部文件路径（只列出，不删除） |
+| POST | `/api/v1/files/{id}/reveal` | 在资源管理器中显示某个文件 |
 | GET/POST | `/api/v1/backups` | 备份列表（含文件夹是否可用）· 立即备份 |
 | POST | `/api/v1/backups/restore` | 从列表中的备份（`name`）或任意文件（`path`）恢复，先另存“恢复前”备份 |
 | POST | `/api/v1/backups/reveal` | 在资源管理器中显示备份文件 |
@@ -240,7 +244,7 @@ cd backend
 
 | 按键 | 功能 |
 |---|---|
-| Ctrl 1–5 | 图库 / 时间轴 / 地图 / AI 搜索 / 作品集 |
+| Ctrl 1–6 | 图库 / 时间轴 / 地图 / AI 搜索 / 作品集 / 整理 |
 | Ctrl , | 设置 |
 | Ctrl K 或 Ctrl F | 聚焦搜索栏 |
 | Ctrl I | 显示或隐藏检查器 |
@@ -248,7 +252,7 @@ cd backend
 | 单击 · Ctrl+单击 · Shift+单击 | 选择 · 加选/取消 · 连续选择 |
 | Ctrl A · Esc | 全选当前筛选结果 · 取消选择 |
 | Enter / 空格 / 双击 | 全屏浏览 |
-| 0–5 · F | 打星（0 为清除）· 收藏/取消收藏（作用于所有选中项） |
+| 0–5 · F · X · P | 打星（0 为清除）· 收藏/取消收藏 · 淘汰 · 保留（再按一次取消；作用于所有选中项，全屏中也可用） |
 | 全屏中：← → · I · Esc | 上一张/下一张 · 信息面板 · 关闭（放大时先回到适合窗口） |
 | 全屏中：滚轮 · 拖动 · 双击或 Z | 以鼠标为中心缩放（最大为原始像素的 400%）· 放大后平移 · 在适合窗口与 100% 之间切换 |
 | 全屏中：D | 进入 / 退出显影（照片）或剪辑（视频） |
@@ -261,6 +265,7 @@ cd backend
 
 - 原始照片和视频文件永远不会被移动、重命名、修改或删除。
 - 取消登记文件夹只删除 LUMEN Studio 数据库中的记录。
+- “淘汰”只是标记（默认隐藏），不会删除文件；整理页可以复制淘汰文件的路径，由你自己决定是否删除。
 - 磁盘上找不到的文件只标记为"丢失"，不会删除其记录、评分和备注；硬盘未连接时来源标记为"离线"。
 - 缩略图和预览图只写入 `cache\`，删除后会按需重新生成。
 - 星级、收藏、标签、备注只存在数据库中；XMP/EXIF 中的关键词和星级只读导入，从不写回文件。

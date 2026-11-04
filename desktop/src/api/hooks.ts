@@ -54,6 +54,9 @@ export const queryKeys = {
   collections: ["library", "collections"] as const,
   collection: (id: number) => ["library", "collections", id] as const,
   tripSuggestions: ["library", "collections", "suggestions"] as const,
+  // Under "library": flag changes (batch / asset updates) refresh them.
+  similarGroups: (params: SimilarParams) => ["library", "cull", "similar", params] as const,
+  suspects: (pendingOnly: boolean) => ["library", "cull", "suspects", pendingOnly] as const,
 };
 
 const ASSET_PAGE_SIZE = 300;
@@ -469,6 +472,32 @@ export function useUpdateSettings() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.aiStatus });
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
     },
+  });
+}
+
+export interface SimilarParams {
+  window_minutes: number;
+  similarity: number;
+  pending_only: boolean;
+}
+
+export function useSimilarGroups(params: SimilarParams) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.similarGroups(params),
+    queryFn: () => api.listSimilarGroups(requireConnection(conn), params),
+    enabled: conn !== null,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useSuspects(pendingOnly: boolean) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.suspects(pendingOnly),
+    queryFn: () => api.listSuspects(requireConnection(conn), pendingOnly),
+    enabled: conn !== null,
+    placeholderData: (previous) => previous,
   });
 }
 

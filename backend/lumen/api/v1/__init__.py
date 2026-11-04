@@ -5,6 +5,7 @@ from lumen.api.v1 import (
     assets,
     backups,
     collections,
+    cull,
     develop,
     exports,
     health,
@@ -22,6 +23,7 @@ router.include_router(assets.router)
 router.include_router(develop.router)
 router.include_router(exports.router)
 router.include_router(collections.router)
+router.include_router(cull.router)
 router.include_router(tags.router)
 router.include_router(settings.router)
 router.include_router(ai.router)

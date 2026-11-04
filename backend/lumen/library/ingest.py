@@ -27,6 +27,7 @@ from lumen.library.common import (
     set_root_status,
 )
 from lumen.library.live import pair_live_photo
+from lumen.library.quality import QUALITY_TASK
 from lumen.library.search import reindex_assets
 from lumen.library.tags import get_or_create_tag, normalize_tag_name, tag_assets
 from lumen.media import thumbnails
@@ -117,6 +118,7 @@ def _ingest(ctx: TaskContext) -> None:
     ctx.progress(done, max(total, done), force=True)
     if done:
         ctx.enqueue(GEO_TASK)
+        ctx.enqueue(QUALITY_TASK)
     if done and get_settings(conn).ai_enabled:
         ctx.enqueue(AI_INDEX_TASK)
 

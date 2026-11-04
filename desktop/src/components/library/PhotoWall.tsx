@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Check, Heart, Play, SlidersHorizontal, Star } from "lucide-react";
+import { Ban, Check, Heart, Play, SlidersHorizontal, Star } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -313,7 +313,11 @@ const Tile = memo(function Tile({
           decoding="async"
           draggable={false}
           onError={() => setFailed(true)}
-          className={cn("size-full object-cover", selected && "opacity-85")}
+          className={cn(
+            "size-full object-cover",
+            selected && "opacity-85",
+            asset.cull_flag === "reject" && "opacity-40 grayscale",
+          )}
         />
       ) : (
         <span className="flex size-full items-center justify-center p-2 text-[11px] text-subtle-foreground">
@@ -356,10 +360,17 @@ const Tile = memo(function Tile({
           asset.is_favorite ||
           asset.media_type === "video" ||
           asset.is_live ||
-          asset.is_edited
+          asset.is_edited ||
+          asset.cull_flag !== "none"
         }
       >
         <span className="flex items-center gap-1">
+          {asset.cull_flag === "reject" && (
+            <Ban role="img" aria-label={t("cull.flag_reject")} className="size-3 text-red-400" />
+          )}
+          {asset.cull_flag === "pick" && (
+            <Check role="img" aria-label={t("cull.flag_pick")} className="size-3 text-emerald-400" />
+          )}
           {asset.is_edited && (
             <SlidersHorizontal
               role="img"

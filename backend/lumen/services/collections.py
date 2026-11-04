@@ -262,7 +262,7 @@ def suggest_trips(conn: sqlite3.Connection) -> TripSuggestions:
         JOIN media_files c ON c.id = a.cover_file_id
              AND c.ingest_state = 'done' AND c.status = 'present'
         LEFT JOIN media_locations l ON l.asset_id = a.id
-        WHERE a.capture_time IS NOT NULL
+        WHERE a.capture_time IS NOT NULL AND a.cull_flag != 'reject'
         ORDER BY a.capture_time, a.id
         """
     ).fetchall()

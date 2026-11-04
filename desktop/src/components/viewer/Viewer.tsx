@@ -37,7 +37,7 @@ import {
   useUpdateAsset,
   useVideoEdit,
 } from "@/api/hooks";
-import type { AssetDetail } from "@/api/types";
+import type { AssetDetail, CullFlag } from "@/api/types";
 import { DevelopWorkspace, type DevelopKeyHandler } from "@/components/develop/DevelopWorkspace";
 import { ZoomableImage, type ZoomHandle } from "@/components/viewer/ZoomableImage";
 import { TrimmedVideo } from "@/components/develop/TrimmedVideo";
@@ -45,6 +45,7 @@ import { VideoWorkspace } from "@/components/develop/VideoWorkspace";
 import { AssetDetails } from "@/components/layout/Inspector";
 import { LiveIcon } from "@/components/library/LiveIcon";
 import { StarRating } from "@/components/library/StarRating";
+import { CullFlagToggle } from "@/components/library/CullFlagToggle";
 import { IconButton } from "@/components/ui/icon-button";
 import { useLibraryState } from "@/library/state";
 import { formatDateTime } from "@/lib/format";
@@ -135,7 +136,7 @@ function ViewerOverlay({
     if (!showDevelop) rootRef.current?.focus();
   }, [showDevelop]);
 
-  const edit = (changes: { rating?: number; is_favorite?: boolean }) =>
+  const edit = (changes: { rating?: number; is_favorite?: boolean; cull_flag?: CullFlag }) =>
     update.mutate({ id, changes });
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -159,6 +160,10 @@ function ViewerOverlay({
     else if (key === "End") setIndex(ids.length - 1);
     else if (/^[0-5]$/.test(key)) edit({ rating: Number(key) });
     else if (key.toLowerCase() === "f" && detail) edit({ is_favorite: !detail.is_favorite });
+    else if (key.toLowerCase() === "x" && detail)
+      edit({ cull_flag: detail.cull_flag === "reject" ? "none" : "reject" });
+    else if (key.toLowerCase() === "p" && detail)
+      edit({ cull_flag: detail.cull_flag === "pick" ? "none" : "pick" });
     else if (key.toLowerCase() === "z" && canZoom) zoomRef.current?.toggleActual();
     else if (key.toLowerCase() === "i" && !showDevelop) setShowInfo((value) => !value);
     else return;
@@ -323,6 +328,9 @@ function ViewerOverlay({
             )}
           />
         </button>
+        {detail && (
+          <CullFlagToggle dark value={detail.cull_flag} onChange={(flag) => edit({ cull_flag: flag })} />
+        )}
       </footer>
     </div>
   );

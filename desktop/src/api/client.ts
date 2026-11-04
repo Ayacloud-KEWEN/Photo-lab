@@ -32,11 +32,14 @@ import type {
   VideoRecipe,
   HealthResponse,
   MapPoints,
+  RejectedFiles,
   RenditionVariant,
   RestoreRequest,
   RestoreResult,
   SemanticPage,
+  SimilarGroups,
   StorageRoot,
+  Suspects,
   StorageRootCreate,
   StorageRootList,
   Tag,
@@ -322,6 +325,24 @@ export const api = {
 
   updateSettings: (conn: BackendConnection, body: AppSettingsUpdate) =>
     request<AppSettings>(conn, "PATCH", "/api/v1/settings", body),
+
+  listSimilarGroups: (
+    conn: BackendConnection,
+    params: { window_minutes: number; similarity: number; pending_only: boolean },
+  ) => request<SimilarGroups>(conn, "GET", `/api/v1/cull/similar${toSearchParams(params)}`),
+
+  listSuspects: (conn: BackendConnection, pendingOnly: boolean) =>
+    request<Suspects>(
+      conn,
+      "GET",
+      `/api/v1/cull/suspects${toSearchParams({ pending_only: pendingOnly })}`,
+    ),
+
+  rejectedFiles: (conn: BackendConnection) =>
+    request<RejectedFiles>(conn, "GET", "/api/v1/cull/rejected-files"),
+
+  revealFile: (conn: BackendConnection, fileId: number) =>
+    request<void>(conn, "POST", `/api/v1/files/${fileId}/reveal`),
 
   listBackups: (conn: BackendConnection) => request<BackupList>(conn, "GET", "/api/v1/backups"),
 

@@ -16,7 +16,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–5 全部完成并合并
 | Phase 3 | 照片墙、全屏浏览、时间轴、地图、星级/收藏/标签/备注、搜索筛选 | ✅ |
 | Phase 4 | SigLIP2 语义搜索/相似照片/自动标签、OpenCLIP 对照工具、DeepSeek 云端分析 | ✅ |
 | Phase 5 | 显影（非破坏性编辑）、导出与预设、视频剪辑与导出、旅行作品集 | ✅ |
-| 之后 | 实况照片配对、图库悬停播放实况、地图标记修复、全屏滚轮缩放、测试中发现的问题修复、可选底图样式、离线地名、备份与恢复 | ✅ |
+| 之后 | 实况照片配对、图库悬停播放实况、地图标记修复、全屏滚轮缩放、测试中发现的问题修复、可选底图样式、离线地名、备份与恢复、整理（相似/废片/淘汰） | ✅ |
 
 `docs/phases.md` 只规划到 Phase 5，**没有 Phase 6**。下一步做什么由用户决定（候选见第 9 节末尾）。
 
@@ -62,7 +62,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **151** 个测试、前端 **79** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **156** 个测试、前端 **81** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ### 4.1 在浏览器面板里用真实图库副本测试（推荐的验收方式）
 
@@ -203,6 +203,8 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
   地图/旅行建议显示城市·地区·国家；`python -m lumen.geo.build <目录>` 重新生成数据。
 - **数据库备份与恢复**（`db-backup`，ADR-024）：自动/手动备份、可换文件夹、恢复前另存当前数据，不重启进程
   （`services/backups.py`、`TaskRunner.paused()`）。SPEC 的 MVP 项至此全部完成。
+- **整理**（`cull`，迁移 0011，ADR-025）：保留/淘汰标记（X/P，淘汰默认隐藏、不删文件）、画质评分
+  （`library/quality.py`）、相似照片分组与推荐（`services/cull.py`）、整理页（Ctrl 6）。
 
 **下一步候选**（等用户选，按价值排序的建议）：
 2. 正式打包（安装包，不再依赖项目里的 `.venv`）。

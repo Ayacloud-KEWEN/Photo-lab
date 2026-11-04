@@ -138,6 +138,16 @@ export function FilterBar({
             .map((tag) => [String(tag.id), `${tag.name} (${tag.asset_count})`] as const) ?? []),
         ]}
       />
+      <Select
+        label={t("filters.rejected")}
+        value={query.rejected ?? ""}
+        onChange={(value) => set({ rejected: (value || undefined) as AssetQuery["rejected"] })}
+        options={[
+          ["", t("filters.rejectedHide")],
+          ["show", t("filters.rejectedShow")],
+          ["only", t("filters.rejectedOnly")],
+        ]}
+      />
       {(roots.data?.length ?? 0) > 1 && (
         <Select
           label={t("library.sources")}
