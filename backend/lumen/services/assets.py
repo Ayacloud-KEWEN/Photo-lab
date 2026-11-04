@@ -14,8 +14,13 @@ from PIL import Image
 
 from lumen.core.errors import LumenError, NotFoundError
 from lumen.develop.engine import DevelopError
-from lumen.develop.recipe import EditRecipe, VideoRecipe, parse_recipe
-from lumen.develop.renditions import edited_rendition_paths, render_edited
+from lumen.develop.recipe import IDENTITY, EditRecipe, VideoRecipe, parse_recipe
+from lumen.develop.renditions import (
+    edited_rendition_paths,
+    full_rendition_path,
+    render_edited,
+    render_full,
+)
 from lumen.library.live import CLIP_EXTENSION
 from lumen.library.search import like_pattern, search_terms
 from lumen.media import thumbnails
@@ -532,6 +537,17 @@ def rendition_path(
         "WHERE a.id = ? AND e.recipe_hash != ''",
         (asset_id,),
     ).fetchone()
+    if variant == "full":
+        kind = conn.execute("SELECT media_type FROM media_assets WHERE id = ?", (asset_id,))
+        row = kind.fetchone()
+        if row is not None and row["media_type"] == "video":
+            variant = "preview"  # videos have no full-size still
+        else:
+            recipe = parse_recipe(edited["recipe"]) if edited is not None else None
+            if not isinstance(recipe, EditRecipe):
+                recipe = IDENTITY
+            edit_hash = edited["recipe_hash"] if edited is not None else ""
+            return _full_rendition_path(conn, cache_dir, asset_id, recipe, edit_hash)
     if edited is not None:
         recipe = parse_recipe(edited["recipe"])
         if isinstance(recipe, VideoRecipe):
@@ -587,6 +603,22 @@ def _turned_rendition(original: Path, quarter_turns: int, recipe_hash: str) -> P
     if not path.exists():
         with Image.open(original) as image:
             thumbnails.save_jpeg(image.rotate(-90 * quarter_turns, expand=True), path)
+    return path
+
+
+def _full_rendition_path(
+    conn: sqlite3.Connection, cache_dir: Path, asset_id: int, recipe: EditRecipe, recipe_hash: str
+) -> Path:
+    try:
+        source = develop_source(conn, asset_id)
+    except DevelopUnavailableError as exc:
+        raise RenditionUnavailableError(str(exc)) from exc
+    path = full_rendition_path(cache_dir, source.fingerprint, recipe_hash)
+    try:
+        render_full(source.path, source.format, recipe, path)
+    except (DevelopError, ValueError, OSError) as exc:
+        logger.warning("full render failed", extra={"asset_id": asset_id, "error": str(exc)})
+        raise RenditionUnavailableError(f"Cannot render the full-size photo: {exc}") from exc
     return path
 
 

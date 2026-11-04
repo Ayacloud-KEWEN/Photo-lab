@@ -166,7 +166,9 @@ storage_roots ──scan──▶ media_files (pending) ──ingest──▶ as
   只渲染可见行。
 - 筛选条件在图库、时间轴、地图之间共享（`library/state.tsx`）；顶部搜索栏实时更新筛选。
 - 时间轴按天分组；跳转到某个月是把列表"锚定"在该月（`date_to` 为下个月），可一键回到最新。
-- 全屏浏览显示 2048px 预览；浏览器可直接解码的格式（JPEG/PNG）可切换到原图 1:1。
+- 全屏浏览显示 2048px 预览，可用滚轮以鼠标为中心缩放、拖动平移（`viewer/zoom.ts` 纯函数 + `ZoomableImage`）；
+  第一次放大时加载全尺寸图：未编辑的 JPEG/PNG 直接用原文件，其余（HEIC、RAW、编辑过的照片）用
+  `thumbnail?variant=full`——按编辑配方全尺寸显影、带原图 ICC，按需生成并缓存在缩略图目录（`<digest>[_e<hash>]_f1.jpg`）。
   视频直接播放原文件（`/original` 支持 Range）。
 - 地图使用 MapLibre；照片在前端用 Supercluster 聚合，气泡用 HTML 标记显示缩略图，因此离线
   底图不需要字体文件。离线底图来自 `world-atlas`（Natural Earth 1:50m 国界，按需加载）。

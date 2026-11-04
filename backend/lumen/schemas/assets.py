@@ -8,7 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 MediaType = Literal["photo", "video"]
 AssetSort = Literal["capture_desc", "capture_asc", "added_desc"]
 FileRole = Literal["primary", "companion", "sidecar"]
-RenditionVariant = Literal["thumb", "preview"]
+# "full": the whole photo (with its edit) at full size, for zooming in.
+RenditionVariant = Literal["thumb", "preview", "full"]
 
 
 class AssetQuery(BaseModel):

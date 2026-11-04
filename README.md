@@ -200,7 +200,7 @@ cd backend
 | PATCH | `/api/v1/assets/{id}` | 修改星级、收藏、备注 |
 | POST | `/api/v1/assets/batch` | 批量修改星级、收藏，批量添加/移除标签 |
 | GET | `/api/v1/assets/{id}` | 资产详情：元数据、位置、全部文件 |
-| GET | `/api/v1/assets/{id}/thumbnail?variant=thumb\|preview` | 缩略图（400px）或预览图（2048px） |
+| GET | `/api/v1/assets/{id}/thumbnail?variant=thumb\|preview\|full` | 缩略图（400px）、预览图（2048px）或全尺寸图（按需生成并缓存，含编辑效果） |
 | GET | `/api/v1/assets/{id}/original` | 原文件（只读，支持 Range，用于视频播放和原图查看） |
 | GET | `/api/v1/assets/{id}/motion` | 实况照片的视频片段（只读，支持 Range） |
 | GET/PUT | `/api/v1/assets/{id}/edit` | 当前编辑配方与历史 / 保存新的一步（非破坏性，不写原文件） |
@@ -246,7 +246,8 @@ cd backend
 | Ctrl A · Esc | 全选当前筛选结果 · 取消选择 |
 | Enter / 空格 / 双击 | 全屏浏览 |
 | 0–5 · F | 打星（0 为清除）· 收藏/取消收藏（作用于所有选中项） |
-| 全屏中：← → · Z · I · Esc | 上一张/下一张 · 原始尺寸 · 信息面板 · 关闭 |
+| 全屏中：← → · I · Esc | 上一张/下一张 · 信息面板 · 关闭（放大时先回到适合窗口） |
+| 全屏中：滚轮 · 拖动 · 双击或 Z | 以鼠标为中心缩放（最大为原始像素的 400%）· 放大后平移 · 在适合窗口与 100% 之间切换 |
 | 全屏中：D | 进入 / 退出显影（照片）或剪辑（视频） |
 | 剪辑视频中：I · O | 把当前位置设为起点 · 终点 |
 | 显影中：Ctrl Z · Ctrl Shift Z（Ctrl Y） · \ · C · Enter · Esc | 撤销 · 重做 · 对比原图 · 裁剪 · 完成裁剪 · 取消裁剪 / 退出显影 |

@@ -102,6 +102,50 @@ describe("Viewer", () => {
     pause.mockRestore();
   });
 
+  it("zooms with the wheel, double-click and Z, loading the full-size photo", async () => {
+    stubBackend({
+      assets: [makeAsset(1, { file_name: "IMG_1.HEIC", width: 4000, height: 3000 })],
+    });
+    render(
+      <Providers>
+        <OpenOnMount ids={[1]} id={1} />
+        <Viewer />
+      </Providers>,
+    );
+    const dialog = await screen.findByRole("dialog", { name: "IMG_1.HEIC" });
+    const preview = await waitFor(() => {
+      const image = dialog.querySelector("img");
+      expect(image).not.toBeNull();
+      return image!;
+    });
+    // jsdom loads no images: give the preview its size (the stage is 800 x 600).
+    Object.defineProperty(preview, "naturalWidth", { value: 2048 });
+    Object.defineProperty(preview, "naturalHeight", { value: 1536 });
+    fireEvent.load(preview);
+    const stage = dialog.querySelector<HTMLElement>("[data-zoom]")!;
+    expect(stage.dataset.zoom).toBe("1.000");
+
+    fireEvent.wheel(stage, { deltaY: -400, clientX: 400, clientY: 300 });
+    expect(Number(stage.dataset.zoom)).toBeGreaterThan(1.5);
+    expect(screen.getByText(/^\d+%$/)).toBeInTheDocument();
+    // Zoomed in: the full-size rendition (HEIC cannot be shown by the webview).
+    const variants = [...dialog.querySelectorAll("img")].map((image) =>
+      new URL(image.src).searchParams.get("variant"),
+    );
+    expect(variants).toEqual(["preview", "full"]);
+
+    fireEvent.keyDown(dialog, { key: "Escape" }); // first back to fit…
+    expect(stage.dataset.zoom).toBe("1.000");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.doubleClick(stage, { clientX: 400, clientY: 300 });
+    expect(stage.dataset.zoom).toBe("5.000"); // 100%: 4000 px shown 800 px wide
+    fireEvent.keyDown(dialog, { key: "z" });
+    expect(stage.dataset.zoom).toBe("1.000");
+    fireEvent.keyDown(dialog, { key: "Escape" }); // …then closes the viewer
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
   it("shows ordinary photos without a LIVE button", async () => {
     stubBackend({ assets: [makeAsset(1)] });
     render(

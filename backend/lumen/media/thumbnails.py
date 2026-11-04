@@ -246,12 +246,20 @@ def _grab_frame(
     return None, stderr
 
 
-def save_jpeg(image: Image.Image, target: Path) -> None:
+def save_jpeg(
+    image: Image.Image,
+    target: Path,
+    *,
+    quality: int = JPEG_QUALITY,
+    icc_profile: bytes | None = None,
+) -> None:
+    """Write ``image`` to ``target`` atomically (never a half-written file)."""
     target.parent.mkdir(parents=True, exist_ok=True)
     handle, temp_name = tempfile.mkstemp(dir=target.parent, suffix=".tmp")
+    extra = {"icc_profile": icc_profile} if icc_profile else {}
     try:
         with os.fdopen(handle, "wb") as out:
-            image.save(out, "JPEG", quality=JPEG_QUALITY, optimize=True, progressive=True)
+            image.save(out, "JPEG", quality=quality, optimize=True, progressive=True, **extra)
         os.replace(temp_name, target)
     except BaseException:
         Path(temp_name).unlink(missing_ok=True)

@@ -29,6 +29,30 @@ def edited_rendition_paths(
     )
 
 
+FULL_QUALITY = 90
+
+
+def full_rendition_path(cache_dir: Path, fingerprint: str, recipe_hash: str) -> Path:
+    """The full-size rendition (``recipe_hash`` '' for the unedited photo)."""
+    digest = fingerprint_digest(fingerprint)
+    edit = f"_e{recipe_hash}" if recipe_hash else ""
+    return cache_dir / "renditions" / digest[:2] / f"{digest}{edit}_f{engine.DEVELOP_VERSION}.jpg"
+
+
+def render_full(source: Path, media_format: MediaFormat, recipe: EditRecipe, target: Path) -> None:
+    """Develop ``source`` at full size into ``target`` (skipped if it exists), keeping the
+    original's colour profile so the browser shows its colours faithfully."""
+    if target.exists():
+        return
+    image = engine.develop(source, media_format, recipe, None, cache=False)
+    thumbnails.save_jpeg(
+        image,
+        target,
+        quality=FULL_QUALITY,
+        icc_profile=engine.source_icc_profile(source, media_format),
+    )
+
+
 def render_edited(
     source: Path, media_format: MediaFormat, recipe: EditRecipe, target: thumbnails.Rendition
 ) -> None:

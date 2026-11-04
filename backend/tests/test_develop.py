@@ -302,3 +302,22 @@ def test_unavailable_original_cannot_be_developed(
     response = client.get(f"/api/v1/assets/{photo}/edit")
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "develop_unavailable"
+
+
+def test_full_size_renditions(api: tuple[TestClient, int, int]) -> None:
+    client, photo, video = api
+
+    def full(asset_id: int) -> Image.Image:
+        response = client.get(f"/api/v1/assets/{asset_id}/thumbnail", params={"variant": "full"})
+        assert response.status_code == 200
+        return Image.open(io.BytesIO(response.content))
+
+    assert full(photo).size == (800, 600)  # the original's size, not the 2048 px preview
+    client.put(
+        f"/api/v1/assets/{photo}/edit",
+        json={"rotate": 1, "crop": {"x": 0, "y": 0, "width": 0.5, "height": 1}},
+    )
+    assert full(photo).size == (300, 800)  # turned, then cropped: the edit at full size
+    client.put(f"/api/v1/assets/{photo}/edit", json={})
+    assert full(photo).size == (800, 600)  # back to the original (cached)
+    assert full(video).size == (800, 600)  # videos answer with their preview

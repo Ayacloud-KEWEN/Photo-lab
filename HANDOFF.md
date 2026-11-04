@@ -53,7 +53,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **139** 个测试、前端 **65** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **140** 个测试、前端 **72** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ## 5. 代码地图
 
@@ -164,6 +164,7 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 - **5.4 旅行作品集 ✅**（ADR-022）：作品集页面（相册/旅行、名称/日期/地点/简介、拖动排序、说明、封面、移出、删除），
   从多选操作条或全屏浏览“加入作品集”，旅行建议（按离家距离与时间间隔聚类，用户库副本上找到 3 段旅行），
   按顺序编号导出，“生成旅行故事”（云端，前 30 项）。迁移 0009。
+- **全屏浏览缩放**（Phase 5 之后）：滚轮缩放、拖动平移、双击/Z 切换 100%，放大时加载全尺寸图（`variant=full`）。
 - **之后可做**：RAW 显影用真实文件验证；HDR 视频转 H.264 的色调映射；作品集的幻灯片放映 / 网页画廊导出；
   旅行故事保存到作品集；离线地名（反向地理编码）给旅行自动命名；第 8 节的其余待办。
 

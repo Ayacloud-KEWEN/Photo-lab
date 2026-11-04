@@ -89,7 +89,11 @@ async def get_asset_thumbnail(
     asset_id: int = Path(ge=1),
     variant: RenditionVariant = Query(default="thumb"),
 ) -> FileResponse:
-    """JPEG thumbnail (400px) or preview (2048px). Accepts ``?token=`` for use in ``<img>``."""
+    """JPEG thumbnail (400px), preview (2048px) or the full-size photo, each with its edit.
+
+    Accepts ``?token=`` for use in ``<img>``. ``full`` is rendered on first use and cached;
+    videos answer it with their preview.
+    """
     settings: Settings = request.app.state.settings
     path = await run_in_threadpool(
         service.rendition_path, conn, settings.cache_dir, asset_id, variant,

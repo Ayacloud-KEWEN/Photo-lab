@@ -12,10 +12,23 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { useTranslation } from "react-i18next";
 
-import { api, motionUrl, originalUrl, thumbnailUrl } from "@/api/client";
+import {
+  api,
+  motionUrl,
+  originalUrl,
+  thumbnailUrl,
+  type BackendConnection,
+} from "@/api/client";
 import {
   queryKeys,
   useAiStatus,
@@ -26,6 +39,7 @@ import {
 } from "@/api/hooks";
 import type { AssetDetail } from "@/api/types";
 import { DevelopWorkspace, type DevelopKeyHandler } from "@/components/develop/DevelopWorkspace";
+import { ZoomableImage, type ZoomHandle } from "@/components/viewer/ZoomableImage";
 import { TrimmedVideo } from "@/components/develop/TrimmedVideo";
 import { VideoWorkspace } from "@/components/develop/VideoWorkspace";
 import { AssetDetails } from "@/components/layout/Inspector";
@@ -38,6 +52,15 @@ import { cn } from "@/lib/utils";
 
 /** Formats the webview can decode itself, so the original can be shown at 100%. */
 const BROWSER_IMAGE = new Set(["jpg", "jpeg", "jpe", "png"]);
+/** Shown for zooming: the original file if the webview can decode it, else a rendition. */
+function fullSource(conn: BackendConnection, detail: AssetDetail): string {
+  const cover = detail.files.find((file) => file.id === detail.cover_file_id);
+  const extension = cover?.path.split(".").pop()?.toLowerCase() ?? "";
+  const version = detail.rendition_version ?? "";
+  return !detail.is_edited && BROWSER_IMAGE.has(extension)
+    ? originalUrl(conn, detail.id, version)
+    : thumbnailUrl(conn, detail.id, version, "full");
+}
 
 export function Viewer() {
   const { viewer, closeViewer } = useLibraryState();
@@ -79,6 +102,7 @@ function ViewerOverlay({
   const aiReady = !!aiStatus.data?.local.enabled && !!aiStatus.data?.local.model_downloaded;
 
   useEffect(() => rootRef.current?.focus(), []);
+  const zoomRef = useRef<ZoomHandle>(null);
   useEffect(() => setZoomed(false), [id]);
 
   // Prefetch neighbours so moving through photos feels instant.
@@ -102,13 +126,10 @@ function ViewerOverlay({
 
   const go = (step: number) =>
     setIndex((current) => Math.min(ids.length - 1, Math.max(0, current + step)));
-  const cover = detail?.files.find((file) => file.id === detail.cover_file_id);
-  const extension = cover?.path.split(".").pop()?.toLowerCase() ?? "";
   const isPhoto = detail?.media_type === "photo";
   const isVideo = detail?.media_type === "video";
   const showDevelop = developing && (isPhoto || isVideo);
-  // 1:1 shows the original file, so not for edited photos or while developing.
-  const canZoom = isPhoto && BROWSER_IMAGE.has(extension) && !detail.is_edited && !showDevelop;
+  const canZoom = isPhoto && !showDevelop;
   // Leaving develop removes the focused control: keep keyboard shortcuts working.
   useEffect(() => {
     if (!showDevelop) rootRef.current?.focus();
@@ -129,6 +150,7 @@ function ViewerOverlay({
       return;
     }
     if (key === "Escape" && showDevelop) setDeveloping(false);
+    else if (key === "Escape" && zoomed && canZoom) zoomRef.current?.reset();
     else if (key === "Escape") onClose();
     else if (key.toLowerCase() === "d" && (isPhoto || isVideo)) setDeveloping((value) => !value);
     else if (key === "ArrowLeft") go(-1);
@@ -137,7 +159,7 @@ function ViewerOverlay({
     else if (key === "End") setIndex(ids.length - 1);
     else if (/^[0-5]$/.test(key)) edit({ rating: Number(key) });
     else if (key.toLowerCase() === "f" && detail) edit({ is_favorite: !detail.is_favorite });
-    else if (key.toLowerCase() === "z" && canZoom) setZoomed((value) => !value);
+    else if (key.toLowerCase() === "z" && canZoom) zoomRef.current?.toggleActual();
     else if (key.toLowerCase() === "i" && !showDevelop) setShowInfo((value) => !value);
     else return;
     event.preventDefault();
@@ -177,7 +199,7 @@ function ViewerOverlay({
           {canZoom && (
             <IconButton
               label={zoomed ? t("viewer.fit") : t("viewer.actualSize")}
-              onClick={() => setZoomed((value) => !value)}
+              onClick={() => zoomRef.current?.toggleActual()}
             >
               {zoomed ? <Minimize2 /> : <Maximize2 />}
             </IconButton>
@@ -259,7 +281,9 @@ function ViewerOverlay({
           {conn && detail && (
             <Stage
               detail={detail}
-              zoomed={zoomed && canZoom}
+              zoomRef={zoomRef}
+              onZoomedChange={setZoomed}
+              fullSrc={fullSource(conn, detail)}
               previewSrc={
                 detail.rendition_version
                   ? thumbnailUrl(conn, detail.id, detail.rendition_version, "preview")
@@ -311,18 +335,23 @@ function fileName(detail: AssetDetail): string {
 
 function Stage({
   detail,
-  zoomed,
+  zoomRef,
+  onZoomedChange,
   previewSrc,
+  fullSrc,
   originalSrc,
   motionSrc,
 }: {
   detail: AssetDetail;
-  zoomed: boolean;
+  zoomRef: RefObject<ZoomHandle | null>;
+  onZoomedChange: (zoomed: boolean) => void;
   previewSrc: string | undefined;
+  fullSrc: string;
   originalSrc: string;
   motionSrc: string | undefined;
 }) {
   const [videoFailed, setVideoFailed] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
 
   if (detail.media_type === "video" && detail.is_edited) {
     return videoFailed ? (
@@ -352,29 +381,38 @@ function Stage({
       />
     );
   }
-  if (zoomed) {
-    return (
-      <div className="size-full overflow-auto">
-        <div className="flex min-h-full min-w-full items-center justify-center">
-          <img src={originalSrc} alt="" draggable={false} className="max-w-none" />
-        </div>
-      </div>
-    );
-  }
+  const long = Math.max(detail.metadata.width ?? 0, detail.metadata.height ?? 0);
   const still = (
-    <img
+    <ZoomableImage
       key={detail.id}
-      src={previewSrc}
-      alt=""
-      draggable={false}
-      className="size-full select-none object-contain p-2"
+      ref={zoomRef}
+      previewSrc={previewSrc}
+      fullSrc={fullSrc}
+      fullLongEdge={long || null}
+      onZoomedChange={(value) => {
+        setZoomed(value);
+        onZoomedChange(value);
+      }}
     />
   );
-  return motionSrc ? <LivePhoto key={detail.id} still={still} motionSrc={motionSrc} /> : still;
+  return motionSrc ? (
+    <LivePhoto key={detail.id} still={still} motionSrc={motionSrc} hidden={zoomed} />
+  ) : (
+    <div className="relative size-full">{still}</div>
+  );
 }
 
 /** The still, with its motion clip played over it while the LIVE button is hovered. */
-function LivePhoto({ still, motionSrc }: { still: ReactNode; motionSrc: string }) {
+function LivePhoto({
+  still,
+  motionSrc,
+  hidden,
+}: {
+  still: ReactNode;
+  motionSrc: string;
+  /** While zoomed in, the clip (fitted to the window) and its button are put away. */
+  hidden: boolean;
+}) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -395,7 +433,7 @@ function LivePhoto({ still, motionSrc }: { still: ReactNode; motionSrc: string }
   return (
     <div className="relative size-full">
       {still}
-      {!failed && (
+      {!failed && !hidden && (
         <>
           <video
             ref={videoRef}

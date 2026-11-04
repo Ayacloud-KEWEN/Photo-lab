@@ -242,7 +242,10 @@ export interface paths {
         };
         /**
          * Get Asset Thumbnail
-         * @description JPEG thumbnail (400px) or preview (2048px). Accepts ``?token=`` for use in ``<img>``.
+         * @description JPEG thumbnail (400px), preview (2048px) or the full-size photo, each with its edit.
+         *
+         *     Accepts ``?token=`` for use in ``<img>``. ``full`` is rendered on first use and cached;
+         *     videos answer it with their preview.
          */
         get: operations["getAssetThumbnail"];
         put?: never;
@@ -2910,7 +2913,7 @@ export interface operations {
     getAssetThumbnail: {
         parameters: {
             query?: {
-                variant?: "thumb" | "preview";
+                variant?: "thumb" | "preview" | "full";
             };
             header?: never;
             path: {
