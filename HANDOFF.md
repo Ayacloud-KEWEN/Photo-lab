@@ -114,6 +114,9 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
   `thumbnails._video_frame` 会在这种情况下用输入端比特流过滤器（`h264_metadata` / `hevc_metadata`）
   把标记改成“未指定”后重试。迁移 0005 会重试此前因超时或抽帧失败的文件。
 - **浏览器预览面板被遮挡时 requestAnimationFrame 会暂停**：MapLibre 不触发 `load`、截图超时。截一张图会唤醒渲染。
+- **MapLibre 标记的外层元素不能加 Tailwind 的 `scale-*`/`hover:scale-*`**：MapLibre 用行内 `transform` 定位标记，
+  而 Tailwind v4 的缩放是独立的 CSS `scale` 属性，会叠加在定位之后、连平移距离一起放大，悬停时标记被推离鼠标
+  （离左上角越远推得越多），于是点不中。缩放效果放在内层元素上（`MapPage.tsx` 的 `markerElement`）。
 - **MapLibre 的 Web Worker** 用 `?raw` 源码 + `blob:` URL 启动（`MapPage.tsx`），不要改回默认路径或 `?url`（Vite 开发模式会改写 worker）。
 - **Tauri CSP**（`tauri.conf.json`）：视频需要 `media-src`，地图需要 `worker-src blob:`，在线地图需要 `https://tiles.openfreemap.org`。
   用浏览器验证 CSP 时，需要给脚本加 `'unsafe-inline'`（Tauri 自己会给内联脚本加哈希）。

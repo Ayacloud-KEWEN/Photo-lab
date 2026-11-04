@@ -107,7 +107,8 @@ export function MapPage() {
           online ? { compact: true, customAttribution: t("map.attributionOnline") } : { compact: true },
         ),
       );
-      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+      // Top left: the panel of a clicked cluster opens on the right.
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
       map.on("load", () => {
         if (!cancelled) setReady(true);
       });
@@ -241,18 +242,27 @@ export function MapPage() {
   );
 }
 
+/**
+ * A marker: MapLibre places the outer element with an inline `transform`, so it must not
+ * be scaled itself. (Tailwind's `scale-*` uses the separate CSS `scale` property, which
+ * applies on top of that transform and would scale the offset too, pushing the marker
+ * out from under the pointer on hover.) The hover zoom is on the inner tile.
+ */
 function markerElement(conn: BackendConnection, cover: PointProps, count: number): HTMLElement {
   const element = document.createElement("button");
   element.type = "button";
-  element.className =
-    "relative size-11 cursor-pointer rounded-md border-2 border-white/90 bg-card bg-cover bg-center shadow-lg transition-transform hover:scale-110";
-  element.style.backgroundImage = `url("${thumbnailUrl(conn, cover.id, cover.v)}")`;
+  element.className = "group size-11 cursor-pointer";
+  const tile = document.createElement("span");
+  tile.className =
+    "relative block size-full rounded-md border-2 border-white/90 bg-card bg-cover bg-center shadow-lg transition-transform group-hover:scale-110";
+  tile.style.backgroundImage = `url("${thumbnailUrl(conn, cover.id, cover.v)}")`;
+  element.append(tile);
   if (count > 1) {
     const badge = document.createElement("span");
     badge.className =
       "absolute -right-2 -top-2 min-w-5 rounded-full bg-highlight px-1 text-center text-[10.5px] font-semibold leading-5 text-background";
     badge.textContent = count > 999 ? "999+" : String(count);
-    element.append(badge);
+    tile.append(badge);
   }
   return element;
 }
