@@ -164,3 +164,13 @@ def _merge_user_data(conn: sqlite3.Connection, *, keep: int, drop: int, now: str
         """,
         (keep, drop),
     )
+    # Portfolios that held the clip hold the Live Photo instead, in the clip's place.
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO collection_items
+            (collection_id, asset_id, position, caption, added_at)
+        SELECT collection_id, ?, position, caption, added_at FROM collection_items
+        WHERE asset_id = ?
+        """,
+        (keep, drop),
+    )

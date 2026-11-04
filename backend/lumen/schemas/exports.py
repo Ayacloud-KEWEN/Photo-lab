@@ -18,6 +18,9 @@ class ExportRequest(BaseModel):
     quality: int = Field(default=90, ge=50, le=100, description="JPEG quality")
     include_metadata: bool = Field(default=True, description="Copy EXIF/XMP from the original")
     include_location: bool = Field(default=False, description="Keep GPS (only with metadata)")
+    numbered: bool = Field(
+        default=False, description='Prefix names with their order ("001_IMG_0001.jpg")'
+    )
     video_mode: Literal["copy", "h264"] = Field(
         default="copy",
         description="Videos: copy the streams (original quality, fast) or re-encode to H.264",

@@ -150,12 +150,15 @@ def test_export_task_exports_photos_with_their_edits(
     out.mkdir()
 
     result = run_task(
-        conn, settings, {"asset_ids": [first, second, video], "destination": str(out)}
+        conn,
+        settings,
+        {"asset_ids": [first, second, video], "destination": str(out), "numbered": True},
     )
     # The "video" (any file ffmpeg can copy) is exported too; the missing photo is skipped.
     assert result == {"destination": str(out), "exported": 2, "skipped": 1, "failed": []}
-    with Image.open(out / "IMG_0001.jpg") as image:
+    with Image.open(out / "001_IMG_0001.jpg") as image:  # numbered in the given order
         assert image.size == (400, 300)  # the edit's crop
+    assert (out / "003_clip.jpg").exists()
     assert (root / "IMG_0001.JPG").exists()  # the original is untouched
 
 

@@ -56,7 +56,7 @@ Photo-lab/
    │  │                     批量操作条、星级、标签输入）、viewer/（全屏浏览）、develop/（显影）、
    │  │                     ai/（云端分析确认框）、settings/（AI 设置）、ui/
    │  ├─ library/           布局算法、多选、共享筛选状态、照片墙逻辑
-   │  ├─ pages/             图库、时间轴、地图、AI 搜索、设置、占位页
+   │  ├─ pages/             图库、时间轴、地图、AI 搜索、作品集、设置
    │  ├─ i18n/              zh-CN / en / fr
    │  └─ lib/               后端连接、原生对话框、工具函数
    └─ src-tauri/
@@ -211,6 +211,12 @@ cd backend
 | GET | `/api/v1/exports/{task_id}` | 导出进度与结果（导出、跳过、失败） |
 | GET/PUT | `/api/v1/assets/{id}/video-edit` | 视频剪辑：起止时间、旋转、静音（非破坏性） |
 | POST | `/api/v1/assets/{id}/frame-export` | 把视频某一帧存成新的 JPEG |
+| GET/POST | `/api/v1/collections` | 作品集列表 / 新建（可同时带入资产） |
+| GET | `/api/v1/collections/suggestions` | 按拍摄时间与地点找出的旅行建议 |
+| GET/PATCH/DELETE | `/api/v1/collections/{id}` | 作品集详情（按顺序的条目与说明）/ 修改 / 删除（不删照片） |
+| POST | `/api/v1/collections/{id}/items` · `/items/remove` | 加入 / 移出资产 |
+| PUT | `/api/v1/collections/{id}/order` | 整体重排 |
+| PATCH | `/api/v1/collections/{id}/items/{asset_id}` | 修改说明 |
 | GET | `/api/v1/timeline?granularity=year\|month\|day&…` | 按时间段统计数量 |
 | GET | `/api/v1/map/points?…` | 带位置的资产坐标 |
 | GET/POST | `/api/v1/tags` · PATCH/DELETE `/api/v1/tags/{id}` | 标签列表、新建、重命名、删除 |

@@ -1,4 +1,13 @@
-import { BookOpen, ClipboardPaste, Download, Heart, HeartOff, Trophy, X } from "lucide-react";
+import {
+  BookOpen,
+  ClipboardPaste,
+  Download,
+  FolderPlus,
+  Heart,
+  HeartOff,
+  Trophy,
+  X,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { useApplyEdits, useBatchUpdate } from "@/api/hooks";
@@ -20,7 +29,7 @@ export function SelectionBar({ ids, onClear, onError }: SelectionBarProps) {
   const { t } = useTranslation();
   const batch = useBatchUpdate();
   const applyEdits = useApplyEdits();
-  const { openCloud, openExport, copiedSettings } = useLibraryState();
+  const { openCloud, openExport, openCollect, copiedSettings } = useLibraryState();
   const apply = (changes: { rating?: number; is_favorite?: boolean; add_tags?: string[] }) =>
     batch.mutateAsync({ asset_ids: ids, ...changes }).catch(onError);
   const applySettings = (settings: ReturnType<typeof settingsFor>) =>
@@ -86,6 +95,10 @@ export function SelectionBar({ ids, onClear, onError }: SelectionBarProps) {
           </option>
         ))}
       </select>
+      <Button variant="ghost" size="sm" onClick={() => openCollect(ids)}>
+        <FolderPlus className="size-3.5" />
+        {t("collections.addTo")}
+      </Button>
       <Button variant="ghost" size="sm" onClick={() => openExport(ids)}>
         <Download className="size-3.5" />
         {t("export.action")}

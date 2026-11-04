@@ -74,6 +74,7 @@ function ExportDialogBody({
   const rootRef = useRef<HTMLDivElement>(null);
   const [options, setOptions] = useState(remembered);
   const [includeLocation, setIncludeLocation] = useState(false);
+  const [numbered, setNumbered] = useState(request.numbered);
   const start = useStartExport();
   const cancel = useCancelTask();
   const [taskId, setTaskId] = useState<number | null>(null);
@@ -98,6 +99,7 @@ function ExportDialogBody({
       include_metadata: options.include_metadata,
       include_location: options.include_metadata && includeLocation,
       video_mode: options.video_mode,
+      numbered,
     };
     remember({ ...options, destination: body.destination });
     start.mutate(body, { onSuccess: (started) => setTaskId(started.task.id) });
@@ -224,6 +226,15 @@ function ExportDialogBody({
                 </span>
               </label>
             </div>
+
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={numbered}
+                onChange={(event) => setNumbered(event.target.checked)}
+              />
+              {t("export.numbered")}
+            </label>
 
             <p className="text-[11.5px] text-subtle-foreground">{t("export.note")}</p>
             {startError && <p className="text-[12px] text-destructive">{startError}</p>}

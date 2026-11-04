@@ -64,6 +64,7 @@ def export_assets(ctx: TaskContext) -> dict[str, Any]:
                 raise PermanentTaskError(f"Export folder is not available: {folder}")
             asset_id = ids[index]
             name = f"#{asset_id}"
+            width = max(3, len(str(len(ids))))
             try:
                 if _media_type(ctx, asset_id) == "video":
                     video = video_source(ctx.conn, asset_id)
@@ -79,6 +80,9 @@ def export_assets(ctx: TaskContext) -> dict[str, Any]:
                         ffmpeg=ffmpeg,
                         ffprobe=ctx.settings.tool("ffprobe"),
                         should_stop=stop_video,
+                        stem=f"{index + 1:0{width}d}_{video.path.stem}"
+                        if request.numbered
+                        else None,
                     )
                 else:
                     photo = develop_source(ctx.conn, asset_id)
@@ -90,6 +94,9 @@ def export_assets(ctx: TaskContext) -> dict[str, Any]:
                         folder,
                         photo_options,
                         exiftool,
+                        stem=f"{index + 1:0{width}d}_{photo.path.stem}"
+                        if request.numbered
+                        else None,
                     )
                 exported += 1
             except (_Unavailable, DevelopUnavailableError, NotFoundError):

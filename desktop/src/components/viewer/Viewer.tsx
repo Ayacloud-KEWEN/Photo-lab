@@ -3,6 +3,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  FolderPlus,
   Heart,
   Info,
   Maximize2,
@@ -74,7 +75,7 @@ function ViewerOverlay({
   const update = useUpdateAsset();
   const detail = asset.data;
   const aiStatus = useAiStatus();
-  const { findSimilar, openExport } = useLibraryState();
+  const { findSimilar, openExport, openCollect } = useLibraryState();
   const aiReady = !!aiStatus.data?.local.enabled && !!aiStatus.data?.local.model_downloaded;
 
   useEffect(() => rootRef.current?.focus(), []);
@@ -199,6 +200,11 @@ function ViewerOverlay({
               onClick={() => setDeveloping((value) => !value)}
             >
               <SlidersHorizontal />
+            </IconButton>
+          )}
+          {detail && (
+            <IconButton label={t("collections.addTo")} onClick={() => openCollect([id])}>
+              <FolderPlus />
             </IconButton>
           )}
           {detail && (

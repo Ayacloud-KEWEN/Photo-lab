@@ -23,8 +23,17 @@ interface LibraryState {
   copiedSettings: CopiedSettings | null;
   copySettings: (settings: CopiedSettings) => void;
   exportRequest: ExportDialogRequest | null;
-  openExport: (assetIds: number[]) => void;
+  openExport: (assetIds: number[], options?: { numbered?: boolean }) => void;
   closeExport: () => void;
+  /** Assets to add to a collection (the picker dialog is open while set). */
+  collectRequest: CollectRequest | null;
+  openCollect: (assetIds: number[]) => void;
+  closeCollect: () => void;
+}
+
+export interface CollectRequest {
+  assetIds: number[];
+  nonce: number;
 }
 
 export interface CopiedSettings {
@@ -34,6 +43,8 @@ export interface CopiedSettings {
 
 export interface ExportDialogRequest {
   assetIds: number[];
+  /** Number the files in this order (exports of a collection). */
+  numbered: boolean;
   nonce: number;
 }
 
@@ -65,6 +76,7 @@ export function LibraryStateProvider({ children }: { children: ReactNode }) {
   const [cloudRequest, setCloudRequest] = useState<CloudDialogRequest | null>(null);
   const [copiedSettings, setCopiedSettings] = useState<CopiedSettings | null>(null);
   const [exportRequest, setExportRequest] = useState<ExportDialogRequest | null>(null);
+  const [collectRequest, setCollectRequest] = useState<CollectRequest | null>(null);
 
   const openViewer = useCallback((ids: readonly number[], id: number) => {
     const index = ids.indexOf(id);
@@ -82,10 +94,16 @@ export function LibraryStateProvider({ children }: { children: ReactNode }) {
   );
   const closeCloud = useCallback(() => setCloudRequest(null), []);
   const openExport = useCallback(
-    (assetIds: number[]) => setExportRequest({ assetIds, nonce: Date.now() }),
+    (assetIds: number[], options: { numbered?: boolean } = {}) =>
+      setExportRequest({ assetIds, numbered: options.numbered ?? false, nonce: Date.now() }),
     [],
   );
   const closeExport = useCallback(() => setExportRequest(null), []);
+  const openCollect = useCallback(
+    (assetIds: number[]) => setCollectRequest({ assetIds, nonce: Date.now() }),
+    [],
+  );
+  const closeCollect = useCallback(() => setCollectRequest(null), []);
 
   const value = useMemo(
     () => ({
@@ -104,6 +122,9 @@ export function LibraryStateProvider({ children }: { children: ReactNode }) {
       exportRequest,
       openExport,
       closeExport,
+      collectRequest,
+      openCollect,
+      closeCollect,
     }),
     [
       query,
@@ -119,6 +140,9 @@ export function LibraryStateProvider({ children }: { children: ReactNode }) {
       exportRequest,
       openExport,
       closeExport,
+      collectRequest,
+      openCollect,
+      closeCollect,
     ],
   );
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;

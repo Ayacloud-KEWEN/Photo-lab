@@ -58,8 +58,11 @@ def export_photo(
     folder: Path,
     options: ExportOptions,
     exiftool: ExifToolSession | None,
+    *,
+    stem: str | None = None,
 ) -> Path:
-    """Develop ``source`` with ``recipe`` into a new JPEG in ``folder``; returns its path."""
+    """Develop ``source`` with ``recipe`` into a new JPEG in ``folder`` (named ``stem``,
+    by default the original's name); returns its path."""
     image = engine.develop(
         source, media_format, recipe, decode_edge(recipe, options.long_edge), cache=False
     )
@@ -67,7 +70,7 @@ def export_photo(
         image.thumbnail((options.long_edge, options.long_edge), Image.Resampling.LANCZOS)
     icc_profile = engine.source_icc_profile(source, media_format)
 
-    target = reserve_path(folder, source.stem)
+    target = reserve_path(folder, stem or source.stem)
     handle, temp_name = tempfile.mkstemp(dir=folder, prefix=".lumen-", suffix=".jpg")
     try:
         with os.fdopen(handle, "wb") as out:

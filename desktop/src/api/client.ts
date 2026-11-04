@@ -11,9 +11,13 @@ import type {
   AssetPage,
   AssetUpdate,
   BatchResult,
+  CollectionCreate,
+  CollectionDetail,
+  CollectionUpdate,
   CloudPreview,
   CloudRequest,
   CloudTestResult,
+  Collection,
   EditBatch,
   EditBatchResult,
   EditRecipe,
@@ -35,6 +39,7 @@ import type {
   Task,
   TaskList,
   Timeline,
+  TripSuggestion,
 } from "./types";
 
 export interface BackendConnection {
@@ -212,6 +217,42 @@ export const api = {
   /** Apply some settings (pasted, or a preset) to many photos. */
   applyEdits: (conn: BackendConnection, body: EditBatch) =>
     request<EditBatchResult>(conn, "POST", "/api/v1/edits/batch", body),
+
+  listCollections: (conn: BackendConnection) =>
+    request<{ items: Collection[] }>(conn, "GET", "/api/v1/collections"),
+
+  suggestTrips: (conn: BackendConnection) =>
+    request<{ items: TripSuggestion[] }>(conn, "GET", "/api/v1/collections/suggestions"),
+
+  getCollection: (conn: BackendConnection, id: number) =>
+    request<CollectionDetail>(conn, "GET", `/api/v1/collections/${id}`),
+
+  createCollection: (conn: BackendConnection, body: CollectionCreate) =>
+    request<CollectionDetail>(conn, "POST", "/api/v1/collections", body),
+
+  updateCollection: (conn: BackendConnection, id: number, body: CollectionUpdate) =>
+    request<CollectionDetail>(conn, "PATCH", `/api/v1/collections/${id}`, body),
+
+  deleteCollection: (conn: BackendConnection, id: number) =>
+    request<void>(conn, "DELETE", `/api/v1/collections/${id}`),
+
+  addToCollection: (conn: BackendConnection, id: number, assetIds: number[]) =>
+    request<{ changed: number }>(conn, "POST", `/api/v1/collections/${id}/items`, {
+      asset_ids: assetIds,
+    }),
+
+  removeFromCollection: (conn: BackendConnection, id: number, assetIds: number[]) =>
+    request<{ changed: number }>(conn, "POST", `/api/v1/collections/${id}/items/remove`, {
+      asset_ids: assetIds,
+    }),
+
+  reorderCollection: (conn: BackendConnection, id: number, assetIds: number[]) =>
+    request<{ changed: number }>(conn, "PUT", `/api/v1/collections/${id}/order`, {
+      asset_ids: assetIds,
+    }),
+
+  setCaption: (conn: BackendConnection, id: number, assetId: number, caption: string | null) =>
+    request<void>(conn, "PATCH", `/api/v1/collections/${id}/items/${assetId}`, { caption }),
 
   getVideoEdit: (conn: BackendConnection, id: number) =>
     request<VideoEditState>(conn, "GET", `/api/v1/assets/${id}/video-edit`),

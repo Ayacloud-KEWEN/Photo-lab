@@ -16,6 +16,8 @@ import type {
   AssetDetail,
   AssetUpdate,
   CloudRequest,
+  CollectionCreate,
+  CollectionUpdate,
   EditBatch,
   EditRecipe,
   EditState,
@@ -47,6 +49,9 @@ export const queryKeys = {
   edit: (id: number) => ["library", "edit", id] as const,
   export: (taskId: number) => ["export", taskId] as const,
   videoEdit: (id: number) => ["library", "video-edit", id] as const,
+  collections: ["library", "collections"] as const,
+  collection: (id: number) => ["library", "collections", id] as const,
+  tripSuggestions: ["library", "collections", "suggestions"] as const,
 };
 
 const ASSET_PAGE_SIZE = 300;
@@ -322,6 +327,63 @@ export function useSaveVideoEdit() {
       }),
     [conn, queryClient],
   );
+}
+
+export function useCollections() {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.collections,
+    queryFn: async () => (await api.listCollections(requireConnection(conn))).items,
+    enabled: conn !== null,
+  });
+}
+
+export function useTripSuggestions(enabled = true) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.tripSuggestions,
+    queryFn: async () => (await api.suggestTrips(requireConnection(conn))).items,
+    enabled: enabled && conn !== null,
+  });
+}
+
+export function useCollection(id: number | null) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.collection(id ?? 0),
+    queryFn: () => api.getCollection(requireConnection(conn), id!),
+    enabled: conn !== null && id !== null,
+  });
+}
+
+/**
+ * Changes to collections. Each refreshes the collections (list, suggestions, the one
+ * changed); they resolve with the API's answer.
+ */
+export function useCollectionActions() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  return useMemo(() => {
+    const refresh = <T,>(result: T) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.collections });
+      return result;
+    };
+    const c = () => requireConnection(conn);
+    return {
+      create: (body: CollectionCreate) => api.createCollection(c(), body).then(refresh),
+      update: (id: number, body: CollectionUpdate) =>
+        api.updateCollection(c(), id, body).then(refresh),
+      remove: (id: number) => api.deleteCollection(c(), id).then(refresh),
+      add: (id: number, assetIds: number[]) =>
+        api.addToCollection(c(), id, assetIds).then(refresh),
+      removeItems: (id: number, assetIds: number[]) =>
+        api.removeFromCollection(c(), id, assetIds).then(refresh),
+      reorder: (id: number, assetIds: number[]) =>
+        api.reorderCollection(c(), id, assetIds).then(refresh),
+      caption: (id: number, assetId: number, caption: string | null) =>
+        api.setCaption(c(), id, assetId, caption).then(refresh),
+    };
+  }, [conn, queryClient]);
 }
 
 /** Settings applied to many photos: every view of them (and their edits) refreshes. */

@@ -125,6 +125,7 @@ def export_video(
     ffmpeg: str,
     ffprobe: str | None,
     should_stop: Callable[[], bool],
+    stem: str | None = None,
 ) -> Path:
     """Write the edited video as a new file in ``folder``; returns its path.
 
@@ -132,7 +133,7 @@ def export_video(
     H.264 re-encodes to an MP4 that plays everywhere.
     """
     extension = source.suffix.lower() if options.mode == "copy" else ".mp4"
-    target = reserve_path(folder, source.stem, extension)
+    target = reserve_path(folder, stem or source.stem, extension)
     handle, temp_name = tempfile.mkstemp(dir=folder, prefix=".lumen-", suffix=extension)
     os.close(handle)
     try:

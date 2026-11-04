@@ -119,6 +119,10 @@ export interface StubOptions {
   cloud?: "ok" | "no_vision" | "not_configured";
   /** Saved video edits by asset id. */
   videoEdits?: Record<number, Partial<VideoRecipe>>;
+  /** Collections: name, kind and their asset ids (in order). */
+  collections?: { name: string; kind?: "album" | "trip"; assetIds?: number[] }[];
+  /** Trip suggestions: date ranges over asset ids. */
+  trips?: { start: string; end: string; assetIds: number[] }[];
 }
 
 export function stubBackend(options: StubOptions = {}) {
@@ -127,6 +131,92 @@ export function stubBackend(options: StubOptions = {}) {
   const requests: Request[] = [];
   const json = (body: unknown, status = 200) => Promise.resolve(Response.json(body, { status }));
   let exportRequest: unknown = null;
+  // Collections, as the backend keeps them.
+  const collections = new Map<number, CollectionState>(
+    (options.collections ?? []).map((collection, index) => [
+      index + 1,
+      {
+        id: index + 1, name: collection.name, kind: collection.kind ?? "album",
+        description: null, place: null, start_date: null, end_date: null, cover: null,
+        items: (collection.assetIds ?? []).map((id) => ({ id, caption: null })),
+      },
+    ]),
+  ); // prettier-ignore
+  const collectionJson = (state: CollectionState) => {
+    const items = state.items
+      .map((item) => ({ asset: assets.find((a) => a.id === item.id), caption: item.caption }))
+      .filter((item) => item.asset);
+    return {
+      id: state.id, uuid: `c${state.id}`, name: state.name, kind: state.kind,
+      description: state.description, place: state.place,
+      start_date: state.start_date, end_date: state.end_date,
+      item_count: state.items.length,
+      cover: items.find((i) => i.asset!.id === state.cover)?.asset ?? items[0]?.asset ?? null,
+      first_capture: null, last_capture: null,
+      created_at: "2026-11-03T08:00:00.000Z", updated_at: `2026-11-03T08:00:0${state.items.length % 10}.000Z`,
+      items,
+    }; // prettier-ignore
+  };
+  const collectionsApi = (path: string, method: string, body: unknown) => {
+    if (path === "/api/v1/collections" && method === "GET") {
+      return json({ items: [...collections.values()].map(collectionJson) });
+    }
+    if (path === "/api/v1/collections/suggestions") {
+      return json({
+        items: (options.trips ?? []).map((trip) => ({
+          start_date: trip.start, end_date: trip.end, asset_count: trip.assetIds.length,
+          asset_ids: trip.assetIds, latitude: 46, longitude: 7.7, distance_km: 514.2,
+          samples: assets.filter((a) => trip.assetIds.includes(a.id)).slice(0, 4),
+        })),
+      }); // prettier-ignore
+    }
+    if (path === "/api/v1/collections" && method === "POST") {
+      const request = body as { name: string; kind?: "album" | "trip"; asset_ids?: number[] } & Record<string, unknown>;
+      const id = collections.size + 1;
+      collections.set(id, {
+        id, name: request.name, kind: request.kind ?? "album", description: null, place: null,
+        start_date: (request.start_date as string) ?? null, end_date: (request.end_date as string) ?? null,
+        cover: null, items: (request.asset_ids ?? []).map((asset) => ({ id: asset, caption: null })),
+      }); // prettier-ignore
+      return json(collectionJson(collections.get(id)!), 201);
+    }
+    const match = /^\/api\/v1\/collections\/(\d+)(.*)$/.exec(path);
+    const state = match ? collections.get(Number(match[1])) : undefined;
+    if (!match || !state) return json({ error: { code: "not_found", message: path } }, 404);
+    const rest = match[2] ?? "";
+    const ids = (body as { asset_ids?: number[] } | undefined)?.asset_ids ?? [];
+    if (rest === "" && method === "GET") return json(collectionJson(state));
+    if (rest === "" && method === "PATCH") {
+      const changes = body as Partial<CollectionState> & { cover_asset_id?: number };
+      Object.assign(state, changes);
+      if (changes.cover_asset_id !== undefined) state.cover = changes.cover_asset_id;
+      return json(collectionJson(state));
+    }
+    if (rest === "" && method === "DELETE") {
+      collections.delete(state.id);
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    if (rest === "/items") {
+      const fresh = ids.filter((id) => !state.items.some((item) => item.id === id));
+      state.items.push(...fresh.map((id) => ({ id, caption: null })));
+      return json({ changed: fresh.length });
+    }
+    if (rest === "/items/remove") {
+      state.items = state.items.filter((item) => !ids.includes(item.id));
+      return json({ changed: ids.length });
+    }
+    if (rest === "/order") {
+      state.items = ids.map((id) => state.items.find((item) => item.id === id)!);
+      return json({ changed: ids.length });
+    }
+    const caption = /^\/items\/(\d+)$/.exec(rest);
+    if (caption) {
+      const item = state.items.find((entry) => entry.id === Number(caption[1]));
+      if (item) item.caption = (body as { caption: string | null }).caption;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    return json({ error: { code: "not_found", message: path } }, 404);
+  };
   const videoEdits = new Map<number, VideoRecipe>(
     Object.entries(options.videoEdits ?? {}).map(([id, recipe]) => [
       Number(id),
@@ -264,6 +354,9 @@ export function stubBackend(options: StubOptions = {}) {
         rendition_version: `v${id}`,
       }); // prettier-ignore
     }
+    if (path.startsWith("/api/v1/collections")) {
+      return collectionsApi(path, method, body);
+    }
     if (path === "/api/v1/edits/batch") {
       const request = body as { asset_ids: number[]; recipe: EditRecipe; fields: (keyof EditRecipe)[] };
       let updated = 0;
@@ -366,6 +459,18 @@ export function stubBackend(options: StubOptions = {}) {
   });
   vi.stubGlobal("fetch", fetch);
   return { fetch, requests };
+}
+
+interface CollectionState {
+  id: number;
+  name: string;
+  kind: "album" | "trip";
+  description: string | null;
+  place: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  cover: number | null;
+  items: { id: number; caption: string | null }[];
 }
 
 export function Providers({

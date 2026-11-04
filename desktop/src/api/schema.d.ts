@@ -561,6 +561,146 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Collections
+         * @description Trips (newest first), then albums by name.
+         */
+        get: operations["listCollections"];
+        put?: never;
+        /** Create Collection */
+        post: operations["createCollection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Suggest Trips
+         * @description Trips found from capture times and places that no trip collection covers yet.
+         */
+        get: operations["suggestTrips"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{collection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Collection */
+        get: operations["getCollection"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Collection
+         * @description Delete the collection only: its photos and videos stay in the library.
+         */
+        delete: operations["deleteCollection"];
+        options?: never;
+        head?: never;
+        /** Update Collection */
+        patch: operations["updateCollection"];
+        trace?: never;
+    };
+    "/api/v1/collections/{collection_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Items
+         * @description Append assets to the end (ones already in it keep their place).
+         */
+        post: operations["addCollectionItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{collection_id}/items/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove Items */
+        post: operations["removeCollectionItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{collection_id}/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reorder
+         * @description The complete new order of the items.
+         */
+        put: operations["reorderCollection"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{collection_id}/items/{asset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Item
+         * @description Set (or clear) an item's caption.
+         */
+        patch: operations["updateCollectionItem"];
+        trace?: never;
+    };
     "/api/v1/tags": {
         parameters: {
             query?: never;
@@ -1308,6 +1448,146 @@ export interface components {
              */
             vision: boolean | null;
         };
+        /** Collection */
+        Collection: {
+            /** Id */
+            id: number;
+            /** Uuid */
+            uuid: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "album" | "trip";
+            /** Description */
+            description: string | null;
+            /** Place */
+            place: string | null;
+            /** Start Date */
+            start_date: string | null;
+            /** End Date */
+            end_date: string | null;
+            /** Item Count */
+            item_count: number;
+            /** @description The chosen cover, else the first item */
+            cover: components["schemas"]["AssetSummary"] | null;
+            /** First Capture */
+            first_capture: string | null;
+            /** Last Capture */
+            last_capture: string | null;
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
+        };
+        /** CollectionAssets */
+        CollectionAssets: {
+            /** Asset Ids */
+            asset_ids: number[];
+        };
+        /** CollectionChange */
+        CollectionChange: {
+            /** Changed */
+            changed: number;
+        };
+        /** CollectionCreate */
+        CollectionCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @default album
+             * @enum {string}
+             */
+            kind: "album" | "trip";
+            /** Description */
+            description?: string | null;
+            /** Place */
+            place?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Asset Ids */
+            asset_ids?: number[];
+        };
+        /** CollectionDetail */
+        CollectionDetail: {
+            /** Id */
+            id: number;
+            /** Uuid */
+            uuid: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "album" | "trip";
+            /** Description */
+            description: string | null;
+            /** Place */
+            place: string | null;
+            /** Start Date */
+            start_date: string | null;
+            /** End Date */
+            end_date: string | null;
+            /** Item Count */
+            item_count: number;
+            /** @description The chosen cover, else the first item */
+            cover: components["schemas"]["AssetSummary"] | null;
+            /** First Capture */
+            first_capture: string | null;
+            /** Last Capture */
+            last_capture: string | null;
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
+            /**
+             * Items
+             * @description In the collection's order
+             */
+            items: components["schemas"]["CollectionItem"][];
+        };
+        /** CollectionItem */
+        CollectionItem: {
+            asset: components["schemas"]["AssetSummary"];
+            /** Caption */
+            caption: string | null;
+        };
+        /** CollectionItemUpdate */
+        CollectionItemUpdate: {
+            /** Caption */
+            caption?: string | null;
+        };
+        /** CollectionList */
+        CollectionList: {
+            /** Items */
+            items: components["schemas"]["Collection"][];
+        };
+        /**
+         * CollectionUpdate
+         * @description Only the fields sent are changed (``null`` clears).
+         */
+        CollectionUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Kind */
+            kind?: ("album" | "trip") | null;
+            /** Description */
+            description?: string | null;
+            /** Place */
+            place?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Cover Asset Id */
+            cover_asset_id?: number | null;
+        };
         /**
          * Crop
          * @description A rectangle in the rotated and straightened frame, as fractions of its size.
@@ -1609,6 +1889,12 @@ export interface components {
              * @default false
              */
             include_location: boolean;
+            /**
+             * Numbered
+             * @description Prefix names with their order ("001_IMG_0001.jpg")
+             * @default false
+             */
+            numbered: boolean;
             /**
              * Video Mode
              * @description Videos: copy the streams (original quality, fast) or re-encode to H.264
@@ -1944,6 +2230,39 @@ export interface components {
             period: string;
             /** Count */
             count: number;
+        };
+        /** TripSuggestion */
+        TripSuggestion: {
+            /** Start Date */
+            start_date: string;
+            /** End Date */
+            end_date: string;
+            /** Asset Count */
+            asset_count: number;
+            /** Asset Ids */
+            asset_ids: number[];
+            /**
+             * Samples
+             * @description A few photos spread over the trip
+             */
+            samples: components["schemas"]["AssetSummary"][];
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+            /**
+             * Distance Km
+             * @description From home (where most located photos were taken)
+             */
+            distance_km: number;
+        };
+        /** TripSuggestions */
+        TripSuggestions: {
+            /**
+             * Items
+             * @description Newest first
+             */
+            items: components["schemas"]["TripSuggestion"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -3409,6 +3728,376 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listCollections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionList"];
+                };
+            };
+        };
+    };
+    createCollection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggestTrips: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripSuggestions"];
+                };
+            };
+        };
+    };
+    getCollection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteCollection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateCollection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    addCollectionItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionAssets"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionChange"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    removeCollectionItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionAssets"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionChange"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reorderCollection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionAssets"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionChange"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateCollectionItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionItemUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

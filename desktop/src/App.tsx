@@ -6,13 +6,14 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { StatusBar } from "@/components/layout/StatusBar";
 import { TopBar } from "@/components/layout/TopBar";
 import { CloudDialog } from "@/components/ai/CloudDialog";
+import { AddToCollectionDialog } from "@/components/collections/AddToCollectionDialog";
 import { ExportDialog } from "@/components/library/ExportDialog";
 import { Viewer } from "@/components/viewer/Viewer";
 import { cleanQuery, useLibraryState } from "@/library/state";
-import { ALL_NAV, MAIN_NAV, type PageId } from "@/navigation";
+import { ALL_NAV, type PageId } from "@/navigation";
 import { AISearchPage } from "@/pages/AISearchPage";
 import { LibraryPage } from "@/pages/LibraryPage";
-import { PlaceholderPage } from "@/pages/PlaceholderPage";
+import { CollectionsPage } from "@/pages/CollectionsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { TimelinePage } from "@/pages/TimelinePage";
 import type { Selection } from "@/selection";
@@ -34,8 +35,6 @@ function initialInspectorOpen(): boolean {
     return true;
   }
 }
-
-const iconFor = (id: PageId) => MAIN_NAV.find((item) => item.id === id)!.icon;
 
 export default function App() {
   const [page, setPage] = useState<PageId>("library");
@@ -113,12 +112,10 @@ export default function App() {
             </Suspense>
           )}
           {page === "aiSearch" && <AISearchPage onSelect={setSelection} />}
-          {page === "collections" && (
-            <PlaceholderPage page="collections" icon={iconFor("collections")} phase="Phase 5" />
-          )}
+          {page === "collections" && <CollectionsPage />}
           {page === "settings" && <SettingsPage />}
         </main>
-        {inspectorOpen && page !== "map" && (
+        {inspectorOpen && page !== "map" && page !== "collections" && (
           <Inspector selection={INSPECTED_VIEWS.includes(page) ? selection : null} />
         )}
       </div>
@@ -126,6 +123,7 @@ export default function App() {
       <Viewer />
       <CloudDialog onOpenSettings={() => setPage("settings")} />
       <ExportDialog />
+      <AddToCollectionDialog />
     </div>
   );
 }

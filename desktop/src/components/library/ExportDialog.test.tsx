@@ -60,6 +60,7 @@ describe("ExportDialog", () => {
         include_metadata: false,
         include_location: false,
         video_mode: "copy",
+        numbered: false,
       }),
     );
     expect(await within(dialog).findByText("已导出 2 项到 D:\\Exports")).toBeInTheDocument();
