@@ -52,6 +52,10 @@ const fr: LocaleResource = {
     video: "Vidéo",
     location: "Coordonnées",
     place: "Lieu",
+    openMap: "Ouvrir dans Google Maps",
+    openMapHint: "Ouvrir Google Maps dans le navigateur (envoie ces coordonnées à Google)",
+    reveal: "Afficher dans l’Explorateur",
+    revealOffline: "Le disque n’est pas branché",
     quality: "Qualité",
     files: "Fichiers",
     fileRole: {

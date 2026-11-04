@@ -1,4 +1,4 @@
-import { ChevronRight, Cloud, Heart, ScanSearch, Sparkles, X } from "lucide-react";
+import { ChevronRight, Cloud, FolderOpen, Heart, MapPinned, ScanSearch, Sparkles, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -9,6 +9,7 @@ import {
   useAsset,
   useBatchUpdate,
   useConnection,
+  useShellActions,
   useStorageRoots,
   useUpdateAsset,
 } from "@/api/hooks";
@@ -98,6 +99,9 @@ function RootDetails({ root }: { root: StorageRoot }) {
 export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; editable?: boolean }) {
   const { t, i18n } = useTranslation();
   const conn = useConnection();
+  const shell = useShellActions();
+  const roots = useStorageRoots();
+  const offline = new Set(roots.data?.filter((root) => !root.is_available).map((root) => root.id));
   const meta = asset.metadata;
   const cover = asset.files.find((file) => file.id === asset.cover_file_id) ?? asset.files[0];
   const name = cover?.relative_path.split(/[\\/]/).pop() ?? "";
@@ -163,8 +167,17 @@ export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; 
         )}
         {asset.location && (
           <Field label={t("inspector.location")}>
-            <span className="select-text font-mono text-[11.5px]">
-              {asset.location.latitude.toFixed(5)}, {asset.location.longitude.toFixed(5)}
+            <span className="flex items-center gap-1.5">
+              <span className="select-text font-mono text-[11.5px]">
+                {asset.location.latitude.toFixed(5)}, {asset.location.longitude.toFixed(5)}
+              </span>
+              <LinkButton
+                label={t("inspector.openMap")}
+                hint={t("inspector.openMapHint")}
+                onClick={() => shell.openMap.mutate(asset.id)}
+              >
+                <MapPinned />
+              </LinkButton>
             </span>
           </Field>
         )}
@@ -187,13 +200,29 @@ export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; 
                     </span>
                   )}
                 </span>
-                <span
-                  className={cn(
-                    "block select-text break-all font-mono text-[11px]",
-                    file.status === "missing" && "line-through opacity-60",
-                  )}
-                >
-                  {file.path}
+                <span className="flex items-start gap-1">
+                  <span
+                    className={cn(
+                      "min-w-0 flex-1 select-text break-all font-mono text-[11px]",
+                      file.status === "missing" && "line-through opacity-60",
+                    )}
+                  >
+                    {file.path}
+                  </span>
+                  <LinkButton
+                    label={t("inspector.reveal")}
+                    hint={
+                      offline.has(file.storage_root_id)
+                        ? t("inspector.revealOffline")
+                        : file.status === "missing"
+                          ? t("inspector.fileMissing")
+                          : t("inspector.reveal")
+                    }
+                    disabled={offline.has(file.storage_root_id) || file.status === "missing"}
+                    onClick={() => shell.reveal.mutate(file.id)}
+                  >
+                    <FolderOpen />
+                  </LinkButton>
                 </span>
               </li>
             ))}
@@ -300,6 +329,34 @@ function Edits({ asset }: { asset: AssetDetail }) {
         />
       </div>
     </div>
+  );
+}
+
+/** A small icon button next to a value (opens something outside the app). */
+function LinkButton({
+  label,
+  hint,
+  disabled = false,
+  onClick,
+  children,
+}: {
+  label: string;
+  hint: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={hint}
+      disabled={disabled}
+      onClick={onClick}
+      className="-my-0.5 shrink-0 rounded p-0.5 text-subtle-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-3.5"
+    >
+      {children}
+    </button>
   );
 }
 

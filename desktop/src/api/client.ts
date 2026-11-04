@@ -350,6 +350,10 @@ export const api = {
   rejectedFiles: (conn: BackendConnection) =>
     request<RejectedFiles>(conn, "GET", "/api/v1/cull/rejected-files"),
 
+  /** Opens Google Maps at the asset's location in the default browser. */
+  openAssetMap: (conn: BackendConnection, assetId: number) =>
+    request<void>(conn, "POST", `/api/v1/assets/${assetId}/open-map`),
+
   revealFile: (conn: BackendConnection, fileId: number) =>
     request<void>(conn, "POST", `/api/v1/files/${fileId}/reveal`),
 

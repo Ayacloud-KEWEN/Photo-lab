@@ -531,6 +531,19 @@ export function useSuspects(pendingOnly: boolean) {
   });
 }
 
+/** Shell actions from the info panel: Google Maps at a location, a file in Explorer. */
+export function useShellActions() {
+  const conn = useConnection();
+  return {
+    openMap: useMutation({
+      mutationFn: (assetId: number) => api.openAssetMap(requireConnection(conn), assetId),
+    }),
+    reveal: useMutation({
+      mutationFn: (fileId: number) => api.revealFile(requireConnection(conn), fileId),
+    }),
+  };
+}
+
 export function useDuplicates() {
   const conn = useConnection();
   return useQuery({

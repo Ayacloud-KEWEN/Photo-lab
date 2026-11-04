@@ -51,6 +51,10 @@ const zhCN = {
     video: "视频",
     location: "位置",
     place: "地点",
+    openMap: "在谷歌地图中打开",
+    openMapHint: "在浏览器中打开谷歌地图（会把这个坐标发给谷歌）",
+    reveal: "在资源管理器中显示",
+    revealOffline: "硬盘未连接",
     quality: "画质",
     files: "文件",
     fileRole: {

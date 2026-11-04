@@ -180,3 +180,28 @@ def test_similar_groups_need_the_local_ai(client: TestClient) -> None:
 
 def test_ai_warm_up_is_a_no_op_without_the_local_ai(client: TestClient) -> None:
     assert client.post("/api/v1/ai/warm-up").status_code == 204
+
+
+def test_open_map_and_reveal_file(
+    client: TestClient, conn: sqlite3.Connection, photos: list[int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:  # fmt: skip
+    from lumen.api.v1 import assets as assets_api
+    from lumen.api.v1 import cull as cull_api
+
+    opened: list[str] = []
+    monkeypatch.setattr(assets_api, "open_in_browser", opened.append)
+    assert client.post(f"/api/v1/assets/{photos[0]}/open-map").status_code == 404  # no GPS
+    conn.execute(
+        "INSERT INTO media_locations (asset_id, latitude, longitude, source, updated_at) "
+        "VALUES (?, 48.8584, 2.2945, 'exif', ?)",
+        (photos[0], NOW),
+    )
+    assert client.post(f"/api/v1/assets/{photos[0]}/open-map").status_code == 204
+    assert opened == ["https://www.google.com/maps/search/?api=1&query=48.858400,2.294500"]
+
+    revealed: list[Path] = []
+    monkeypatch.setattr(cull_api, "reveal_in_explorer", revealed.append)
+    file_id = client.get(f"/api/v1/assets/{photos[0]}").json()["files"][0]["id"]
+    assert client.post(f"/api/v1/files/{file_id}/reveal").status_code == 204
+    assert [p.name for p in revealed] == ["IMG_0000.JPG"]

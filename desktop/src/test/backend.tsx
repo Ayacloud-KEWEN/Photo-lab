@@ -323,6 +323,7 @@ export function stubBackend(options: StubOptions = {}) {
       return json({ merged_groups: groups.length, removed_assets: groups.reduce((n, g) => n + g.asset_ids.length - 1, 0) });
     }
     if (/^\/api\/v1\/files\/\d+\/reveal$/.test(path)) return Promise.resolve(new Response(null, { status: 204 }));
+    if (/^\/api\/v1\/assets\/\d+\/open-map$/.test(path)) return Promise.resolve(new Response(null, { status: 204 }));
     if (path === "/api/v1/cull/rejected-files") {
       return json({ asset_count: 1, paths: ["D:\Photos\IMG_1.JPG", "D:\Photos\IMG_1.MOV"] });
     }

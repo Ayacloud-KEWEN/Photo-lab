@@ -52,6 +52,10 @@ const en: LocaleResource = {
     video: "Video",
     location: "Location",
     place: "Place",
+    openMap: "Open in Google Maps",
+    openMapHint: "Open Google Maps in the browser (sends these coordinates to Google)",
+    reveal: "Show in Explorer",
+    revealOffline: "The drive is not connected",
     quality: "Quality",
     files: "Files",
     fileRole: {

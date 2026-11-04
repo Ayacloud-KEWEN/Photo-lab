@@ -8,6 +8,8 @@ from starlette.concurrency import run_in_threadpool
 
 from lumen.api.deps import Connection
 from lumen.core.config import Settings
+from lumen.core.errors import NotFoundError
+from lumen.core.reveal import open_in_browser
 from lumen.schemas.assets import (
     AssetBatchUpdate,
     AssetDetail,
@@ -66,6 +68,23 @@ def batch_update(conn: Connection, body: AssetBatchUpdate) -> BatchResult:
 )  # fmt: skip
 def get_asset(conn: Connection, asset_id: int = Path(ge=1)) -> AssetDetail:
     return service.get_asset(conn, asset_id)
+
+
+@router.post(
+    "/assets/{asset_id}/open-map", status_code=204, operation_id="openAssetMap",
+    responses=NOT_FOUND,
+)  # fmt: skip
+def open_map(conn: Connection, asset_id: int = Path(ge=1)) -> None:
+    """Show where the photo was taken in Google Maps, in the default browser. Only this
+    click sends the coordinates out (as part of the link)."""
+    row = conn.execute(
+        "SELECT latitude, longitude FROM media_locations WHERE asset_id = ?", (asset_id,)
+    ).fetchone()
+    if row is None:
+        raise NotFoundError("This photo has no location", details={"id": asset_id})
+    open_in_browser(
+        f"https://www.google.com/maps/search/?api=1&query={row[0]:.6f},{row[1]:.6f}"
+    )
 
 
 @router.patch(

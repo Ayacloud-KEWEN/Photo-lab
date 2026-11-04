@@ -233,6 +233,27 @@ export interface paths {
         patch: operations["updateAsset"];
         trace?: never;
     };
+    "/api/v1/assets/{asset_id}/open-map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Map
+         * @description Show where the photo was taken in Google Maps, in the default browser. Only this
+         *     click sends the coordinates out (as part of the link).
+         */
+        post: operations["openAssetMap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assets/{asset_id}/thumbnail": {
         parameters: {
             query?: never;
@@ -3414,6 +3435,44 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AssetDetail"];
                 };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    openAssetMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Not Found */
             404: {

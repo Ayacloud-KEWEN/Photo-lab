@@ -234,6 +234,7 @@ cd backend
 | GET | `/api/v1/cull/suspects?pending_only=` | 可能模糊或曝光不当的照片（最差的在前） |
 | GET | `/api/v1/cull/rejected-files` | 淘汰照片在磁盘上的全部文件路径（只列出，不删除） |
 | POST | `/api/v1/files/{id}/reveal` | 在资源管理器中显示某个文件 |
+| POST | `/api/v1/assets/{id}/open-map` | 在默认浏览器中打开谷歌地图，定位到照片的拍摄地点（点击时才会把坐标发给谷歌） |
 | GET/POST | `/api/v1/backups` | 备份列表（含文件夹是否可用）· 立即备份 |
 | POST | `/api/v1/backups/restore` | 从列表中的备份（`name`）或任意文件（`path`）恢复，先另存“恢复前”备份 |
 | POST | `/api/v1/backups/reveal` | 在资源管理器中显示备份文件 |

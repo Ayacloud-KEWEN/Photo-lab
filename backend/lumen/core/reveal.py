@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -21,3 +22,13 @@ def reveal_in_explorer(path: Path) -> None:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+
+
+def open_in_browser(url: str) -> None:
+    """Open an https URL built by the backend in the default browser (never one from a
+    request: endpoints compose it themselves)."""
+    if not url.startswith("https://"):
+        raise LumenError("Only https links can be opened")
+    if sys.platform != "win32":
+        raise LumenError("Opening links is only supported on Windows")
+    os.startfile(url)  # Windows only
