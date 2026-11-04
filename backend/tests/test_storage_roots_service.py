@@ -7,6 +7,7 @@ import pytest
 
 from lumen.core.errors import ConflictError, InvalidPathError, NotFoundError
 from lumen.db.connection import utc_now
+from lumen.library.drives import check_roots
 from lumen.schemas.storage_roots import StorageRootCreate
 from lumen.services import storage_roots as service
 
@@ -95,7 +96,9 @@ def test_unavailable_root_is_reported(conn: sqlite3.Connection, tmp_path: Path) 
     directory.mkdir()
     root_id = _create(conn, directory)
     directory.rmdir()  # simulate a disconnected drive
+    check_roots(conn)  # what the drive watcher does every 30 s
     assert service.get_storage_root(conn, root_id).is_available is False
+    assert service.get_storage_root(conn, root_id).status == "offline"
 
 
 def test_delete_removes_records_but_not_files(conn: sqlite3.Connection, photo_dir: Path) -> None:

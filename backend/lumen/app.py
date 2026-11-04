@@ -26,6 +26,7 @@ from lumen.core.security import TokenAuthMiddleware
 from lumen.db.connection import Database
 from lumen.db.migrator import migrate
 from lumen.geo.tasks import GEO_TASK, needs_locating
+from lumen.library.drives import DriveWatcher
 from lumen.library.handlers import HANDLERS
 from lumen.library.quality import QUALITY_TASK, needs_scoring
 from lumen.services.backups import BACKUP_TASK, auto_backup_due
@@ -89,8 +90,12 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         app.state.db = db
         app.state.started_at = time.monotonic()
         runner: TaskRunner | None = None
+        watcher: DriveWatcher | None = None
         if settings.run_tasks:
             runner = TaskRunner(db, settings, HANDLERS)
+            # External drives: offline / back online / moved to another letter.
+            watcher = DriveWatcher(db, runner.wake)
+            watcher.check()
             with db.session() as conn:
                 # Places for assets located before this version (or new place data).
                 if needs_locating(conn):
@@ -100,6 +105,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
                 if auto_backup_due(conn, settings):
                     queue.enqueue(conn, BACKUP_TASK)
             runner.start()
+            watcher.start()
         app.state.task_runner = runner
         logger.info(
             "backend started",
@@ -111,6 +117,8 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             },
         )
         yield
+        if watcher is not None:
+            watcher.stop()
         if runner is not None:
             # Running tasks are put back in the queue and resume on next start.
             await run_in_threadpool(runner.stop)

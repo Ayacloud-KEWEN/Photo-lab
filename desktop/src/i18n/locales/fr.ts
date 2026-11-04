@@ -116,6 +116,7 @@ const fr: LocaleResource = {
     connecting: "Connexion au service…",
     backendUnavailable: "Impossible de joindre le service : {{message}}",
     retry: "Réessayer",
+    offlineHint: "Le disque n’est pas branché. Photos, notes et retouches sont conservées ; une fois rebranché, il revient tout seul et une importation inachevée reprend.",
     rootStatus: {
       pending_scan: "En attente d’analyse",
       scanning: "Analyse en cours",
@@ -185,6 +186,7 @@ const fr: LocaleResource = {
     live: "LIVE",
     livePlay: "Survoler pour lire la Live Photo",
     position: "{{index, number}} / {{total, number}}",
+    driveOffline: "Le disque de l’original ({{name}}) n’est pas branché : seul l’aperçu est disponible. La pleine taille, la lecture vidéo, la retouche et l’export reviennent une fois le disque branché.",
   },
   develop: {
     title: "Développement",

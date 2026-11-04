@@ -419,6 +419,7 @@ function StatusBadge({ root }: { root: StorageRoot }) {
   if (!offline && root.status === "ready") return null;
   return (
     <span
+      title={offline ? t("library.offlineHint") : undefined}
       className={cn(
         "shrink-0 rounded-full border px-2 py-0.5 text-[11px]",
         offline || root.status === "error"

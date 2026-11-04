@@ -116,6 +116,7 @@ const en: LocaleResource = {
     connecting: "Connecting to backend…",
     backendUnavailable: "Cannot reach the backend service: {{message}}",
     retry: "Retry",
+    offlineHint: "The drive is not connected. Photos, ratings and edits are kept; when it is plugged in again it comes back by itself and an unfinished import resumes.",
     rootStatus: {
       pending_scan: "Waiting for scan",
       scanning: "Scanning",
@@ -185,6 +186,7 @@ const en: LocaleResource = {
     live: "LIVE",
     livePlay: "Hover to play the Live Photo",
     position: "{{index, number}} / {{total, number}}",
+    driveOffline: "The drive with the original ({{name}}) is not connected: only the preview can be shown. Full size, video playback, editing and export work again once it is plugged in.",
   },
   develop: {
     title: "Develop",

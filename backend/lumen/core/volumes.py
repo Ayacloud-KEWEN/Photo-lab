@@ -110,3 +110,31 @@ def _windows_seek_penalty(path: Path) -> bool | None:
         return bool(result.incurs_seek_penalty) if ok else None
     finally:
         kernel32.CloseHandle(wintypes.HANDLE(handle))
+
+
+def logical_drives() -> set[str] | None:
+    """Drive letters present now (``{"C", "D", ...}``) without touching any disk; None off
+    Windows."""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+
+    mask = ctypes.WinDLL("kernel32").GetLogicalDrives()
+    return {chr(ord("A") + bit) for bit in range(26) if mask & (1 << bit)}
+
+
+def drive_letter(path: Path | str) -> str | None:
+    """The drive letter of paths like ``C:/...`` (upper case), else None (UNC, relative)."""
+    text = str(path)
+    if len(text) >= 2 and text[1] == ":" and text[0].isalpha():
+        return text[0].upper()
+    return None
+
+
+def find_volume(serial: str, letters: set[str]) -> list[str]:
+    """The drive letters (among ``letters``) showing the volume with this serial number."""
+    return [
+        letter
+        for letter in sorted(letters)
+        if get_volume_info(Path(f"{letter}:\\")).serial == serial
+    ]

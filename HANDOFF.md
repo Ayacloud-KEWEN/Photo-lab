@@ -27,7 +27,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–5 及之后的扩展（
 | `docs/PROJECT_SPEC.md` | 产品需求（原始需求，勿随意改动） |
 | `docs/phases.md` | 阶段划分 |
 | `docs/Project_Initialization.md` | Phase 1 任务书（工作方式：先查环境、提方案、经确认再实施） |
-| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-027）**，改动架构前先读 |
+| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-028）**，改动架构前先读 |
 | `README.md` | 安装、开发、测试、API 列表、快捷键 |
 
 ## 3. 环境（用户的开发机）
@@ -62,7 +62,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **160** 个测试、前端 **83** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **164** 个测试、前端 **84** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ### 4.1 在浏览器面板里用真实图库副本测试（推荐的验收方式）
 
@@ -80,7 +80,9 @@ cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ... 
    （后端默认 CORS 允许 `http://localhost:1420`）。重建时用同一个 PowerShell 脚本，Git Bash 和 PowerShell 写到的目录可能不同。
 4. 浏览器面板打开 `http://localhost:1420`，`resize_window` 设 1440×900。
    注意：自动化的鼠标拖动不会触发 HTML5 拖放（作品集排序要用脚本派发 `DragEvent` 验证）；截图偶尔是旧帧，再截一次。
-5. 结束时停掉两个进程（端口 1420/8765），重置视口。
+5. 结束时停掉两个进程（端口 1420/8765），重置视口。**只停自己启动的那两个后台任务**（用任务工具按任务 ID 停，
+   或按端口找到的 PID）。**绝不要按命令行 `-m lumen` 匹配去结束进程**：用户自己正在运行的 LUMEN Studio 后端
+   也是 `python -m lumen --watch-stdin`（父进程 `lumen-studio.exe`），2026-11-04 曾因此把用户的后端连同导入一起停掉。
 
 ## 5. 代码地图
 
@@ -176,7 +178,7 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 5. **阈值只在小样本上校准**：语义搜索 0.075、自动标签 0.25、相似照片 0.6（`services/ai.py`、`ai/labels.py`）。
 6. 失败任务没有专门的查看/重试界面（重复文件界面已完成，ADR-026）。
 7. HDR 视频转 H.264 没有色调映射（会偏灰）；显影模式里不能缩放查看细节；窗口缩放时已放大的视图不重新校正位置。
-8. 外接硬盘换盘符后需手动处理（已记录卷序列号，未自动重定位）；删除来源后缩略图缓存不会自动清理
+8. 外接硬盘换盘符后按卷序列号自动认回（ADR-028，只用单元测试验证过，subst 盘没有序列号）；删除来源后缩略图缓存不会自动清理
    （全尺寸图有 2 GB 上限，缩略图/预览图没有）。
 9. AI 标签名固定为中文（不随界面语言变化）。
 10. 性能：导入默认 8 线程（`ingest_workers`，ADR-027）；HEIC 无降采样解码（12MP 约 1 秒/张）；AI 索引约 44 张/秒；
@@ -210,6 +212,8 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 - **大图库性能**（`fix-import-performance`，ADR-027）：实况配对查询不再全表扫描；导入改为滑动窗口
   （8 线程，机械硬盘 2 个并发读）；导入期间界面少刷新；统计/地图/旅行建议/重复文件按写入代数缓存；
   相似照片用内存向量并缓存分组、分页；AI 搜索页打开时预热模型。G: 盘实测导入约快 2 倍。
+- **外接硬盘断开**（`fix-drive-offline`，ADR-028）：扫描/导入中途拔盘不再误标丢失（来源 offline、任务暂停）；
+  `library/drives.py` 每 30 秒检查，插回后自动扫描并继续导入，换盘符时按卷序列号认回；全屏浏览提示原图所在盘未连接。
 
 **用户的图库（2026-11-04 晚）**：来源 `D:\照片`（SSD）、`G:\照片整理202507`、`G:\照片整理`（USB 机械硬盘，
 14.4 万个文件、678 GB，当时仍在导入）；约 19 万个文件。性能问题先在这个规模上验证（方法见 4.1，副本 + 关闭后台任务）。

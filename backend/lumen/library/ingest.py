@@ -45,7 +45,7 @@ from lumen.media.metadata import (
     run_ffprobe,
 )
 from lumen.services.settings import get_settings
-from lumen.tasks.runner import TaskContext, TaskInterrupted
+from lumen.tasks.runner import PermanentTaskError, TaskContext, TaskInterrupted
 
 logger = logging.getLogger(__name__)
 
@@ -236,12 +236,18 @@ def _run_window(
                 if ctx.should_stop():
                     raise TaskInterrupted()
                 continue
-            group: list[WorkItem] = []
+            group: list[tuple[WorkItem, Future[None]]] = []
             while queued and len(group) < STORE_SIZE and queued[0][1].done():
-                item, future = queued.popleft()
-                future.result()  # _prepare records errors on the item; re-raise bugs
-                group.append(item)
-            _store_group(ctx, group, tools)
+                entry = queued.popleft()
+                entry[1].result()  # _prepare records errors on the item; re-raise bugs
+                group.append(entry)
+            items = [item for item, _ in group]
+            if any(item.vanished or item.read_failed for item in items) and not root_path.is_dir():
+                # The drive went away: its files are not missing, the import is just paused.
+                queued.extendleft(reversed(group))  # not charged an attempt (see below)
+                set_root_status(ctx.conn, root_id, "offline")
+                raise PermanentTaskError(f"Storage root is not reachable: {root_path}")
+            _store_group(ctx, items, tools)
             done += len(group)
             ctx.progress(done, max(total, done))
     finally:

@@ -114,6 +114,7 @@ const zhCN = {
     connecting: "正在连接后端…",
     backendUnavailable: "无法连接后端服务：{{message}}",
     retry: "重试",
+    offlineHint: "硬盘未连接。照片、评分和编辑都保留着；插上后会自动恢复，没导完的会继续导入。",
     rootStatus: {
       pending_scan: "等待扫描",
       scanning: "扫描中",
@@ -183,6 +184,7 @@ const zhCN = {
     live: "实况",
     livePlay: "悬停播放实况",
     position: "{{index, number}} / {{total, number}}",
+    driveOffline: "原图所在的硬盘（{{name}}）未连接：只能查看预览，放大原图、播放视频、显影和导出要等硬盘接上后才能使用。",
   },
   develop: {
     title: "显影",

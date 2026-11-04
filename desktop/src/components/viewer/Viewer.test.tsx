@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useLibraryState } from "@/library/state";
-import { makeAsset, Providers, stubBackend } from "@/test/backend";
+import { makeAsset, Providers, root, stubBackend } from "@/test/backend";
 
 import { Viewer } from "./Viewer";
 
@@ -29,6 +29,17 @@ afterEach(() => {
 });
 
 describe("Viewer", () => {
+  it("says when the drive with the original is unplugged", async () => {
+    stubBackend({
+      assets: ids.map((id) => makeAsset(id)),
+      roots: [{ ...root, display_name: "照片整理", status: "offline", is_available: false }],
+    });
+    renderViewer();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "原图所在的硬盘（照片整理）未连接",
+    );
+  });
+
   it("shows the preview and moves with the arrow keys", async () => {
     stubBackend({ assets: ids.map((id) => makeAsset(id)) });
     renderViewer();

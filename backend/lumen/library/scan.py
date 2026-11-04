@@ -8,8 +8,10 @@ survive a disconnected drive or a moved folder).
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 from dataclasses import dataclass
+from pathlib import Path
 
 from lumen.db.connection import transaction, utc_now
 from lumen.library.common import (
@@ -22,7 +24,7 @@ from lumen.library.common import (
     set_root_status,
 )
 from lumen.media.walker import FoundFile, walk_media
-from lumen.tasks.runner import TaskContext
+from lumen.tasks.runner import PermanentTaskError, TaskContext
 
 logger = logging.getLogger(__name__)
 
@@ -68,15 +70,21 @@ def _scan(ctx: TaskContext) -> ScanStats:
             pending.clear()
         ctx.progress(stats.seen)
 
-    for found in walk_media(root_path, ctx.should_stop):
+    unreadable: list[Path] = []
+    for found in walk_media(root_path, ctx.should_stop, unreadable.append):
         pending.append(found)
         stats.seen += 1
         if len(pending) >= FLUSH_EVERY:
             flush()
     flush()  # also raises if cancelled/interrupted before we mark files missing
 
+    if not root_path.is_dir():
+        # The drive went away during the scan: the files it did not reach are not missing.
+        set_root_status(conn, root_id, "offline")
+        raise PermanentTaskError(f"Storage root is not reachable: {root_path}")
     now = utc_now()
     with transaction(conn):
+        _keep_unreadable(conn, root_id, root_path, unreadable, generation)
         stats.missing = conn.execute(
             """
             UPDATE media_files SET status = 'missing', updated_at = ?
@@ -159,6 +167,42 @@ def _apply(
                     (generation, now, now, existing[0]),
                 )
                 stats.unchanged += 1
+
+
+def _keep_unreadable(
+    conn: sqlite3.Connection,
+    root_id: int,
+    root_path: Path,
+    unreadable: list[Path],
+    generation: int,
+) -> None:
+    """Files under folders (or files) that could not be read count as seen: a folder
+    without permission, or a drive hiccup, does not make its photos "missing"."""
+    if not unreadable:
+        return
+    prefixes = [path_key(os.path.relpath(path, root_path)) for path in unreadable]
+    if any(prefix in (".", "") for prefix in prefixes):
+        prefixes = [""]  # the root itself
+    unseen = conn.execute(
+        "SELECT id, relative_path_key FROM media_files "
+        "WHERE storage_root_id = ? AND scan_generation < ? AND status = 'present'",
+        (root_id, generation),
+    ).fetchall()
+    kept = [
+        (generation, row["id"])
+        for row in unseen
+        if any(
+            not prefix
+            or row["relative_path_key"] == prefix
+            or row["relative_path_key"].startswith(prefix + os.sep)
+            for prefix in prefixes
+        )
+    ]
+    conn.executemany("UPDATE media_files SET scan_generation = ? WHERE id = ?", kept)
+    logger.warning(
+        "unreadable paths during scan; their files are kept",
+        extra={"storage_root_id": root_id, "paths": len(unreadable), "files": len(kept)},
+    )
 
 
 def switch_missing_covers(conn: sqlite3.Connection, root_id: int, now: str) -> int:

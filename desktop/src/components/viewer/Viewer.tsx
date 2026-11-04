@@ -10,6 +10,7 @@ import {
   Minimize2,
   ScanSearch,
   SlidersHorizontal,
+  Unplug,
   X,
 } from "lucide-react";
 import {
@@ -34,6 +35,7 @@ import {
   useAiStatus,
   useAsset,
   useConnection,
+  useStorageRoots,
   useUpdateAsset,
   useVideoEdit,
 } from "@/api/hooks";
@@ -101,6 +103,10 @@ function ViewerOverlay({
   const aiStatus = useAiStatus();
   const { findSimilar, openExport, openCollect } = useLibraryState();
   const aiReady = !!aiStatus.data?.local.enabled && !!aiStatus.data?.local.model_downloaded;
+  const roots = useStorageRoots();
+  // The drive holding the original is unplugged: only the cached previews can be shown.
+  const coverRoot = detail?.files.find((file) => file.id === detail.cover_file_id)?.storage_root_id;
+  const offlineRoot = roots.data?.find((root) => root.id === coverRoot && !root.is_available);
 
   useEffect(() => rootRef.current?.focus(), []);
   const zoomRef = useRef<ZoomHandle>(null);
@@ -253,6 +259,15 @@ function ViewerOverlay({
           </IconButton>
         </div>
       </header>
+      {offlineRoot && (
+        <div
+          role="status"
+          className="flex shrink-0 items-center justify-center gap-2 bg-amber-500/15 px-3 py-1.5 text-[12px] text-amber-200"
+        >
+          <Unplug className="size-3.5 shrink-0" />
+          {t("viewer.driveOffline", { name: offlineRoot.display_name })}
+        </div>
+      )}
 
       {showDevelop && conn && detail && isVideo ? (
         <VideoWorkspace

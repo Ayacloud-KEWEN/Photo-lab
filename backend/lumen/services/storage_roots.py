@@ -13,7 +13,7 @@ import sqlite3
 from pathlib import Path
 
 from lumen.core.errors import ConflictError, InvalidPathError, NotFoundError
-from lumen.core.volumes import get_volume_info
+from lumen.core.volumes import drive_letter, get_volume_info, logical_drives
 from lumen.db.connection import transaction, utc_now
 from lumen.library.common import SCAN_TASK
 from lumen.schemas.storage_roots import StorageRoot, StorageRootCreate, StorageRootStats
@@ -92,6 +92,16 @@ def _stats(conn: sqlite3.Connection, root_id: int | None = None) -> dict[int, St
     }
 
 
+def _available(row: sqlite3.Row) -> bool:
+    """Whether the root can be read now. For a drive letter this uses the list of drives
+    (no disk access, so a sleeping external disk is not woken by the UI's polling); the
+    drive watcher marks such a root offline / back online (``library/drives.py``)."""
+    letter, drives = drive_letter(row["path"]), logical_drives()
+    if letter is not None and drives is not None:
+        return letter in drives and row["status"] != "offline"
+    return os.path.isdir(row["path"])
+
+
 def _to_model(row: sqlite3.Row, stats: StorageRootStats | None = None) -> StorageRoot:
     return StorageRoot(
         stats=stats or StorageRootStats(),
@@ -99,7 +109,7 @@ def _to_model(row: sqlite3.Row, stats: StorageRootStats | None = None) -> Storag
         path=row["path"],
         display_name=row["display_name"],
         status=row["status"],
-        is_available=os.path.isdir(row["path"]),
+        is_available=_available(row),
         volume_serial=row["volume_serial"],
         volume_label=row["volume_label"],
         last_scanned_at=row["last_scanned_at"],

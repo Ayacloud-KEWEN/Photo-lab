@@ -51,12 +51,16 @@ def _is_hidden(entry: os.DirEntry[str]) -> bool:
     return bool(attributes & _HIDDEN_OR_SYSTEM)
 
 
-def walk_media(root: Path, should_stop: Callable[[], bool] = lambda: False) -> Iterator[FoundFile]:
+def walk_media(
+    root: Path,
+    should_stop: Callable[[], bool] = lambda: False,
+    on_error: Callable[[Path], None] = lambda path: None,
+) -> Iterator[FoundFile]:
     """Yield supported media files below ``root``.
 
     Symlinks and junctions are not followed (avoids loops and escaping the root);
     hidden/system entries and known system folders are skipped; unreadable
-    directories are logged and skipped.
+    directories and files are logged, reported to ``on_error`` and skipped.
     """
     stack = [root]
     while stack:
@@ -70,6 +74,7 @@ def walk_media(root: Path, should_stop: Callable[[], bool] = lambda: False) -> I
             logger.warning(
                 "cannot read directory", extra={"path": str(directory), "error": str(exc)}
             )
+            on_error(directory)
             continue
 
         subdirectories: list[Path] = []
@@ -92,6 +97,7 @@ def walk_media(root: Path, should_stop: Callable[[], bool] = lambda: False) -> I
                 info = entry.stat(follow_symlinks=False)
             except OSError as exc:
                 logger.warning("cannot stat file", extra={"path": entry.path, "error": str(exc)})
+                on_error(Path(entry.path))
                 continue
             yield FoundFile(
                 relative_path=os.path.relpath(entry.path, root),
