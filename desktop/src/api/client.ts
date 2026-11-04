@@ -14,6 +14,7 @@ import type {
   BackupInfo,
   BackupList,
   CollectionCreate,
+  DuplicateReport,
   CollectionDetail,
   CollectionUpdate,
   CloudPreview,
@@ -32,6 +33,8 @@ import type {
   VideoRecipe,
   HealthResponse,
   MapPoints,
+  MergeRequest,
+  MergeResult,
   RejectedFiles,
   RenditionVariant,
   RestoreRequest,
@@ -337,6 +340,12 @@ export const api = {
       "GET",
       `/api/v1/cull/suspects${toSearchParams({ pending_only: pendingOnly })}`,
     ),
+
+  listDuplicates: (conn: BackendConnection) =>
+    request<DuplicateReport>(conn, "GET", "/api/v1/duplicates"),
+
+  mergeDuplicates: (conn: BackendConnection, body: MergeRequest) =>
+    request<MergeResult>(conn, "POST", "/api/v1/duplicates/merge", body),
 
   rejectedFiles: (conn: BackendConnection) =>
     request<RejectedFiles>(conn, "GET", "/api/v1/cull/rejected-files"),

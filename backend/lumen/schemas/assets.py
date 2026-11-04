@@ -255,21 +255,3 @@ class AssetDetail(BaseModel):
     cull_flag: CullFlag
     quality: AssetQuality | None = Field(description="Photos only, once measured")
     files: list[AssetFile]
-
-
-class DuplicateFile(BaseModel):
-    file_id: int
-    asset_id: int | None
-    storage_root_id: int
-    path: str
-
-
-class DuplicateGroup(BaseModel):
-    fingerprint: str
-    size_bytes: int
-    files: list[DuplicateFile]
-
-
-class DuplicateReport(BaseModel):
-    groups: list[DuplicateGroup]
-    reclaimable_bytes: int = Field(description="Bytes used by redundant copies in these groups")

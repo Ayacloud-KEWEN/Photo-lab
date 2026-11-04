@@ -17,7 +17,6 @@ from lumen.schemas.assets import (
     AssetQuery,
     AssetUpdate,
     BatchResult,
-    DuplicateReport,
     MapPoints,
     RenditionVariant,
     Timeline,
@@ -164,11 +163,3 @@ def get_map_points(
     conn: Connection, query: Filters, limit: int = Query(default=100_000, ge=1, le=200_000)
 ) -> MapPoints:
     return service.map_points(conn, query, limit=limit)
-
-
-@router.get("/duplicates", response_model=DuplicateReport, operation_id="listDuplicates")
-def list_duplicates(
-    conn: Connection, limit: int = Query(default=100, ge=1, le=1000)
-) -> DuplicateReport:
-    """Groups of files with identical content. Reported only; nothing is merged or deleted."""
-    return service.find_duplicates(conn, limit=limit)

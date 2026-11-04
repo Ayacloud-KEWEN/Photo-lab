@@ -11,12 +11,13 @@ import {
   type SimilarParams,
 } from "@/api/hooks";
 import type { CullFlag, CullItem, SimilarGroup } from "@/api/types";
+import { DuplicatesTab } from "@/components/cull/DuplicatesTab";
 import { Button } from "@/components/ui/button";
 import { cleanQuery, useLibraryState } from "@/library/state";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type Tab = "similar" | "suspects";
+type Tab = "similar" | "suspects" | "duplicates";
 
 const WINDOWS = [1, 10, 60] as const;
 const SIMILARITIES = [
@@ -50,7 +51,7 @@ export function CullPage({ onShowLibrary }: { onShowLibrary: () => void }) {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h1 className="text-lg font-medium">{t("nav.cull")}</h1>
         <div role="tablist" className="flex h-7 rounded-md border p-0.5">
-          {(["similar", "suspects"] as const).map((id) => (
+          {(["similar", "suspects", "duplicates"] as const).map((id) => (
             <button
               key={id}
               type="button"
@@ -88,7 +89,9 @@ export function CullPage({ onShowLibrary }: { onShowLibrary: () => void }) {
       <p className="mb-5 max-w-3xl text-[12px] leading-relaxed text-muted-foreground">
         {t("cull.hint")}
       </p>
-      {tab === "similar" ? <SimilarTab /> : <SuspectsTab />}
+      {tab === "similar" && <SimilarTab />}
+      {tab === "suspects" && <SuspectsTab />}
+      {tab === "duplicates" && <DuplicatesTab />}
     </div>
   );
 }

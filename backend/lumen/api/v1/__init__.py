@@ -7,6 +7,7 @@ from lumen.api.v1 import (
     collections,
     cull,
     develop,
+    duplicates,
     exports,
     health,
     settings,
@@ -21,6 +22,7 @@ router.include_router(storage_roots.router)
 router.include_router(tasks.router)
 router.include_router(assets.router)
 router.include_router(develop.router)
+router.include_router(duplicates.router)
 router.include_router(exports.router)
 router.include_router(collections.router)
 router.include_router(cull.router)

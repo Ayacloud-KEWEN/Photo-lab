@@ -42,9 +42,6 @@ from lumen.schemas.assets import (
     AssetTag,
     CityFacet,
     CountryFacet,
-    DuplicateFile,
-    DuplicateGroup,
-    DuplicateReport,
     FacetValue,
     MapPoint,
     MapPoints,
@@ -738,51 +735,6 @@ def _edited_rendition_path(
         logger.warning("edited render failed", extra={"asset_id": asset_id, "error": str(exc)})
         raise RenditionUnavailableError(f"Cannot render edited preview: {exc}") from exc
     return path
-
-
-def find_duplicates(conn: sqlite3.Connection, *, limit: int) -> DuplicateReport:
-    groups_rows = conn.execute(
-        """
-        SELECT fingerprint, MAX(size_bytes) AS size_bytes, COUNT(*) AS copies
-        FROM media_files
-        WHERE fingerprint IS NOT NULL AND status = 'present' AND file_role != 'sidecar'
-        GROUP BY fingerprint
-        HAVING COUNT(*) > 1
-        ORDER BY MAX(size_bytes) * (COUNT(*) - 1) DESC
-        LIMIT ?
-        """,
-        (limit,),
-    ).fetchall()
-
-    groups: list[DuplicateGroup] = []
-    reclaimable = 0
-    for group in groups_rows:
-        files = conn.execute(
-            """
-            SELECT f.id, f.asset_id, f.storage_root_id, f.relative_path, r.path AS root_path
-            FROM media_files f JOIN storage_roots r ON r.id = f.storage_root_id
-            WHERE f.fingerprint = ? AND f.status = 'present' AND f.file_role != 'sidecar'
-            ORDER BY f.id
-            """,
-            (group["fingerprint"],),
-        ).fetchall()
-        groups.append(
-            DuplicateGroup(
-                fingerprint=group["fingerprint"],
-                size_bytes=group["size_bytes"],
-                files=[
-                    DuplicateFile(
-                        file_id=f["id"],
-                        asset_id=f["asset_id"],
-                        storage_root_id=f["storage_root_id"],
-                        path=os.path.join(f["root_path"], f["relative_path"]),
-                    )
-                    for f in files
-                ],
-            )
-        )
-        reclaimable += int(group["size_bytes"]) * (int(group["copies"]) - 1)
-    return DuplicateReport(groups=groups, reclaimable_bytes=reclaimable)
 
 
 def original_file(conn: sqlite3.Connection, asset_id: int) -> tuple[Path, str]:

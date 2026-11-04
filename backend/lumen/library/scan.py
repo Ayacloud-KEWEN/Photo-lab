@@ -8,6 +8,7 @@ survive a disconnected drive or a moved folder).
 from __future__ import annotations
 
 import logging
+import sqlite3
 from dataclasses import dataclass
 
 from lumen.db.connection import transaction, utc_now
@@ -83,6 +84,8 @@ def _scan(ctx: TaskContext) -> ScanStats:
             """,
             (now, root_id, generation),
         ).rowcount
+        if stats.missing:
+            switch_missing_covers(conn, root_id, now)
         conn.execute(
             "UPDATE storage_roots SET scan_generation = ?, updated_at = ? WHERE id = ?",
             (generation, now, root_id),
@@ -156,3 +159,23 @@ def _apply(
                     (generation, now, now, existing[0]),
                 )
                 stats.unchanged += 1
+
+
+def switch_missing_covers(conn: sqlite3.Connection, root_id: int, now: str) -> int:
+    """Photos whose cover file went missing show another present copy instead (a merged
+    duplicate, or the RAW of a RAW+JPEG pair). Call inside a transaction."""
+    present = """
+        SELECT f.id FROM media_files f
+        WHERE f.asset_id = media_assets.id AND f.status = 'present'
+          AND f.file_role = 'primary' AND f.ingest_state = 'done'
+        ORDER BY f.extension IN ('jpg', 'jpeg', 'heic', 'heif', 'png') DESC, f.id LIMIT 1
+    """
+    return conn.execute(
+        f"""
+        UPDATE media_assets SET cover_file_id = ({present}), updated_at = ?
+        WHERE cover_file_id IN (
+                SELECT id FROM media_files WHERE storage_root_id = ? AND status = 'missing')
+          AND EXISTS ({present})
+        """,
+        (now, root_id),
+    ).rowcount

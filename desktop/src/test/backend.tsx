@@ -125,6 +125,8 @@ export interface StubOptions {
   similar?: number[];
   /** Likely rejects (asset ids). */
   suspects?: number[];
+  /** Groups of duplicate copies (asset ids; the first is the suggested keep). */
+  duplicates?: number[][];
   /** Cloud behaviour: "ok" (default), "no_vision" or "not_configured". */
   cloud?: "ok" | "no_vision" | "not_configured";
   /** Saved video edits by asset id. */
@@ -302,6 +304,22 @@ export function stubBackend(options: StubOptions = {}) {
       }));
       return json({ items, total: items.length });
     }
+    if (path === "/api/v1/duplicates") {
+      const groups = (options.duplicates ?? []).map((ids) => ({
+        keep_asset_id: ids[0]!, redundant_bytes: 2_000_000,
+        assets: ids.map((id) => ({
+          asset: assets.find((a) => a.id === id)!, tag_count: id === ids[0] ? 2 : 0, collection_count: 0,
+          files: [{ file_id: id * 10, path: `D:\Photos\copy${id}\IMG.JPG`, folder: "Photos",
+                    role: "primary", size_bytes: 2_000_000, modified_at: "2024-06-01T10:00:00" }],
+        })),
+      })); // prettier-ignore
+      return json({ groups, group_count: groups.length, redundant_bytes: groups.length * 2_000_000 });
+    }
+    if (path === "/api/v1/duplicates/merge") {
+      const groups = (body as { groups: { asset_ids: number[] }[] }).groups;
+      return json({ merged_groups: groups.length, removed_assets: groups.reduce((n, g) => n + g.asset_ids.length - 1, 0) });
+    }
+    if (/^\/api\/v1\/files\/\d+\/reveal$/.test(path)) return Promise.resolve(new Response(null, { status: 204 }));
     if (path === "/api/v1/cull/rejected-files") {
       return json({ asset_count: 1, paths: ["D:\Photos\IMG_1.JPG", "D:\Photos\IMG_1.MOV"] });
     }

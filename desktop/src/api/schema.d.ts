@@ -337,26 +337,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/duplicates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Duplicates
-         * @description Groups of files with identical content. Reported only; nothing is merged or deleted.
-         */
-        get: operations["listDuplicates"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/assets/{asset_id}/edit": {
         parameters: {
             query?: never;
@@ -516,6 +496,46 @@ export interface paths {
          *     comma-separated pixel counts.
          */
         post: operations["renderDevelopPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Duplicates
+         * @description Photos listed more than once because their files are identical copies.
+         */
+        get: operations["listDuplicates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/duplicates/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Duplicates
+         * @description Fold copies into one photo with several file locations. No file is touched.
+         */
+        post: operations["mergeDuplicates"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1918,35 +1938,72 @@ export interface components {
              */
             edge: number;
         };
+        /** DuplicateAsset */
+        DuplicateAsset: {
+            asset: components["schemas"]["AssetSummary"];
+            /** Files */
+            files: components["schemas"]["DuplicateFile"][];
+            /**
+             * Tag Count
+             * @description User and imported tags (not AI labels)
+             */
+            tag_count: number;
+            /** Collection Count */
+            collection_count: number;
+        };
         /** DuplicateFile */
         DuplicateFile: {
             /** File Id */
             file_id: number;
-            /** Asset Id */
-            asset_id: number | null;
-            /** Storage Root Id */
-            storage_root_id: number;
-            /** Path */
+            /**
+             * Path
+             * @description Absolute path
+             */
             path: string;
+            /**
+             * Folder
+             * @description Storage root display name
+             */
+            folder: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "primary" | "companion" | "sidecar";
+            /** Size Bytes */
+            size_bytes: number;
+            /** Modified At */
+            modified_at: string;
         };
         /** DuplicateGroup */
         DuplicateGroup: {
-            /** Fingerprint */
-            fingerprint: string;
-            /** Size Bytes */
-            size_bytes: number;
-            /** Files */
-            files: components["schemas"]["DuplicateFile"][];
+            /**
+             * Assets
+             * @description The copy to keep first
+             */
+            assets: components["schemas"]["DuplicateAsset"][];
+            /**
+             * Keep Asset Id
+             * @description The copy merging keeps (the one with most user data)
+             */
+            keep_asset_id: number;
+            /**
+             * Redundant Bytes
+             * @description Space the extra copies take on disk
+             */
+            redundant_bytes: number;
         };
         /** DuplicateReport */
         DuplicateReport: {
-            /** Groups */
-            groups: components["schemas"]["DuplicateGroup"][];
             /**
-             * Reclaimable Bytes
-             * @description Bytes used by redundant copies in these groups
+             * Groups
+             * @description Largest redundant size first
              */
-            reclaimable_bytes: number;
+            groups: components["schemas"]["DuplicateGroup"][];
+            /** Group Count */
+            group_count: number;
+            /** Redundant Bytes */
+            redundant_bytes: number;
         };
         /** EditBatch */
         EditBatch: {
@@ -2336,6 +2393,31 @@ export interface components {
              * @description Towns of the points
              */
             places: components["schemas"]["NamedPlace"][];
+        };
+        /** MergeGroup */
+        MergeGroup: {
+            /** Asset Ids */
+            asset_ids: number[];
+            /**
+             * Keep Asset Id
+             * @description Default: the suggested copy
+             */
+            keep_asset_id?: number | null;
+        };
+        /** MergeRequest */
+        MergeRequest: {
+            /** Groups */
+            groups: components["schemas"]["MergeGroup"][];
+        };
+        /** MergeResult */
+        MergeResult: {
+            /** Merged Groups */
+            merged_groups: number;
+            /**
+             * Removed Assets
+             * @description Library entries folded into another (files untouched)
+             */
+            removed_assets: number;
         };
         /** ModelDownload */
         ModelDownload: {
@@ -3563,37 +3645,6 @@ export interface operations {
             };
         };
     };
-    listDuplicates: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DuplicateReport"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     getEdit: {
         parameters: {
             query?: never;
@@ -4075,6 +4126,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listDuplicates: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mergeDuplicates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeResult"];
                 };
             };
             /** @description Validation Error */

@@ -303,8 +303,8 @@ def test_api_end_to_end(tmp_path: Path, library: Path) -> None:
 
         duplicates = client.get("/api/v1/duplicates").json()
         assert len(duplicates["groups"]) == 1
-        assert len(duplicates["groups"][0]["files"]) == 2
-        assert duplicates["reclaimable_bytes"] > 0
+        assert len(duplicates["groups"][0]["assets"]) == 2  # see test_duplicates.py
+        assert duplicates["redundant_bytes"] > 0
 
         scan = client.post(f"/api/v1/storage-roots/{root['id']}/scan")
         assert scan.status_code == 202 and scan.json()["kind"] == "scan_storage_root"

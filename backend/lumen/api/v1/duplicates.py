@@ -1,0 +1,29 @@
+from __future__ import annotations
+
+from fastapi import APIRouter, Query, Request
+
+from lumen.api.deps import Connection, wake_task_runner
+from lumen.geo.tasks import GEO_TASK, needs_locating
+from lumen.schemas.duplicates import DuplicateReport, MergeRequest, MergeResult
+from lumen.services import duplicates as service
+from lumen.tasks import queue
+
+router = APIRouter(prefix="/duplicates", tags=["duplicates"])
+
+
+@router.get("", response_model=DuplicateReport, operation_id="listDuplicates")
+def list_duplicates(
+    conn: Connection, limit: int = Query(default=500, ge=1, le=5000)
+) -> DuplicateReport:
+    """Photos listed more than once because their files are identical copies."""
+    return service.find_duplicates(conn, limit=limit)
+
+
+@router.post("/merge", response_model=MergeResult, operation_id="mergeDuplicates")
+def merge_duplicates(conn: Connection, request: Request, body: MergeRequest) -> MergeResult:
+    """Fold copies into one photo with several file locations. No file is touched."""
+    result = service.merge_duplicates(conn, body)
+    if needs_locating(conn):  # a copy's location may now belong to the kept photo
+        queue.enqueue(conn, GEO_TASK)
+        wake_task_runner(request)
+    return result

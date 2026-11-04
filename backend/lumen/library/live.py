@@ -113,7 +113,7 @@ def pair_live_photo(conn: sqlite3.Connection, file_id: int, now: str) -> bool:
 def _attach_clip(
     conn: sqlite3.Connection, photo_id: int, clip_file_id: int, video_id: int, now: str
 ) -> None:
-    _merge_user_data(conn, keep=photo_id, drop=video_id, now=now)
+    merge_user_data(conn, keep=photo_id, drop=video_id, now=now)
     conn.execute(
         "UPDATE media_files SET asset_id = ?, updated_at = ? WHERE asset_id = ?",
         (photo_id, now, video_id),  # the clip and any sidecars of it
@@ -129,8 +129,9 @@ def _attach_clip(
     )
 
 
-def _merge_user_data(conn: sqlite3.Connection, *, keep: int, drop: int, now: str) -> None:
-    """Carry what the user set on the clip's own asset over to the photo asset."""
+def merge_user_data(conn: sqlite3.Connection, *, keep: int, drop: int, now: str) -> None:
+    """Carry what the user set on one asset (``drop``) over to another (``keep``): the
+    clip's own asset to the Live Photo, or a duplicate copy to the copy kept."""
     kept = conn.execute("SELECT * FROM media_assets WHERE id = ?", (keep,)).fetchone()
     gone = conn.execute("SELECT * FROM media_assets WHERE id = ?", (drop,)).fetchone()
     rating, source = kept["rating"], kept["rating_source"]

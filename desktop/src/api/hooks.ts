@@ -22,6 +22,7 @@ import type {
   EditRecipe,
   EditState,
   ExportRequest,
+  MergeRequest,
   RestoreRequest,
   StorageRootCreate,
   VideoEditState,
@@ -57,6 +58,7 @@ export const queryKeys = {
   // Under "library": flag changes (batch / asset updates) refresh them.
   similarGroups: (params: SimilarParams) => ["library", "cull", "similar", params] as const,
   suspects: (pendingOnly: boolean) => ["library", "cull", "suspects", pendingOnly] as const,
+  duplicates: ["library", "cull", "duplicates"] as const,
 };
 
 const ASSET_PAGE_SIZE = 300;
@@ -499,6 +501,29 @@ export function useSuspects(pendingOnly: boolean) {
     enabled: conn !== null,
     placeholderData: (previous) => previous,
   });
+}
+
+export function useDuplicates() {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.duplicates,
+    queryFn: () => api.listDuplicates(requireConnection(conn)),
+    enabled: conn !== null,
+  });
+}
+
+export function useDuplicateActions() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  return {
+    merge: useMutation({
+      mutationFn: (body: MergeRequest) => api.mergeDuplicates(requireConnection(conn), body),
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.library }),
+    }),
+    reveal: useMutation({
+      mutationFn: (fileId: number) => api.revealFile(requireConnection(conn), fileId),
+    }),
+  };
 }
 
 export function useBackups() {
