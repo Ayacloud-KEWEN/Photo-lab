@@ -950,6 +950,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Backups */
+        get: operations["listBackups"];
+        put?: never;
+        /** Create Backup */
+        post: operations["createBackup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backups/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reveal Backup */
+        post: operations["revealBackup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backups/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Backup */
+        post: operations["restoreBackup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1050,6 +1102,28 @@ export interface components {
              * @default false
              */
             cloud_include_location: boolean;
+            /**
+             * Backup Auto
+             * @description Back up the database automatically
+             * @default true
+             */
+            backup_auto: boolean;
+            /**
+             * Backup Interval Days
+             * @default 7
+             */
+            backup_interval_days: number;
+            /**
+             * Backup Keep
+             * @description Automatic backups kept
+             * @default 10
+             */
+            backup_keep: number;
+            /**
+             * Backup Folder
+             * @description Backup folder (default: the data folder's backups)
+             */
+            backup_folder?: string | null;
         };
         /** AppSettingsUpdate */
         AppSettingsUpdate: {
@@ -1069,6 +1143,17 @@ export interface components {
             cloud_base_url?: string | null;
             /** Cloud Include Location */
             cloud_include_location?: boolean | null;
+            /** Backup Auto */
+            backup_auto?: boolean | null;
+            /** Backup Interval Days */
+            backup_interval_days?: number | null;
+            /** Backup Keep */
+            backup_keep?: number | null;
+            /**
+             * Backup Folder
+             * @description An empty string goes back to the default
+             */
+            backup_folder?: string | null;
         };
         /** AssetBatchUpdate */
         AssetBatchUpdate: {
@@ -1349,6 +1434,49 @@ export interface components {
              * @description Empty string clears
              */
             notes?: string | null;
+        };
+        /** BackupInfo */
+        BackupInfo: {
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /**
+             * Kind
+             * @description manual, auto, pre_restore (made before a restore), migration (made before a database upgrade) or other (a file chosen by the user)
+             * @enum {string}
+             */
+            kind: "manual" | "auto" | "pre_restore" | "migration" | "other";
+            /**
+             * Created At
+             * @description Local time, ISO 8601
+             */
+            created_at: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Schema Version */
+            schema_version: number;
+            /** Asset Count */
+            asset_count: number;
+        };
+        /** BackupList */
+        BackupList: {
+            /** Folder */
+            folder: string;
+            /** Default Folder */
+            default_folder: string;
+            /**
+             * Folder Available
+             * @description False when e.g. the backup drive is unplugged
+             */
+            folder_available: boolean;
+            /** Last Auto At */
+            last_auto_at: string | null;
+            /**
+             * Items
+             * @description Newest first
+             */
+            items: components["schemas"]["BackupInfo"][];
         };
         /** BatchResult */
         BatchResult: {
@@ -2140,6 +2268,32 @@ export interface components {
             zh: string;
             /** Fr */
             fr: string;
+        };
+        /** RestoreRequest */
+        RestoreRequest: {
+            /**
+             * Name
+             * @description A listed backup
+             */
+            name?: string | null;
+            /**
+             * Path
+             * @description Any backup file
+             */
+            path?: string | null;
+        };
+        /** RestoreResult */
+        RestoreResult: {
+            restored: components["schemas"]["BackupInfo"];
+            /** @description The database as it was before restoring */
+            safety_backup: components["schemas"]["BackupInfo"];
+            /** Schema Version */
+            schema_version: number;
+        };
+        /** RevealRequest */
+        RevealRequest: {
+            /** Name */
+            name: string;
         };
         /**
          * SemanticPage
@@ -4884,6 +5038,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalysisResult"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listBackups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupList"];
+                };
+            };
+        };
+    };
+    createBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupInfo"];
+                };
+            };
+        };
+    };
+    revealBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevealRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restoreBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreResult"];
                 };
             };
             /** @description Validation Error */

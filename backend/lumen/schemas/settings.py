@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import PureWindowsPath
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -10,6 +11,12 @@ from lumen.ai.models import DEFAULT_MODEL, MODELS
 def _check_model(value: str | None) -> str | None:
     if value is not None and value not in MODELS:
         raise ValueError(f"unknown model, expected one of: {', '.join(MODELS)}")
+    return value
+
+
+def _check_folder(value: str | None) -> str | None:
+    if value and not (PureWindowsPath(value).is_absolute() or value.startswith("/")):
+        raise ValueError("the backup folder must be an absolute path")
     return value
 
 
@@ -38,6 +45,12 @@ class AppSettings(BaseModel):
     cloud_include_location: bool = Field(
         default=False, description="Default for sending GPS coordinates with a cloud request"
     )
+    backup_auto: bool = Field(default=True, description="Back up the database automatically")
+    backup_interval_days: int = Field(default=7, ge=1, le=90)
+    backup_keep: int = Field(default=10, ge=1, le=100, description="Automatic backups kept")
+    backup_folder: str | None = Field(
+        default=None, description="Backup folder (default: the data folder's backups)"
+    )
 
 
 class AppSettingsUpdate(BaseModel):
@@ -51,6 +64,19 @@ class AppSettingsUpdate(BaseModel):
     cloud_model: str | None = Field(default=None, min_length=1, max_length=100)
     cloud_base_url: str | None = Field(default=None, max_length=200)
     cloud_include_location: bool | None = None
+    backup_auto: bool | None = None
+    backup_interval_days: int | None = Field(default=None, ge=1, le=90)
+    backup_keep: int | None = Field(default=None, ge=1, le=100)
+    backup_folder: str | None = Field(
+        default=None, max_length=500, description="An empty string goes back to the default"
+    )
+
+    @field_validator("backup_folder")
+    @classmethod
+    def _valid_folder(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _check_folder(value.strip()) if value.strip() else ""
 
     @field_validator("ai_model")
     @classmethod

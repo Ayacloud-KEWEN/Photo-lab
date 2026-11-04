@@ -5,6 +5,7 @@ import { useBackendStatus } from "@/api/backend-context";
 import { useHealth, useSettings, useUpdateSettings } from "@/api/hooks";
 import { BasemapPicker } from "@/components/map/BasemapPicker";
 import { CloudSettings, LocalAiSettings } from "@/components/settings/AiSettings";
+import { BackupSettings } from "@/components/settings/BackupSettings";
 import { LANGUAGES, setLanguage, type LanguageCode } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +84,10 @@ export function SettingsPage() {
 
       <Section title={t("settings.cloud")}>
         <CloudSettings />
+      </Section>
+
+      <Section title={t("settings.backup")}>
+        <BackupSettings />
       </Section>
 
       <Section title={t("settings.about")}>

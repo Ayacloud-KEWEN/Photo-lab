@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from lumen.api.v1 import (
     ai,
     assets,
+    backups,
     collections,
     develop,
     exports,
@@ -24,3 +25,4 @@ router.include_router(collections.router)
 router.include_router(tags.router)
 router.include_router(settings.router)
 router.include_router(ai.router)
+router.include_router(backups.router)

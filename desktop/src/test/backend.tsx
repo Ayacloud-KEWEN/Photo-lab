@@ -274,8 +274,39 @@ export function stubBackend(options: StubOptions = {}) {
         cloud_model: "deepseek-flash",
         cloud_base_url: "https://api.deepseek.com",
         cloud_include_location: false,
+        backup_auto: true,
+        backup_interval_days: 7,
+        backup_keep: 10,
+        backup_folder: null,
         ...((body as object | undefined) ?? {}),
       });
+    }
+    if (path.startsWith("/api/v1/backups")) {
+      const folder = "C:\Users\me\AppData\Local\LUMEN Studio\backups";
+      const backup = (name: string, kind: string, created: string) => ({
+        name, path: `${folder}\${name}`, kind, created_at: created, size_bytes: 7_843_840,
+        schema_version: 11, asset_count: 676,
+      }); // prettier-ignore
+      if (path === "/api/v1/backups" && method === "GET") {
+        return json({
+          folder, default_folder: folder, folder_available: true,
+          last_auto_at: "2026-11-01T09:00:00",
+          items: [
+            backup("lumen-auto-20261101-090000-000.db", "auto", "2026-11-01T09:00:00"),
+            backup("lumen-backup-20261020-180000-000.db", "manual", "2026-10-20T18:00:00"),
+          ],
+        }); // prettier-ignore
+      }
+      if (path === "/api/v1/backups" && method === "POST") {
+        return json(backup("lumen-backup-20261104-120000-000.db", "manual", "2026-11-04T12:00:00"), 201);
+      }
+      if (path === "/api/v1/backups/restore") {
+        return json({
+          restored: backup("lumen-backup-20261020-180000-000.db", "manual", "2026-10-20T18:00:00"),
+          safety_backup: backup("lumen-before-restore-20261104-120100-000.db", "pre_restore", "2026-11-04T12:01:00"),
+          schema_version: 11,
+        }); // prettier-ignore
+      }
     }
     if (path === "/api/v1/ai/status") {
       return json({

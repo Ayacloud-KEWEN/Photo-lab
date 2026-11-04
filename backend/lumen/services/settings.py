@@ -24,6 +24,9 @@ def update_settings(conn: sqlite3.Connection, data: AppSettingsUpdate) -> AppSet
     now = utc_now()
     with transaction(conn):
         for key, value in data.model_dump(exclude_none=True).items():
+            if key == "backup_folder" and value == "":  # back to the default folder
+                conn.execute("DELETE FROM app_settings WHERE key = ?", (key,))
+                continue
             conn.execute(
                 """
                 INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)

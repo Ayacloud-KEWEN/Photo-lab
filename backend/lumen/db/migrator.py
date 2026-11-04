@@ -91,6 +91,32 @@ def _backup(db: Database, backup_dir: Path, from_version: int) -> Path:
     return target
 
 
+def check_compatible(
+    conn: sqlite3.Connection, migrations: list[Migration] | None = None
+) -> dict[int, str]:
+    """The applied migrations (version -> checksum), if this application can use the database.
+
+    Raises ``DatabaseMigrationError`` for a newer schema or a modified migration.
+    """
+    migrations = load_migrations() if migrations is None else migrations
+    known = {m.version: m for m in migrations}
+    latest = max(known, default=0)
+    applied = _applied(conn)
+    newer = sorted(v for v in applied if v not in known)
+    if newer:
+        raise DatabaseMigrationError(
+            f"Database schema version {max(newer)} is newer than this application "
+            f"supports ({latest}). Please update LUMEN Studio."
+        )
+    for version, checksum in applied.items():
+        if known[version].checksum != checksum:
+            raise DatabaseMigrationError(
+                f"Migration {version:04d}_{known[version].name} was modified after it "
+                "was applied. Restore the original file."
+            )
+    return applied
+
+
 def migrate(
     db: Database,
     *,
@@ -99,26 +125,11 @@ def migrate(
 ) -> int:
     """Apply pending migrations and return the resulting schema version."""
     migrations = load_migrations() if migrations is None else migrations
-    known = {m.version: m for m in migrations}
-    latest = max(known, default=0)
+    latest = max((m.version for m in migrations), default=0)
 
     with db.session() as conn:
         _ensure_bookkeeping(conn)
-        applied = _applied(conn)
-
-        newer = sorted(v for v in applied if v not in known)
-        if newer:
-            raise DatabaseMigrationError(
-                f"Database schema version {max(newer)} is newer than this application "
-                f"supports ({latest}). Please update LUMEN Studio."
-            )
-        for version, checksum in applied.items():
-            if known[version].checksum != checksum:
-                raise DatabaseMigrationError(
-                    f"Migration {version:04d}_{known[version].name} was modified after it "
-                    "was applied. Restore the original file."
-                )
-
+        applied = check_compatible(conn, migrations)
         pending = [m for m in migrations if m.version not in applied]
         if not pending:
             return max(applied, default=0)

@@ -7,7 +7,8 @@ import logging
 import sqlite3
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,6 +20,10 @@ logger = logging.getLogger(__name__)
 
 PROGRESS_INTERVAL_S = 0.5
 IDLE_POLL_S = 2.0
+
+
+class RunnerBusyError(Exception):
+    """The runner could not be paused: a task did not stop in time."""
 
 
 class TaskCancelled(Exception):
@@ -102,6 +107,21 @@ class TaskRunner:
             self._thread.join(timeout)
             if self._thread.is_alive():
                 logger.warning("task runner did not stop in time")
+
+    @contextmanager
+    def paused(self, timeout: float = 15.0) -> Iterator[None]:
+        """Run a block with no task running (the running one goes back to the queue)."""
+        self.stop(timeout)
+        if self._thread is not None and self._thread.is_alive():
+            # Let it carry on rather than leave the queue without a runner.
+            self._stop.clear()
+            raise RunnerBusyError("a background task is still running")
+        try:
+            yield
+        finally:
+            self._stop = threading.Event()
+            self._wake.clear()
+            self.start()
 
     def enqueue(self, kind: str, **kwargs: Any) -> int:
         with self._db.session() as conn:

@@ -230,6 +230,9 @@ cd backend
 | POST | `/api/v1/ai/cloud/preview` | 列出将要发送的内容（图片、字段、目标），不联网 |
 | POST | `/api/v1/ai/cloud/analyze` | 云端分析，必须带 `confirmed: true`；结果按内容缓存 |
 | GET | `/api/v1/assets/{id}/analyses` | 该照片以往的云端分析 |
+| GET/POST | `/api/v1/backups` | 备份列表（含文件夹是否可用）· 立即备份 |
+| POST | `/api/v1/backups/restore` | 从列表中的备份（`name`）或任意文件（`path`）恢复，先另存“恢复前”备份 |
+| POST | `/api/v1/backups/reveal` | 在资源管理器中显示备份文件 |
 | GET | `/api/v1/duplicates` | 内容完全相同的文件分组（只报告，不合并、不删除） |
 | GET | `/api/v1/openapi.json` | OpenAPI 文档 |
 
@@ -265,7 +268,8 @@ cd backend
 - 本地 AI 完全在本机运行；云端分析默认关闭，每次都先显示将上传的内容（缩小后的图片和字段），
   确认后才发送；GPS 默认不发送；API 密钥只保存在 Windows 凭据管理器中。
 - 后端只监听 `127.0.0.1`，每次启动使用随机端口和随机令牌。
-- 升级数据库结构前，自动将旧数据库备份到 `backups\`。
+- 升级数据库结构前，自动将旧数据库备份到 `backups\`；另有自动备份（默认每周、保留 10 份）、手动备份和恢复
+  （设置 → 备份与恢复；恢复前会先另存当前数据）。
 
 ## AI 模型对照实验
 

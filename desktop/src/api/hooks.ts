@@ -22,6 +22,7 @@ import type {
   EditRecipe,
   EditState,
   ExportRequest,
+  RestoreRequest,
   StorageRootCreate,
   VideoEditState,
   VideoRecipe,
@@ -34,6 +35,7 @@ export const queryKeys = {
   storageRoots: ["storage-roots"] as const,
   tasks: ["tasks", "active"] as const,
   settings: ["settings"] as const,
+  backups: ["backups"] as const,
   library: ["library"] as const,
   assets: (query: AssetQuery) => ["library", "assets", query] as const,
   facets: ["library", "facets"] as const,
@@ -468,6 +470,35 @@ export function useUpdateSettings() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
     },
   });
+}
+
+export function useBackups() {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.backups,
+    queryFn: () => api.listBackups(requireConnection(conn)),
+    enabled: conn !== null,
+  });
+}
+
+export function useBackupActions() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.backups });
+  return {
+    create: useMutation({
+      mutationFn: () => api.createBackup(requireConnection(conn)),
+      onSuccess: refresh,
+    }),
+    restore: useMutation({
+      mutationFn: (body: RestoreRequest) => api.restoreBackup(requireConnection(conn), body),
+      // Everything may have changed: refetch every query.
+      onSuccess: () => queryClient.invalidateQueries(),
+    }),
+    reveal: useMutation({
+      mutationFn: (name: string) => api.revealBackup(requireConnection(conn), name),
+    }),
+  };
 }
 
 /** Local AI and cloud configuration; polled quickly while AI work is running. */

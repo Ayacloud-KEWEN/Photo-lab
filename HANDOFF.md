@@ -16,7 +16,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–5 全部完成并合并
 | Phase 3 | 照片墙、全屏浏览、时间轴、地图、星级/收藏/标签/备注、搜索筛选 | ✅ |
 | Phase 4 | SigLIP2 语义搜索/相似照片/自动标签、OpenCLIP 对照工具、DeepSeek 云端分析 | ✅ |
 | Phase 5 | 显影（非破坏性编辑）、导出与预设、视频剪辑与导出、旅行作品集 | ✅ |
-| 之后 | 实况照片配对、图库悬停播放实况、地图标记修复、全屏滚轮缩放、测试中发现的问题修复、可选底图样式、离线地名 | ✅ |
+| 之后 | 实况照片配对、图库悬停播放实况、地图标记修复、全屏滚轮缩放、测试中发现的问题修复、可选底图样式、离线地名、备份与恢复 | ✅ |
 
 `docs/phases.md` 只规划到 Phase 5，**没有 Phase 6**。下一步做什么由用户决定（候选见第 9 节末尾）。
 
@@ -62,7 +62,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **146** 个测试、前端 **77** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **151** 个测试、前端 **79** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ### 4.1 在浏览器面板里用真实图库副本测试（推荐的验收方式）
 
@@ -170,7 +170,7 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 1. **RAW 显影和 RAW 解码都没用真实 RAW 文件验证过**（用户库里没有 RAW；`develop.engine._decode_raw` 只测了错误路径）。
    用户有 CR3/NEF/ARW/DNG 样本时优先验证。
 2. **DeepSeek 未用真实 API 密钥测试过**（“生成旅行故事”、云端点评等都依赖它）；用户填入密钥后用“测试连接”确认。
-3. **SPEC 中 MVP 的“数据库备份与恢复”尚未实现**（目前只有迁移前自动备份到 `backups/`）。
+3. ~~数据库备份与恢复~~ 已完成（ADR-024）；恢复只在副本上实测过，用户真实数据未做过恢复。
 4. **正式打包**：PyInstaller 打成 `lumen-backend.exe`（Tauri externalBin，`backend.rs` 已预留），随附 ExifTool/FFmpeg，
    NSIS 安装包；AI 栈体积大（torch ~3 GB），需决定是否作为可选组件。当前启动程序依赖项目里的 `backend\.venv`。
 5. **阈值只在小样本上校准**：语义搜索 0.075、自动标签 0.25、相似照片 0.6（`services/ai.py`、`ai/labels.py`）。
@@ -201,9 +201,10 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
   设置页和地图页左下角切换，`setStyle` 原地换底图（见 ARCHITECTURE 第 16 节）。
 - **离线地名**（`offline-places`，迁移 0010，ADR-023）：GeoNames 数据随程序发布（`lumen/geo/`），检查器/筛选/搜索/
   地图/旅行建议显示城市·地区·国家；`python -m lumen.geo.build <目录>` 重新生成数据。
+- **数据库备份与恢复**（`db-backup`，ADR-024）：自动/手动备份、可换文件夹、恢复前另存当前数据，不重启进程
+  （`services/backups.py`、`TaskRunner.paused()`）。SPEC 的 MVP 项至此全部完成。
 
 **下一步候选**（等用户选，按价值排序的建议）：
-1. 数据库备份与恢复（SPEC 的 MVP 要求，唯一没做的 MVP 项）。
 2. 正式打包（安装包，不再依赖项目里的 `.venv`）。
 3. 重复文件与失败任务的管理界面。
 4. 作品集幻灯片放映 / 导出为网页画廊；旅行故事保存到作品集；离线地名给旅行自动命名。

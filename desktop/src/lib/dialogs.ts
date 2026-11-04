@@ -12,6 +12,21 @@ export async function pickDirectory(title: string): Promise<string | null> {
   return typed?.trim() || null;
 }
 
+/** Pick a LUMEN Studio database file (a backup). Resolves to `null` when cancelled. */
+export async function pickDatabaseFile(title: string, filterName: string): Promise<string | null> {
+  if (isTauri()) {
+    const selected = await open({
+      multiple: false,
+      directory: false,
+      title,
+      filters: [{ name: filterName, extensions: ["db"] }],
+    });
+    return typeof selected === "string" ? selected : null;
+  }
+  const typed = window.prompt(title);
+  return typed?.trim() || null;
+}
+
 export async function confirmAction(
   message: string,
   options: { title: string; okLabel: string; cancelLabel: string },

@@ -8,6 +8,7 @@ from lumen.ai.pipeline import AI_DOWNLOAD_TASK, AI_INDEX_TASK
 from lumen.api.deps import Connection, wake_task_runner
 from lumen.schemas.settings import AppSettings, AppSettingsUpdate
 from lumen.services import settings as service
+from lumen.services.backups import BACKUP_TASK, auto_backup_due
 from lumen.tasks import queue
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -25,5 +26,10 @@ def update_settings(conn: Connection, request: Request, body: AppSettingsUpdate)
         # Enabling AI (or switching model) downloads the model if needed, then indexes.
         downloaded = model_downloaded(get_spec(updated.ai_model))
         queue.enqueue(conn, AI_INDEX_TASK if downloaded else AI_DOWNLOAD_TASK)
+        wake_task_runner(request)
+    if (body.backup_auto or body.backup_folder is not None) and auto_backup_due(
+        conn, request.app.state.settings
+    ):
+        queue.enqueue(conn, BACKUP_TASK)
         wake_task_runner(request)
     return updated

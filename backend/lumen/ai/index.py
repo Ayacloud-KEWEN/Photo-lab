@@ -31,6 +31,13 @@ class VectorIndex:
         with self._lock:
             self._generation[model_id] = self._generation.get(model_id, 0) + 1
 
+    def clear(self) -> None:
+        """Forget every cached matrix (the database was replaced)."""
+        with self._lock:
+            for model_id in {*self._cache, *self._generation}:
+                self._generation[model_id] = self._generation.get(model_id, 0) + 1
+            self._cache.clear()
+
     def _matrix(self, conn: sqlite3.Connection, model_id: str) -> _Matrix:
         with self._lock:
             generation = self._generation.get(model_id, 0)

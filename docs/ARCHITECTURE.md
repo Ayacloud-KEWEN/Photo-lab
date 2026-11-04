@@ -339,3 +339,23 @@ storage_roots ──scan──▶ media_files (pending) ──ingest──▶ as
   删除了位置的资产同时删除地名。
 - **接口**：资产详情 `place`；筛选 `country`（ISO 代码）/ `place_id`；统计 `places`（国家 → 城市）；
   地图点 `p` + `places`；旅行建议 `cities`/`countries`。前端按界面语言显示（`lib/places.ts`）。
+
+## 27. 数据库备份与恢复（ADR-024）
+
+- **备份**（`services/backups.py`）：用 SQLite 在线备份 API 把 `lumen.db` 复制成一个独立文件，应用照常运行。
+  先写 `*.partial`，`PRAGMA quick_check` 通过后再改名，所以不会留下写了一半的备份。内容是全部用户数据
+  （评分、标签、备注、编辑、作品集、AI 向量与标签、地名、设置）；缩略图缓存可重建，不备份；
+  云端 API 密钥在 Windows 凭据管理器里，不在数据库中。
+- **文件名**（本地时间，精确到毫秒，按名称排序即按时间）：`lumen-backup-*`（手动）、`lumen-auto-*`（自动）、
+  `lumen-before-restore-*`（恢复前自动另存）；迁移器升级前写的 `lumen-v000N-*` 也列出来，可以恢复。
+- **设置**：`backup_auto`（默认开）、`backup_interval_days`（默认 7）、`backup_keep`（默认 10，只删除最旧的
+  **自动**备份，其他种类从不删除）、`backup_folder`（默认 `<数据目录>ackups`，建议换到另一块硬盘；
+  传空字符串恢复默认）。启动时（以及开启自动备份或更换文件夹时）如果距上一次自动备份已满间隔、且库里有资产，
+  就排队 `db_backup` 任务；文件夹不可用时任务失败、不重试，设置页显示"找不到文件夹"。
+- **恢复**：可以选列表里的备份，或任意 `.db` 文件（换电脑时）。先只读打开做 `integrity_check`、确认是 LUMEN 数据库、
+  用迁移器的 `check_compatible` 拒绝更新版本或被改过的迁移；然后暂停后台任务（`TaskRunner.paused()`，正在运行的
+  任务放回队列；15 秒内停不下来就返回 409）、另存一份"恢复前"备份、用备份 API 把备份内容逐页写回正在使用的数据库
+  （不重启进程，其他连接之后看到新内容）、运行迁移把旧版本升级到当前版本，再清空内存中的 AI 向量缓存、
+  按需排队地名任务。备份相关的四个设置保持恢复前的值（不随备份回退）。前端成功后让全部查询失效重新获取。
+- **在资源管理器中显示**：`core/reveal.py` 用 `explorer /select,` 打开（stdin 为 DEVNULL），只接受列表里的备份名。
+- 接口：`GET/POST /backups`、`POST /backups/restore`（`name` 或 `path`）、`POST /backups/reveal`。

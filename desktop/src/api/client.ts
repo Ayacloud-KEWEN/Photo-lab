@@ -11,6 +11,8 @@ import type {
   AssetPage,
   AssetUpdate,
   BatchResult,
+  BackupInfo,
+  BackupList,
   CollectionCreate,
   CollectionDetail,
   CollectionUpdate,
@@ -31,6 +33,8 @@ import type {
   HealthResponse,
   MapPoints,
   RenditionVariant,
+  RestoreRequest,
+  RestoreResult,
   SemanticPage,
   StorageRoot,
   StorageRootCreate,
@@ -318,6 +322,17 @@ export const api = {
 
   updateSettings: (conn: BackendConnection, body: AppSettingsUpdate) =>
     request<AppSettings>(conn, "PATCH", "/api/v1/settings", body),
+
+  listBackups: (conn: BackendConnection) => request<BackupList>(conn, "GET", "/api/v1/backups"),
+
+  createBackup: (conn: BackendConnection) =>
+    request<BackupInfo>(conn, "POST", "/api/v1/backups"),
+
+  restoreBackup: (conn: BackendConnection, body: RestoreRequest) =>
+    request<RestoreResult>(conn, "POST", "/api/v1/backups/restore", body),
+
+  revealBackup: (conn: BackendConnection, name: string) =>
+    request<void>(conn, "POST", "/api/v1/backups/reveal", { name }),
 
   getAiStatus: (conn: BackendConnection) => request<AIStatus>(conn, "GET", "/api/v1/ai/status"),
 
