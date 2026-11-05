@@ -83,8 +83,13 @@ export function LocalAiSettings() {
           {local.enabled && local.model_downloaded && (
             <Row label="">
               <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                {indexing && <Loader2 className="size-3.5 animate-spin text-highlight" />}
+                {indexing?.status === "running" && (
+                  <Loader2 className="size-3.5 animate-spin text-highlight" />
+                )}
                 {t("settings.analysed", { indexed: local.indexed, total: local.total })}
+                {indexing?.status === "pending" && (
+                  <span className="text-subtle-foreground">· {t("settings.analyseQueued")}</span>
+                )}
                 {!indexing && local.indexed < local.total && (
                   <Button size="sm" variant="secondary" onClick={() => actions.index.mutate()}>
                     {t("settings.reindex")}

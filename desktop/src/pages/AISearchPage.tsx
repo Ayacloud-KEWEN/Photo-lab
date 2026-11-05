@@ -113,6 +113,7 @@ function SearchView({ onSelect }: { onSelect: (selection: Selection) => void }) 
   const { t } = useTranslation();
   const conn = useConnection();
   const status = useAiStatus();
+  const tasks = useActiveTasks();
   const { query, setQuery, openViewer, similarTo, findSimilar } = useLibraryState();
   const [draft, setDraft] = useState("");
   const [text, setText] = useState("");
@@ -154,6 +155,13 @@ function SearchView({ onSelect }: { onSelect: (selection: Selection) => void }) 
   };
 
   const local = status.data?.local;
+  const indexTask = tasks.data?.find((task) => task.kind === "ai_index_assets");
+  const indexKey =
+    indexTask?.status === "running"
+      ? "aiSearch.indexing"
+      : indexTask
+        ? "aiSearch.indexQueued"
+        : "aiSearch.indexPartial";
   const examples = t("aiSearch.examples").split("|");
   const error = results.error instanceof ApiError ? results.error.message : results.error?.message;
 
@@ -218,7 +226,7 @@ function SearchView({ onSelect }: { onSelect: (selection: Selection) => void }) 
         <FilterBar query={query} onChange={setQuery} sortable={false} />
         <p className="text-xs text-subtle-foreground">
           {local && local.indexed < local.total
-            ? t("aiSearch.indexing", { current: local.indexed, total: local.total })
+            ? t(indexKey, { current: local.indexed, total: local.total })
             : results.data
               ? t("aiSearch.results", { count: relevant })
               : t("aiSearch.hint")}

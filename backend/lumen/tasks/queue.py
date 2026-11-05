@@ -21,6 +21,17 @@ from lumen.db.connection import transaction, utc_now
 ACTIVE_STATUSES = ("pending", "running")
 RETRY_BASE_DELAY = timedelta(seconds=10)
 
+# Work derived from imported media (ADR-030): it picks up where it stopped, so it runs
+# after anything else and gives way when other work is queued (scanning a new folder,
+# an export…). Kept as strings: the handlers import this module.
+BACKGROUND_KINDS = frozenset({"geo_locate_assets", "quality_score_assets", "ai_index_assets"})
+BACKGROUND_PRIORITY = 0
+FOREGROUND_PRIORITY = 10
+
+
+def priority_for(kind: str) -> int:
+    return BACKGROUND_PRIORITY if kind in BACKGROUND_KINDS else FOREGROUND_PRIORITY
+
 
 def _later(delay: timedelta) -> str:
     return (datetime.now(UTC) + delay).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
@@ -41,13 +52,16 @@ def enqueue(
     *,
     storage_root_id: int | None = None,
     payload: dict[str, Any] | None = None,
-    priority: int = 0,
+    priority: int | None = None,
     unique: bool = True,
 ) -> int:
     """Queue a task, or return the id of an identical one that is already active.
 
     ``unique=False`` always queues a new task (e.g. two exports of different photos).
+    ``priority`` defaults to the kind's (``priority_for``).
     """
+    if priority is None:
+        priority = priority_for(kind)
     now = utc_now()
     with transaction(conn):
         existing = (
@@ -100,6 +114,38 @@ def claim_next(conn: sqlite3.Connection) -> sqlite3.Row | None:
             (now, now, row["id"]),
         )
     return get(conn, int(row["id"]))
+
+
+def has_higher_pending(conn: sqlite3.Connection, priority: int) -> bool:
+    """Whether a task that outranks ``priority`` is waiting and could run now."""
+    row = conn.execute(
+        """
+        SELECT EXISTS (
+            SELECT 1 FROM tasks
+            WHERE status = 'pending' AND priority > ? AND (run_after IS NULL OR run_after <= ?)
+        )
+        """,
+        (priority, utc_now()),
+    ).fetchone()
+    return bool(row[0])
+
+
+def apply_priorities(conn: sqlite3.Connection) -> int:
+    """Give active tasks their kind's priority (tasks queued by earlier versions had 0)."""
+    marks = ",".join("?" * len(BACKGROUND_KINDS))
+    cursor = conn.execute(
+        f"""
+        UPDATE tasks
+        SET priority = CASE WHEN kind IN ({marks}) THEN ? ELSE ? END
+        WHERE status IN ('pending', 'running')
+          AND priority != CASE WHEN kind IN ({marks}) THEN ? ELSE ? END
+        """,
+        (
+            *sorted(BACKGROUND_KINDS), BACKGROUND_PRIORITY, FOREGROUND_PRIORITY,
+            *sorted(BACKGROUND_KINDS), BACKGROUND_PRIORITY, FOREGROUND_PRIORITY,
+        ),
+    )  # fmt: skip
+    return cursor.rowcount
 
 
 def report_progress(
@@ -182,7 +228,10 @@ def mark_failed(conn: sqlite3.Connection, task_id: int, error: str, *, retry: bo
 
 
 def mark_interrupted(conn: sqlite3.Connection, task_id: int) -> None:
-    """Put a running task back in the queue without counting the attempt (app shutdown)."""
+    """Put a running task back in the queue without counting the attempt.
+
+    Used on app shutdown and when a background task gives way to other work.
+    """
     conn.execute(
         """
         UPDATE tasks

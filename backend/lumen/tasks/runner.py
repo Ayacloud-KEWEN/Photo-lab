@@ -34,6 +34,10 @@ class TaskInterrupted(Exception):
     """The application is shutting down; the task resumes on next start."""
 
 
+class TaskYielded(Exception):
+    """A background task gives way to queued work that outranks it; it resumes later."""
+
+
 class PermanentTaskError(Exception):
     """A failure that retrying cannot fix (e.g. the drive is disconnected)."""
 
@@ -48,18 +52,24 @@ class TaskContext:
     payload: dict[str, Any]
     stop_event: threading.Event
     enqueue: Callable[..., int]
+    priority: int = queue.FOREGROUND_PRIORITY
     _last_report: float = field(default=0.0)
     _current: int = field(default=0)
     _total: int | None = field(default=None)
 
     def progress(self, current: int, total: int | None = None, *, force: bool = False) -> None:
-        """Record progress (throttled) and stop the handler if cancelled or shutting down."""
+        """Record progress (throttled) and stop the handler if cancelled, shutting down or
+        outranked by queued work (background tasks only)."""
         self._current, self._total = current, total
         now = time.monotonic()
         if force or now - self._last_report >= PROGRESS_INTERVAL_S:
             self._last_report = now
             if not queue.report_progress(self.conn, self.task_id, current, total):
                 raise TaskCancelled()
+            if self.priority < queue.FOREGROUND_PRIORITY and queue.has_higher_pending(
+                self.conn, self.priority
+            ):
+                raise TaskYielded()
         if self.stop_event.is_set():
             raise TaskInterrupted()
 
@@ -92,6 +102,7 @@ class TaskRunner:
     def start(self) -> None:
         with self._db.session() as conn:
             recovered = queue.recover_interrupted(conn)
+            queue.apply_priorities(conn)
         if recovered:
             logger.info("requeued interrupted tasks", extra={"count": recovered})
         self._thread = threading.Thread(target=self._loop, name="task-runner", daemon=True)
@@ -161,22 +172,32 @@ class TaskRunner:
             payload=json.loads(task["payload"] or "{}"),
             stop_event=self._stop,
             enqueue=self.enqueue,
+            priority=int(task["priority"]),
         )
         started = time.monotonic()
+        status = "succeeded"
         logger.info("task started", extra={**log, "attempt": task["attempts"]})
         try:
             with background_writes():
                 outcome = handler(ctx)
         except TaskCancelled:
+            status = "cancelled"
             queue.mark_cancelled(conn, task_id)
             logger.info("task cancelled", extra=log)
         except TaskInterrupted:
+            status = "interrupted"
             queue.mark_interrupted(conn, task_id)
             logger.info("task interrupted by shutdown", extra=log)
+        except TaskYielded:
+            status = "yielded"
+            queue.mark_interrupted(conn, task_id)
+            logger.info("task yielded to queued work", extra=log)
         except PermanentTaskError as exc:
+            status = "failed"
             queue.mark_failed(conn, task_id, str(exc), retry=False)
             logger.warning("task failed", extra={**log, "error": str(exc)})
         except Exception as exc:
+            status = "error"
             outcome = queue.mark_failed(conn, task_id, f"{type(exc).__name__}: {exc}", retry=True)
             logger.exception("task error", extra={**log, "outcome": outcome})
         else:
@@ -185,6 +206,10 @@ class TaskRunner:
             # The work is over: cached library views refresh on the next request.
             bump_write_generation(background=False)
             logger.info(
-                "task succeeded",
-                extra={**log, "duration_s": round(time.monotonic() - started, 2)},
+                "task finished",
+                extra={
+                    **log,
+                    "status": status,
+                    "duration_s": round(time.monotonic() - started, 2),
+                },
             )

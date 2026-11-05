@@ -29,13 +29,43 @@ def test_enqueue_reuses_active_task(conn: sqlite3.Connection) -> None:
 
 def test_claim_respects_priority_and_order(conn: sqlite3.Connection) -> None:
     low = queue.enqueue(conn, "a")
-    high = queue.enqueue(conn, "b", priority=5)
+    high = queue.enqueue(conn, "b", priority=20)
     later = queue.enqueue(conn, "c")
     claimed = [queue.claim_next(conn)["id"] for _ in range(3)]  # type: ignore[index]
     assert claimed == [high, low, later]
     assert queue.claim_next(conn) is None
     row = queue.get(conn, high)
     assert (row["status"], row["attempts"]) == ("running", 1)
+
+
+def test_background_kinds_queue_after_other_work(conn: sqlite3.Connection) -> None:
+    from lumen.ai.pipeline import AI_INDEX_TASK
+    from lumen.geo.tasks import GEO_TASK
+    from lumen.library.common import SCAN_TASK
+    from lumen.library.quality import QUALITY_TASK
+
+    assert {AI_INDEX_TASK, GEO_TASK, QUALITY_TASK} == queue.BACKGROUND_KINDS
+    quality = queue.enqueue(conn, QUALITY_TASK)
+    ai = queue.enqueue(conn, AI_INDEX_TASK)
+    scan = queue.enqueue(conn, SCAN_TASK, storage_root_id=None)
+    assert queue.has_higher_pending(conn, queue.BACKGROUND_PRIORITY)
+    claimed = [queue.claim_next(conn)["id"] for _ in range(3)]  # type: ignore[index]
+    assert claimed == [scan, quality, ai]
+    assert not queue.has_higher_pending(conn, queue.BACKGROUND_PRIORITY)
+
+
+def test_apply_priorities_fixes_tasks_from_earlier_versions(conn: sqlite3.Connection) -> None:
+    finished = queue.enqueue(conn, "export_assets", priority=0)
+    queue.claim_next(conn)
+    queue.mark_succeeded(conn, finished)
+    quality = queue.enqueue(conn, "quality_score_assets", priority=0)
+    scan = queue.enqueue(conn, "scan_storage_root", priority=0)
+    assert queue.apply_priorities(conn) == 1  # only the scan was wrong
+    assert queue.get(conn, scan)["priority"] == queue.FOREGROUND_PRIORITY
+    assert queue.get(conn, quality)["priority"] == queue.BACKGROUND_PRIORITY
+    assert queue.get(conn, finished)["priority"] == 0  # finished tasks are left alone
+    assert queue.claim_next(conn)["id"] == scan  # type: ignore[index]
+    assert queue.apply_priorities(conn) == 0
 
 
 def test_failure_is_retried_with_backoff_then_failed(conn: sqlite3.Connection) -> None:
@@ -155,3 +185,68 @@ def test_runner_shutdown_requeues_running_task(db: Database, settings: Settings)
     with db.session() as conn:
         row = queue.get(conn, task_id)
         assert (row["status"], row["attempts"]) == ("pending", 0)
+
+
+def test_background_task_gives_way_to_queued_work(db: Database, settings: Settings) -> None:
+    """A long background task (AI analysis…) pauses while a new folder is scanned."""
+    order: list[str] = []
+    started = threading.Event()
+    runs = {"n": 0}
+
+    def background(ctx: TaskContext) -> None:
+        runs["n"] += 1
+        order.append(f"background-{runs['n']}")
+        started.set()
+        if runs["n"] > 1:
+            return  # resumed after the scan: the remaining work is done
+        while True:
+            ctx.progress(1, 2)
+            time.sleep(0.01)
+
+    def scan(ctx: TaskContext) -> None:
+        order.append("scan")
+
+    runner = TaskRunner(db, settings, {"ai_index_assets": background, "scan_storage_root": scan})
+    runner.start()
+    try:
+        with db.session() as conn:
+            background_id = runner.enqueue("ai_index_assets")
+            assert started.wait(5)
+            scan_id = runner.enqueue("scan_storage_root")
+            assert _wait_for(conn, scan_id, {"succeeded"}) == "succeeded"
+            assert _wait_for(conn, background_id, {"succeeded"}) == "succeeded"
+            assert order == ["background-1", "scan", "background-2"]
+            assert queue.get(conn, background_id)["attempts"] == 1  # yielding is free
+    finally:
+        runner.stop()
+
+
+def test_foreground_tasks_do_not_yield(db: Database, settings: Settings) -> None:
+    order: list[str] = []
+    started = threading.Event()
+    release = threading.Event()
+
+    def ingest(ctx: TaskContext) -> None:
+        order.append("ingest")
+        started.set()
+        while not release.is_set():
+            ctx.progress(1, 2)
+            time.sleep(0.01)
+
+    def export(ctx: TaskContext) -> None:
+        order.append("export")
+
+    runner = TaskRunner(db, settings, {"ingest_storage_root": ingest, "export_assets": export})
+    runner.start()
+    try:
+        with db.session() as conn:
+            ingest_id = runner.enqueue("ingest_storage_root")
+            assert started.wait(5)
+            export_id = runner.enqueue("export_assets")
+            time.sleep(1.2)  # a couple of progress reports
+            assert _status(conn, ingest_id) == "running"
+            release.set()
+            assert _wait_for(conn, export_id, {"succeeded"}) == "succeeded"
+            assert order == ["ingest", "export"]
+    finally:
+        runner.stop()

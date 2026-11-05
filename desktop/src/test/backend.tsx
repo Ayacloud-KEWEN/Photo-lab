@@ -119,7 +119,7 @@ export interface StubOptions {
   roots?: StorageRoot[];
   assets?: AssetSummary[];
   /** Local AI state reported by /ai/status. */
-  ai?: { enabled?: boolean; downloaded?: boolean; installed?: boolean };
+  ai?: { enabled?: boolean; downloaded?: boolean; installed?: boolean; indexed?: number };
   /** The online map setting. */
   mapOnline?: boolean;
   /** Active background tasks reported by /tasks. */
@@ -373,7 +373,7 @@ export function stubBackend(options: StubOptions = {}) {
           model_id: "siglip2-so400m-patch14-384",
           model_downloaded: options.ai?.downloaded ?? false,
           model_loaded: false,
-          indexed: assets.length,
+          indexed: options.ai?.indexed ?? assets.length,
           total: assets.length,
           models: [
             {

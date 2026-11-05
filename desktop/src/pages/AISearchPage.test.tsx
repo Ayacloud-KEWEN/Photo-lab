@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fakeViewport, makeAsset, Providers, stubBackend, type StubOptions } from "@/test/backend";
+import { makeTask } from "@/test/tasks";
 
 import { AISearchPage } from "./AISearchPage";
 
@@ -56,6 +57,25 @@ describe("AISearchPage", () => {
     expect(screen.queryByRole("img", { name: "IMG_1.JPG" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "显示 1 张相关度较低的照片" }));
     expect(await screen.findByRole("img", { name: "IMG_1.JPG" })).toBeInTheDocument();
+  });
+
+  it("says the analysis is queued rather than running", async () => {
+    renderPage({
+      ai: { enabled: true, downloaded: true, indexed: 1 },
+      assets: [1, 2, 3].map((id) => makeAsset(id)),
+      tasks: [makeTask(1, "ai_index_assets", { status: "pending" })],
+    });
+    expect(await screen.findByText(/已分析 1 \/ 3 张照片，其余的在排队/)).toBeInTheDocument();
+    expect(screen.queryByText(/正在分析照片/)).not.toBeInTheDocument();
+  });
+
+  it("shows the analysis progress while it runs", async () => {
+    renderPage({
+      ai: { enabled: true, downloaded: true, indexed: 1 },
+      assets: [1, 2, 3].map((id) => makeAsset(id)),
+      tasks: [makeTask(1, "ai_index_assets")],
+    });
+    expect(await screen.findByText(/正在分析照片 1 \/ 3/)).toBeInTheDocument();
   });
 
   it("runs an example query with one click", async () => {
