@@ -5,7 +5,9 @@ from fastapi import APIRouter, Query, Request
 from lumen.api.deps import Connection, wake_task_runner
 from lumen.geo.tasks import GEO_TASK, needs_locating
 from lumen.schemas.duplicates import DuplicateReport, MergeRequest, MergeResult
+from lumen.schemas.tasks import Task
 from lumen.services import duplicates as service
+from lumen.services import tasks as task_service
 from lumen.tasks import queue
 
 router = APIRouter(prefix="/duplicates", tags=["duplicates"])
@@ -17,6 +19,16 @@ def list_duplicates(
 ) -> DuplicateReport:
     """Photos listed more than once because their files are identical copies."""
     return service.find_duplicates(conn, limit=limit)
+
+
+@router.post(
+    "/merge-all", response_model=Task, status_code=202, operation_id="mergeAllDuplicates"
+)
+def merge_all(conn: Connection, request: Request) -> Task:
+    """Merge every group into its suggested copy, as a background task (no file touched)."""
+    task_id = queue.enqueue(conn, service.MERGE_ALL_TASK)
+    wake_task_runner(request)
+    return task_service.get_task(conn, task_id)
 
 
 @router.post("/merge", response_model=MergeResult, operation_id="mergeDuplicates")

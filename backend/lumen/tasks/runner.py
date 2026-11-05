@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from lumen.core.config import Settings
-from lumen.db.connection import Database
+from lumen.db.connection import Database, background_writes, bump_write_generation
 from lumen.tasks import queue
 
 logger = logging.getLogger(__name__)
@@ -165,7 +165,8 @@ class TaskRunner:
         started = time.monotonic()
         logger.info("task started", extra={**log, "attempt": task["attempts"]})
         try:
-            outcome = handler(ctx)
+            with background_writes():
+                outcome = handler(ctx)
         except TaskCancelled:
             queue.mark_cancelled(conn, task_id)
             logger.info("task cancelled", extra=log)
@@ -180,6 +181,9 @@ class TaskRunner:
             logger.exception("task error", extra={**log, "outcome": outcome})
         else:
             queue.mark_succeeded(conn, task_id, outcome if isinstance(outcome, dict) else None)
+        finally:
+            # The work is over: cached library views refresh on the next request.
+            bump_write_generation(background=False)
             logger.info(
                 "task succeeded",
                 extra={**log, "duration_s": round(time.monotonic() - started, 2)},

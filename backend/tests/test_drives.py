@@ -169,3 +169,29 @@ def test_an_import_stops_when_the_drive_goes_and_resumes(
     assert status(conn, root_id) == "ready"
     done = conn.execute("SELECT COUNT(*) FROM media_files WHERE ingest_state = 'done'")
     assert done.fetchone()[0] == 12
+
+
+@needs_tools
+def test_photo_quality_is_measured_during_the_import(
+    conn: sqlite3.Connection, db: Database, settings: Settings, tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:  # fmt: skip
+    from lumen.library.quality import QUALITY_TASK
+
+    root = tmp_path / "Photos"
+    for index in range(3):
+        make_jpeg(root / f"IMG_{index:04d}.JPG")
+    monkeypatch.setitem(HANDLERS, QUALITY_TASK, lambda ctx: None)  # no separate pass
+    runner = TaskRunner(db, settings, HANDLERS)
+    runner.start()
+    try:
+        register(conn, runner, root)
+        wait_idle(db)
+    finally:
+        runner.stop()
+    rows = conn.execute(
+        "SELECT COUNT(*) FROM media_quality q JOIN media_assets a ON a.id = q.asset_id "
+        "JOIN media_files c ON c.id = a.cover_file_id AND c.fingerprint = q.fingerprint "
+        "WHERE q.score IS NOT NULL"
+    ).fetchone()[0]
+    assert rows == 3

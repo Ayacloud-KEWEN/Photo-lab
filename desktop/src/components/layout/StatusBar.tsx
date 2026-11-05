@@ -25,6 +25,11 @@ export function StatusBar() {
       current: running.progress_current,
       total: running.progress_total ?? 0,
     });
+  } else if (running?.kind === "merge_duplicates") {
+    taskLabel = t("status.taskMerge", {
+      current: running.progress_current,
+      total: running.progress_total ?? 0,
+    });
   } else if (running?.kind === "geo_locate_assets") {
     taskLabel = t("status.taskPlaces", {
       current: running.progress_current,

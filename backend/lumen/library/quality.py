@@ -109,6 +109,40 @@ _PENDING = """
 """
 
 
+def measure_preview(cache_dir: Path, fingerprint: str, extension: str) -> Quality | None:
+    """Quality of a photo from its preview file (PNG: screenshots, not judged on exposure)."""
+    preview = thumbnails.rendition_paths(cache_dir, fingerprint).preview
+    return measure_file(preview, judge_exposure=extension != "png")
+
+
+def store_quality(
+    conn: sqlite3.Connection, asset_id: int, fingerprint: str, quality: Quality | None, now: str
+) -> None:
+    """Record a measurement (None: the preview could not be read). Call in a transaction."""
+    values = (
+        (None,) * 5 + ("",)
+        if quality is None
+        else (
+            quality.sharpness, quality.exposure, quality.highlights,
+            quality.shadows, quality.score, ",".join(quality.flags),
+        )
+    )  # fmt: skip
+    conn.execute(
+        """
+        INSERT INTO media_quality (asset_id, fingerprint, version, sharpness,
+            exposure, highlights, shadows, score, flags, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (asset_id) DO UPDATE SET
+            fingerprint = excluded.fingerprint, version = excluded.version,
+            sharpness = excluded.sharpness, exposure = excluded.exposure,
+            highlights = excluded.highlights, shadows = excluded.shadows,
+            score = excluded.score, flags = excluded.flags,
+            updated_at = excluded.updated_at
+        """,
+        (asset_id, fingerprint, VERSION, *values, now),
+    )
+
+
 def needs_scoring(conn: sqlite3.Connection) -> bool:
     return bool(conn.execute(f"SELECT EXISTS (SELECT 1 {_PENDING})", (VERSION,)).fetchone()[0])
 
@@ -117,7 +151,8 @@ def score_assets(ctx: TaskContext) -> dict[str, int]:
     conn = ctx.conn
     total = conn.execute(f"SELECT COUNT(*) {_PENDING}", (VERSION,)).fetchone()[0]
     done = 0
-    with ThreadPoolExecutor(4, thread_name_prefix="quality") as pool:
+    workers = ctx.settings.ingest_workers
+    with ThreadPoolExecutor(workers, thread_name_prefix="quality") as pool:
         while True:
             ctx.check()
             rows = conn.execute(
@@ -128,35 +163,13 @@ def score_assets(ctx: TaskContext) -> dict[str, int]:
                 break
 
             def one(row: sqlite3.Row) -> Quality | None:
-                preview = thumbnails.rendition_paths(ctx.settings.cache_dir, row[1]).preview
-                return measure_file(preview, judge_exposure=row[2] != "png")
+                return measure_preview(ctx.settings.cache_dir, row[1], row[2])
 
             results = list(pool.map(one, rows))
             now = utc_now()
             with transaction(conn):
                 for row, quality in zip(rows, results, strict=True):
-                    values = (
-                        (None,) * 5 + ("",)
-                        if quality is None
-                        else (
-                            quality.sharpness, quality.exposure, quality.highlights,
-                            quality.shadows, quality.score, ",".join(quality.flags),
-                        )
-                    )  # fmt: skip
-                    conn.execute(
-                        """
-                        INSERT INTO media_quality (asset_id, fingerprint, version, sharpness,
-                            exposure, highlights, shadows, score, flags, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT (asset_id) DO UPDATE SET
-                            fingerprint = excluded.fingerprint, version = excluded.version,
-                            sharpness = excluded.sharpness, exposure = excluded.exposure,
-                            highlights = excluded.highlights, shadows = excluded.shadows,
-                            score = excluded.score, flags = excluded.flags,
-                            updated_at = excluded.updated_at
-                        """,
-                        (row[0], row[1], VERSION, *values, now),
-                    )
+                    store_quality(conn, row[0], row[1], quality, now)
             done += len(rows)
             ctx.progress(done, max(total, done))
     return {"scored": done}

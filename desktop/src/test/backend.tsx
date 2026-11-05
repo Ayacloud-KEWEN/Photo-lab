@@ -318,6 +318,14 @@ export function stubBackend(options: StubOptions = {}) {
       })); // prettier-ignore
       return json({ groups, group_count: groups.length, redundant_bytes: groups.length * 2_000_000 });
     }
+    if (path === "/api/v1/duplicates/merge-all") {
+      return json({
+        id: 99, kind: "merge_duplicates", status: "pending", storage_root_id: null,
+        progress_current: 0, progress_total: null, attempts: 0, max_attempts: 3,
+        cancel_requested: false, error: null, result: null, created_at: "2026-11-05T10:00:00Z",
+        updated_at: "2026-11-05T10:00:00Z", started_at: null, finished_at: null,
+      }, 202); // prettier-ignore
+    }
     if (path === "/api/v1/duplicates/merge") {
       const groups = (body as { groups: { asset_ids: number[] }[] }).groups;
       return json({ merged_groups: groups.length, removed_assets: groups.reduce((n, g) => n + g.asset_ids.length - 1, 0) });

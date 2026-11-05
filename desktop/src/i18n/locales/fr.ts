@@ -21,6 +21,7 @@ const fr: LocaleResource = {
   status: {
     taskExport: "Export {{current, number}} / {{total, number}}",
     taskAiDownload: "Téléchargement du modèle IA {{done}} / {{total}} Go",
+    taskMerge: "Fusion des doublons {{current, number}} / {{total, number}}",
     taskPlaces: "Identification des lieux {{current, number}} / {{total, number}}",
     taskAiIndex: "Analyse IA des photos {{current, number}} / {{total, number}}",
     taskScanning: "Analyse de {{name}} · {{count, number}} fichiers trouvés",
@@ -378,6 +379,7 @@ const fr: LocaleResource = {
     },
   },
   aiSearch: {
+    loadingModel: "Chargement du modèle d’IA ; la première recherche prend environ 20 s…",
     title: "Recherche IA",
     placeholder: "Décrivez ce que vous cherchez, p. ex. un lac sous des montagnes enneigées",
     search: "Rechercher",
@@ -448,6 +450,7 @@ const fr: LocaleResource = {
     merge: "Fusionner en une seule",
     merged_one: "{{count, number}} groupe fusionné",
     merged_other: "{{count, number}} groupes fusionnés",
+    mergingAll: "Fusion de tous les doublons en arrière-plan ; la progression est dans la barre d’état.",
     mergeFailed: "Échec de la fusion",
     copies_one: "{{count, number}} copie",
     copies_other: "{{count, number}} copies",

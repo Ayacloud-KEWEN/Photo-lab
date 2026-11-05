@@ -21,6 +21,7 @@ const zhCN = {
     taskExport: "正在导出 {{current, number}} / {{total, number}}",
     taskAiDownload: "正在下载 AI 模型 {{done}} / {{total}} GB",
     taskAiIndex: "AI 分析照片 {{current, number}} / {{total, number}}",
+    taskMerge: "正在合并重复文件 {{current, number}} / {{total, number}}",
     taskPlaces: "正在识别拍摄地点 {{current, number}} / {{total, number}}",
     taskScanning: "正在扫描 {{name}} · 已发现 {{count, number}} 个文件",
     taskIngesting: "正在处理 {{name}} · {{current, number}} / {{total, number}}",
@@ -376,6 +377,7 @@ const zhCN = {
     },
   },
   aiSearch: {
+    loadingModel: "正在加载 AI 模型，第一次搜索约需 20 秒…",
     title: "AI 搜索",
     placeholder: "描述你想找的画面，例如：雪山下的湖泊、夕阳下的海边、戴帽子的小孩",
     search: "搜索",
@@ -446,6 +448,7 @@ const zhCN = {
     merge: "合并为一张",
     merged_one: "已合并 {{count, number}} 组",
     merged_other: "已合并 {{count, number}} 组",
+    mergingAll: "已开始在后台合并全部重复文件，进度见底部状态栏。",
     mergeFailed: "合并失败",
     copies_one: "{{count, number}} 份副本",
     copies_other: "{{count, number}} 份副本",

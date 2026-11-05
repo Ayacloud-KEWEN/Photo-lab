@@ -161,3 +161,28 @@ def test_library_views_are_cached_until_the_next_write(
     # ...until the next committed write through the application.
     client.patch(f"/api/v1/assets/{photos[1]}", json={"rating": 3})
     assert client.get("/api/v1/assets/facets").json()["favorites"] == 1
+
+
+def test_background_writes_refresh_cached_views_at_most_every_minute(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lumen.db import connection
+    from lumen.db.connection import GenerationCache, background_writes, bump_write_generation
+
+    cache = GenerationCache()
+    calls: list[int] = []
+    now = [1000.0]
+    monkeypatch.setattr(connection.time, "monotonic", lambda: now[0])
+
+    def compute() -> int:
+        calls.append(1)
+        return len(calls)
+
+    assert cache.get("facets", compute) == 1
+    with background_writes():  # an import saves a group of files
+        bump_write_generation()
+    assert cache.get("facets", compute) == 1  # still fresh enough
+    now[0] += 61
+    assert cache.get("facets", compute) == 2  # a minute later: recomputed
+    bump_write_generation()  # the user changes something: recomputed at once
+    assert cache.get("facets", compute) == 3

@@ -30,7 +30,7 @@ from lumen.library.common import (
     set_root_status,
 )
 from lumen.library.live import pair_live_photo
-from lumen.library.quality import QUALITY_TASK
+from lumen.library.quality import QUALITY_TASK, Quality, measure_preview, store_quality
 from lumen.library.search import reindex_assets
 from lumen.library.tags import get_or_create_tag, normalize_tag_name, tag_assets
 from lumen.media import thumbnails
@@ -71,6 +71,8 @@ class WorkItem:
     fingerprint: str | None
     metadata: Metadata | None = None
     probed: Metadata | None = None  # FFprobe result (videos)
+    quality: Quality | None = None  # photos: measured on the preview just rendered
+    measured: bool = False
     read_failed: bool = False  # could not be read or fingerprinted
     error: str | None = None
     vanished: bool = False
@@ -279,6 +281,13 @@ def _prepare(
             item.warnings.append(f"ffprobe: {exc}")
     # Thumbnails and previews (CPU bound; Pillow/LibRaw release the GIL).
     _render(item, ctx, tools)
+    if item.error is None and item.fingerprint and item.format.media_type == "photo":
+        # The preview was just written (still in the file cache): measuring it now saves
+        # reading every preview again in a separate pass after the import.
+        item.quality = measure_preview(
+            ctx.settings.cache_dir, item.fingerprint, item.path.suffix.lower().lstrip(".")
+        )
+        item.measured = True
 
 
 def _store_group(ctx: TaskContext, items: list[WorkItem], tools: Tools) -> None:
@@ -470,6 +479,19 @@ def _render(item: WorkItem, ctx: TaskContext, tools: Tools) -> None:
         item.error = f"{type(exc).__name__}: {exc}"
 
 
+def _store_qualities(conn: sqlite3.Connection, items: list[WorkItem], now: str) -> None:
+    """Quality of the photos whose file is their asset's cover (others are measured by
+    the quality task once the cover is known)."""
+    for item in items:
+        if not item.measured or item.fingerprint is None or item.asset_id is None:
+            continue
+        cover = conn.execute(
+            "SELECT cover_file_id FROM media_assets WHERE id = ?", (item.asset_id,)
+        ).fetchone()
+        if cover is not None and cover[0] == item.file_id:
+            store_quality(conn, item.asset_id, item.fingerprint, item.quality, now)
+
+
 def _store_results(conn: sqlite3.Connection, items: list[WorkItem], tools: Tools) -> None:
     now = utc_now()
     extractor_version = (
@@ -487,6 +509,7 @@ def _store_results(conn: sqlite3.Connection, items: list[WorkItem], tools: Tools
     with transaction(conn):
         for item in items:
             _store_item(conn, item, extractor_version, now)
+        _store_qualities(conn, items, now)
         # After storing: pairing needs the metadata of both halves, wherever they were read.
         for item in items:
             if item.metadata is not None and not (item.error or item.vanished):

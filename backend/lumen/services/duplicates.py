@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from dataclasses import dataclass
 
 from lumen.core.errors import LumenError
 from lumen.db.connection import GenerationCache, transaction, utc_now
 from lumen.library.live import merge_user_data
 from lumen.library.search import reindex_assets
-from lumen.schemas.assets import AssetSummary
 from lumen.schemas.duplicates import (
     DuplicateAsset,
     DuplicateFile,
@@ -27,6 +27,7 @@ from lumen.schemas.duplicates import (
     MergeResult,
 )
 from lumen.services.assets import summaries_by_ids
+from lumen.tasks.runner import TaskContext
 
 
 def _components(conn: sqlite3.Connection) -> list[list[int]]:
@@ -70,38 +71,30 @@ def _counts(conn: sqlite3.Connection, sql: str, ids: list[int]) -> dict[int, int
     return {int(row[0]): int(row[1]) for row in conn.execute(sql.format(marks=marks), ids)}
 
 
-def _rank(asset: AssetSummary, tags: int, collections: int) -> tuple[object, ...]:
-    """The copy to keep: the one the user worked on most, else the first imported."""
-    return (
-        asset.is_edited,
-        asset.cull_flag == "pick",
-        asset.rating,
-        asset.is_favorite,
-        tags,
-        collections,
-        -asset.id,
-    )
+@dataclass
+class _Planned:
+    """A duplicate group: its copies (the one to keep first) and the space the rest take."""
+
+    assets: list[int]
+    redundant_bytes: int
+
+    @property
+    def keep(self) -> int:
+        return self.assets[0]
 
 
-_cache = GenerationCache(size=4)
-
-
-def find_duplicates(conn: sqlite3.Connection, *, limit: int = 500) -> DuplicateReport:
-    return _cache.get(("duplicates", limit), lambda: _find_duplicates(conn, limit=limit))
-
-
-def _find_duplicates(conn: sqlite3.Connection, *, limit: int) -> DuplicateReport:
+def _plan(conn: sqlite3.Connection) -> tuple[list[_Planned], dict[int, int], dict[int, int]]:
+    """Every group with the copy to keep, from cheap columns only (no summaries); also the
+    tag and portfolio counts. Largest redundant size first."""
     components = _components(conn)
     ids = [asset_id for group in components for asset_id in group]
-    if not ids:
-        return DuplicateReport(groups=[], group_count=0, redundant_bytes=0)
-    summaries = {s.id: s for s in summaries_by_ids(conn, ids)}
+    rank: dict[int, tuple[object, ...]] = {}
     tags: dict[int, int] = {}
     collections: dict[int, int] = {}
-    files: dict[int, list[DuplicateFile]] = {}
-    fingerprints: dict[int, dict[int, str]] = {}
+    fingerprints: dict[int, list[tuple[str, int]]] = {}
     for start in range(0, len(ids), 500):
         chunk = ids[start : start + 500]
+        marks = ",".join("?" * len(chunk))
         tags |= _counts(
             conn,
             "SELECT asset_id, COUNT(*) FROM media_tags WHERE source != 'ai' "
@@ -114,10 +107,72 @@ def _find_duplicates(conn: sqlite3.Connection, *, limit: int) -> DuplicateReport
             "GROUP BY asset_id",
             chunk,
         )
+        # Listable assets only (as the library shows them), with what decides the keeper.
+        for row in conn.execute(
+            f"""
+            SELECT a.id, a.rating, a.is_favorite, a.cull_flag,
+                   COALESCE(e.recipe_hash, '') != '' AS edited
+            FROM media_assets a
+            JOIN media_files c ON c.id = a.cover_file_id
+                 AND c.ingest_state = 'done' AND c.status = 'present'
+            LEFT JOIN edit_history e ON e.id = a.current_edit_id
+            WHERE a.capture_time IS NOT NULL AND a.id IN ({marks})
+            """,
+            chunk,
+        ):
+            rank[int(row["id"])] = (
+                bool(row["edited"]), row["cull_flag"] == "pick", row["rating"],
+                bool(row["is_favorite"]),
+            )  # fmt: skip
+        for row in conn.execute(
+            f"SELECT asset_id, fingerprint, size_bytes FROM media_files "
+            f"WHERE status = 'present' AND file_role != 'sidecar' AND fingerprint IS NOT NULL "
+            f"AND asset_id IN ({marks})",
+            chunk,
+        ):
+            fingerprints.setdefault(int(row[0]), []).append((str(row[1]), int(row[2])))
+
+    def order(asset_id: int) -> tuple[object, ...]:
+        """The copy the user worked on most, else the first imported."""
+        return (
+            *rank[asset_id], tags.get(asset_id, 0), collections.get(asset_id, 0), -asset_id
+        )
+
+    planned: list[_Planned] = []
+    for component in components:
+        members = sorted((i for i in component if i in rank), key=order, reverse=True)
+        if len(members) < 2:
+            continue
+        # Files whose content the kept copy already has take space for nothing.
+        kept = {fingerprint for fingerprint, _ in fingerprints.get(members[0], [])}
+        redundant = sum(
+            size for i in members[1:] for fingerprint, size in fingerprints.get(i, [])
+            if fingerprint in kept
+        )  # fmt: skip
+        planned.append(_Planned(assets=members, redundant_bytes=redundant))
+    planned.sort(key=lambda group: group.redundant_bytes, reverse=True)
+    return planned, tags, collections
+
+
+_cache = GenerationCache(size=4)
+
+
+def find_duplicates(conn: sqlite3.Connection, *, limit: int = 500) -> DuplicateReport:
+    return _cache.get(("duplicates", limit), lambda: _find_duplicates(conn, limit=limit))
+
+
+def _find_duplicates(conn: sqlite3.Connection, *, limit: int) -> DuplicateReport:
+    planned, tags, collections = _plan(conn)
+    shown = planned[:limit]
+    ids = [asset_id for group in shown for asset_id in group.assets]
+    summaries = {s.id: s for s in summaries_by_ids(conn, ids)}
+    files: dict[int, list[DuplicateFile]] = {}
+    for start in range(0, len(ids), 500):
+        chunk = ids[start : start + 500]
         rows = conn.execute(
             f"""
             SELECT f.id, f.asset_id, f.relative_path, f.file_role, f.size_bytes, f.modified_at,
-                   f.fingerprint, r.path AS root_path, r.display_name
+                   r.path AS root_path, r.display_name
             FROM media_files f JOIN storage_roots r ON r.id = f.storage_root_id
             WHERE f.status = 'present' AND f.asset_id IN ({",".join("?" * len(chunk))})
             ORDER BY f.file_role = 'primary' DESC, f.id
@@ -135,57 +190,35 @@ def _find_duplicates(conn: sqlite3.Connection, *, limit: int) -> DuplicateReport
                     modified_at=row["modified_at"],
                 )
             )
-            if row["fingerprint"] and row["file_role"] != "sidecar":
-                fingerprints.setdefault(row["asset_id"], {})[row["id"]] = row["fingerprint"]
-
-    groups: list[DuplicateGroup] = []
-    for component in components:
-        members = [summaries[i] for i in component if i in summaries]
-        if len(members) < 2:
-            continue
-        members.sort(
-            key=lambda a: _rank(a, tags.get(a.id, 0), collections.get(a.id, 0)), reverse=True
+    groups = [
+        DuplicateGroup(
+            assets=[
+                DuplicateAsset(
+                    asset=summaries[i],
+                    files=files.get(i, []),
+                    tag_count=tags.get(i, 0),
+                    collection_count=collections.get(i, 0),
+                )
+                for i in group.assets
+                if i in summaries
+            ],
+            keep_asset_id=group.keep,
+            redundant_bytes=group.redundant_bytes,
         )
-        keep = members[0].id
-        # Files whose content the kept copy already has take space for nothing.
-        kept = set(fingerprints.get(keep, {}).values())
-        redundant = sum(
-            f.size_bytes
-            for a in members[1:]
-            for f in files.get(a.id, [])
-            if fingerprints.get(a.id, {}).get(f.file_id) in kept
-        )
-        groups.append(
-            DuplicateGroup(
-                assets=[
-                    DuplicateAsset(
-                        asset=a,
-                        files=files.get(a.id, []),
-                        tag_count=tags.get(a.id, 0),
-                        collection_count=collections.get(a.id, 0),
-                    )
-                    for a in members
-                ],
-                keep_asset_id=keep,
-                redundant_bytes=redundant,
-            )
-        )
-    groups.sort(key=lambda g: g.redundant_bytes, reverse=True)
+        for group in shown
+    ]
     return DuplicateReport(
-        groups=groups[:limit],
-        group_count=len(groups),
-        redundant_bytes=sum(g.redundant_bytes for g in groups),
+        groups=groups,
+        group_count=len(planned),
+        redundant_bytes=sum(group.redundant_bytes for group in planned),
     )
 
 
 def merge_duplicates(conn: sqlite3.Connection, request: MergeRequest) -> MergeResult:
     """Fold each group's copies into one photo (the database only; no file is touched)."""
     components = {asset_id: tuple(group) for group in _components(conn) for asset_id in group}
-    suggested = {
-        entry.asset.id: group.keep_asset_id
-        for group in find_duplicates(conn, limit=len(components) + 1).groups
-        for entry in group.assets
-    }
+    planned, _, _ = _plan(conn)
+    suggested = {asset_id: group.keep for group in planned for asset_id in group.assets}
     now = utc_now()
     merged = removed = 0
     with transaction(conn):
@@ -204,6 +237,28 @@ def merge_duplicates(conn: sqlite3.Connection, request: MergeRequest) -> MergeRe
             merged += 1
             removed += len(drops)
     return MergeResult(merged_groups=merged, removed_assets=removed)
+
+
+MERGE_ALL_TASK = "merge_duplicates"
+_MERGE_CHUNK = 100
+
+
+def merge_all_task(ctx: TaskContext) -> dict[str, int]:
+    """Merge every duplicate group, each into its suggested copy (a background task:
+    tens of thousands of groups take a while)."""
+    planned, _, _ = _plan(ctx.conn)
+    merged = removed = 0
+    ctx.progress(0, len(planned), force=True)
+    for start in range(0, len(planned), _MERGE_CHUNK):
+        ctx.check()
+        now = utc_now()
+        with transaction(ctx.conn):
+            for group in planned[start : start + _MERGE_CHUNK]:
+                _merge(ctx.conn, group.keep, group.assets[1:], now)
+                merged += 1
+                removed += len(group.assets) - 1
+        ctx.progress(merged, len(planned))
+    return {"merged_groups": merged, "removed_assets": removed}
 
 
 def _merge(conn: sqlite3.Connection, keep: int, drops: list[int], now: str) -> None:

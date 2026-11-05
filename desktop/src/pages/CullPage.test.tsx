@@ -79,11 +79,11 @@ describe("CullPage", () => {
     await waitFor(() =>
       expect(requests.some((r) => r.url.pathname === "/api/v1/files/10/reveal")).toBe(true),
     );
+    // All groups (not only the ones loaded) are merged by a background task.
     await userEvent.click(screen.getByRole("button", { name: /全部合并（2 组）/ }));
     await waitFor(() =>
-      expect(
-        requests.filter((r) => r.url.pathname === "/api/v1/duplicates/merge").at(-1)?.body,
-      ).toEqual({ groups: [{ asset_ids: [1, 2] }, { asset_ids: [3, 4] }] }),
+      expect(requests.some((r) => r.url.pathname === "/api/v1/duplicates/merge-all")).toBe(true),
     );
+    expect(await screen.findByRole("status")).toHaveTextContent("已开始在后台合并全部重复文件");
   });
 });

@@ -27,7 +27,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–5 及之后的扩展（
 | `docs/PROJECT_SPEC.md` | 产品需求（原始需求，勿随意改动） |
 | `docs/phases.md` | 阶段划分 |
 | `docs/Project_Initialization.md` | Phase 1 任务书（工作方式：先查环境、提方案、经确认再实施） |
-| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-028）**，改动架构前先读 |
+| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-029）**，改动架构前先读 |
 | `README.md` | 安装、开发、测试、API 列表、快捷键 |
 
 ## 3. 环境（用户的开发机）
@@ -62,7 +62,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **165** 个测试、前端 **86** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **168** 个测试、前端 **86** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ### 4.1 在浏览器面板里用真实图库副本测试（推荐的验收方式）
 
@@ -216,6 +216,9 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
   `library/drives.py` 每 30 秒检查，插回后自动扫描并继续导入，换盘符时按卷序列号认回；全屏浏览提示原图所在盘未连接。
 - **信息栏链接**（`info-links`）：位置旁“在谷歌地图中打开”（`POST /assets/{id}/open-map`，后端生成网址、默认浏览器打开），
   每个文件旁“在资源管理器中显示”（`POST /files/{id}/reveal`；盘未连接或文件丢失时禁用）。
+- **性能第二轮**（`perf-round-2`，迁移 0012，ADR-029）：后台写入与用户操作分开计数（导入时视图最多 60 s 重算）、
+  SQLite mmap、重复文件报告只为显示的组生成详情 + 后台“全部合并”任务、AI 索引编码与解码并行（43→60 张/s）、
+  画质在导入时测量。用户库副本：17,458 组重复（约 104 GB），全部合并 16 s，14.5 万项 → 12.6 万项。
 
 **用户的图库（2026-11-04 晚）**：来源 `D:\照片`（SSD）、`G:\照片整理202507`、`G:\照片整理`（USB 机械硬盘，
 14.4 万个文件、678 GB，当时仍在导入）；约 19 万个文件。性能问题先在这个规模上验证（方法见 4.1，副本 + 关闭后台任务）。

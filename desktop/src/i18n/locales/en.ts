@@ -21,6 +21,7 @@ const en: LocaleResource = {
   status: {
     taskExport: "Exporting {{current, number}} / {{total, number}}",
     taskAiDownload: "Downloading AI model {{done}} / {{total}} GB",
+    taskMerge: "Merging duplicates {{current, number}} / {{total, number}}",
     taskPlaces: "Naming places {{current, number}} / {{total, number}}",
     taskAiIndex: "AI analysing photos {{current, number}} / {{total, number}}",
     taskScanning: "Scanning {{name}} · {{count, number}} files found",
@@ -378,6 +379,7 @@ const en: LocaleResource = {
     },
   },
   aiSearch: {
+    loadingModel: "Loading the AI model; the first search takes about 20 s…",
     title: "AI Search",
     placeholder: "Describe what you are looking for, e.g. a lake below snowy mountains",
     search: "Search",
@@ -448,6 +450,7 @@ const en: LocaleResource = {
     merge: "Merge into one",
     merged_one: "Merged {{count, number}} group",
     merged_other: "Merged {{count, number}} groups",
+    mergingAll: "Merging all duplicates in the background; progress is in the status bar.",
     mergeFailed: "Could not merge",
     copies_one: "{{count, number}} copy",
     copies_other: "{{count, number}} copies",

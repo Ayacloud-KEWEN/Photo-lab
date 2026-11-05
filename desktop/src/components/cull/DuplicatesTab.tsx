@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError, thumbnailUrl } from "@/api/client";
-import { useConnection, useDuplicateActions, useDuplicates } from "@/api/hooks";
+import { useActiveTasks, useConnection, useDuplicateActions, useDuplicates } from "@/api/hooks";
 import type { DuplicateAsset, DuplicateGroup } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { useLibraryState } from "@/library/state";
@@ -21,17 +21,16 @@ export function DuplicatesTab() {
   const [message, setMessage] = useState<string | null>(null);
   const data = duplicates.data;
 
+  const tasks = useActiveTasks();
+  const merging = tasks.data?.some((task) => task.kind === "merge_duplicates") ?? false;
   const mergeAll = () => {
-    if (!data) return;
     setMessage(null);
-    actions.merge.mutate(
-      { groups: data.groups.map((group) => ({ asset_ids: group.assets.map((a) => a.asset.id) })) },
-      {
-        onSuccess: (result) => setMessage(t("cull.merged", { count: result.merged_groups })),
-        onError: (error) =>
-          setMessage(error instanceof ApiError ? error.message : t("cull.mergeFailed")),
-      },
-    );
+    // Every group (there can be tens of thousands), in the background.
+    actions.mergeAll.mutate(undefined, {
+      onSuccess: () => setMessage(t("cull.mergingAll")),
+      onError: (error) =>
+        setMessage(error instanceof ApiError ? error.message : t("cull.mergeFailed")),
+    });
   };
 
   return (
@@ -50,15 +49,15 @@ export function DuplicatesTab() {
             {message}
           </span>
         )}
-        {data && data.groups.length > 1 && (
+        {data && data.group_count > 1 && (
           <Button
             size="sm"
             className="ml-auto"
-            disabled={actions.merge.isPending}
+            disabled={actions.mergeAll.isPending || merging}
             onClick={mergeAll}
           >
             <Merge className="size-3.5" />
-            {t("cull.mergeAll", { count: data.groups.length })}
+            {t("cull.mergeAll", { count: data.group_count })}
           </Button>
         )}
       </div>

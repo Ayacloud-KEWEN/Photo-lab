@@ -344,6 +344,10 @@ export const api = {
   listDuplicates: (conn: BackendConnection) =>
     request<DuplicateReport>(conn, "GET", "/api/v1/duplicates"),
 
+  /** Merges every group into its suggested copy, as a background task. */
+  mergeAllDuplicates: (conn: BackendConnection) =>
+    request<Task>(conn, "POST", "/api/v1/duplicates/merge-all"),
+
   mergeDuplicates: (conn: BackendConnection, body: MergeRequest) =>
     request<MergeResult>(conn, "POST", "/api/v1/duplicates/merge", body),
 

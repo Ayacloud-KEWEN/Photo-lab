@@ -87,3 +87,19 @@ def test_merge_folds_copies_into_one_photo_and_keeps_user_data(
     assert original in [i["id"] for i in client.get("/api/v1/assets").json()["items"]]
     thumb = client.get(f"/api/v1/assets/{original}/thumbnail")
     assert thumb.status_code == 200
+
+
+def test_merge_all_runs_as_a_background_task(
+    library: tuple[TestClient, Any, Path, dict[str, int]],
+) -> None:
+    client, (app, _), _, ids = library
+    original, copy = ids["IMG_0002.jpg"], ids["IMG_0002_copy.jpg"]
+    task = client.post("/api/v1/duplicates/merge-all")
+    assert task.status_code == 202 and task.json()["kind"] == "merge_duplicates"
+    wait_idle(app.state.db)
+    done = client.get(f"/api/v1/tasks/{task.json()['id']}").json()
+    assert done["status"] == "succeeded"
+    assert done["result"] == {"merged_groups": 1, "removed_assets": 1}
+    assert client.get("/api/v1/duplicates").json()["group_count"] == 0
+    assert client.get(f"/api/v1/assets/{copy}").status_code == 404
+    assert client.get(f"/api/v1/assets/{original}").json()["rating"] == 4

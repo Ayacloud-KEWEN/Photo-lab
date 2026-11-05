@@ -561,6 +561,11 @@ export function useDuplicateActions() {
       mutationFn: (body: MergeRequest) => api.mergeDuplicates(requireConnection(conn), body),
       onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.library }),
     }),
+    mergeAll: useMutation({
+      mutationFn: () => api.mergeAllDuplicates(requireConnection(conn)),
+      // Progress shows in the status bar; views refresh when the task ends.
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.tasks }),
+    }),
     reveal: useMutation({
       mutationFn: (fileId: number) => api.revealFile(requireConnection(conn), fileId),
     }),

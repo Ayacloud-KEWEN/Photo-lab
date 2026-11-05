@@ -236,8 +236,10 @@ function SearchView({ onSelect }: { onSelect: (selection: Selection) => void }) 
       </div>
       <div className="min-h-0 flex-1">
         {results.isFetching && items.length === 0 ? (
-          <p className="flex justify-center pt-10">
-            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          <p className="flex items-center justify-center gap-2 pt-10 text-xs text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            {/* The first search loads the model (~20 s); say what is being waited for. */}
+            {status.data && !status.data.local.model_loaded && t("aiSearch.loadingModel")}
           </p>
         ) : items.length > 0 ? (
           <PhotoWall
