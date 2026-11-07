@@ -138,6 +138,8 @@ export interface StubOptions {
   videoEdits?: Record<number, Partial<VideoRecipe>>;
   /** Collections: name, kind and their asset ids (in order). */
   collections?: { name: string; kind?: "album" | "trip"; assetIds?: number[] }[];
+  /** MapWeb: its address (none: not set) and whether it answers. */
+  mapweb?: { url?: string; down?: boolean };
   /** Where assets were taken (asset id: [lat, lon]); a collection's route has a stop for each. */
   located?: Record<number, [number, number]>;
   /** Cache folder: moved to a custom folder, its drive missing at startup, or a full target. */
@@ -316,8 +318,39 @@ export function stubBackend(options: StubOptions = {}) {
         backup_interval_days: 7,
         backup_keep: 10,
         backup_folder: null,
+        mapweb_url: options.mapweb?.url ?? null,
         ...((body as object | undefined) ?? {}),
       });
+    }
+    if (path.startsWith("/api/v1/mapweb/")) {
+      const down = () =>
+        json({ error: { code: "mapweb_failed", message: "MapWeb cannot be reached",
+                        details: { url: "http://kevin:8788", reason: "timed out" } } }, 502); // prettier-ignore
+      if (path === "/api/v1/mapweb/test") {
+        return options.mapweb?.down ? down() : json({ url: (body as { url: string }).url, point_count: 310 });
+      }
+      if (!options.mapweb?.url) {
+        return json({ error: { code: "mapweb_not_configured", message: "Set MapWeb's address", details: {} } }, 400);
+      }
+      if (options.mapweb.down) return down();
+      if (path === "/api/v1/mapweb/plan") {
+        const ids = (body as { asset_ids: number[] }).asset_ids;
+        return json({
+          url: options.mapweb.url, photo_count: ids.length, video_count: 1,
+          attach: [{ point_id: 7, title: "Kotor 老城", visited_at: "2025-10-20T10:30:00Z", count: 2 }],
+          groups: [{ title: "布德瓦 · 2025-10-21 13:39", lat: 42.29, lon: 18.84, start: "2025-10-21T11:39:00Z",
+                     count: Math.max(ids.length - 3, 0) }],
+          duplicate_count: 1, unplaced_count: 0,
+        }); // prettier-ignore
+      }
+      if (path === "/api/v1/mapweb/send") {
+        return json({
+          id: 98, kind: "mapweb_send", status: "pending", storage_root_id: null,
+          progress_current: 0, progress_total: null, attempts: 0, max_attempts: 3,
+          cancel_requested: false, error: null, result: null, created_at: "2026-11-07T10:00:00Z",
+          updated_at: "2026-11-07T10:00:00Z", started_at: null, finished_at: null,
+        }, 202); // prettier-ignore
+      }
     }
     if (path === "/api/v1/cull/similar") {
       const group = (options.similar ?? []).map((id) => ({ asset: assets.find((a) => a.id === id)!, quality: null }));

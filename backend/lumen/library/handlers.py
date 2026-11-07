@@ -8,6 +8,8 @@ from lumen.library.scan import scan_storage_root
 from lumen.services.backups import BACKUP_TASK, backup_task
 from lumen.services.cache import MOVE_CACHE_TASK, move_cache
 from lumen.services.duplicates import MERGE_ALL_TASK, merge_all_task
+from lumen.services.mapweb import SEND_TASK as MAPWEB_SEND_TASK
+from lumen.services.mapweb import send_task as mapweb_send
 from lumen.tasks.runner import Handler
 
 HANDLERS: dict[str, Handler] = {
@@ -21,4 +23,5 @@ HANDLERS: dict[str, Handler] = {
     QUALITY_TASK: score_assets,
     MERGE_ALL_TASK: merge_all_task,
     MOVE_CACHE_TASK: move_cache,
+    MAPWEB_SEND_TASK: mapweb_send,
 }

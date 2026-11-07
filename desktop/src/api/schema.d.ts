@@ -1209,6 +1209,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mapweb/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Mapweb
+         * @description Check that an address answers like MapWeb (before saving it).
+         */
+        post: operations["testMapWeb"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mapweb/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Plan Send
+         * @description Where these photos would go on the map: existing footprints, new ones, skipped.
+         */
+        post: operations["planMapWebSend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mapweb/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send
+         * @description Send the photos to MapWeb as planned (a background task).
+         */
+        post: operations["sendToMapWeb"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1331,6 +1391,11 @@ export interface components {
              * @description Backup folder (default: the data folder's backups)
              */
             backup_folder?: string | null;
+            /**
+             * Mapweb Url
+             * @description Address of the user's MapWeb (e.g. http://kevin:8788); photos are sent there only when the user asks
+             */
+            mapweb_url?: string | null;
         };
         /** AppSettingsUpdate */
         AppSettingsUpdate: {
@@ -1361,6 +1426,11 @@ export interface components {
              * @description An empty string goes back to the default
              */
             backup_folder?: string | null;
+            /**
+             * Mapweb Url
+             * @description An empty string removes the address
+             */
+            mapweb_url?: string | null;
         };
         /** AssetBatchUpdate */
         AssetBatchUpdate: {
@@ -2594,6 +2664,114 @@ export interface components {
              * @description Towns of the points
              */
             places: components["schemas"]["NamedPlace"][];
+        };
+        /** MapWebAttach */
+        MapWebAttach: {
+            /** Point Id */
+            point_id: number;
+            /** Title */
+            title: string;
+            /** Visited At */
+            visited_at: string | null;
+            /**
+             * Count
+             * @description Photos added to this existing footprint
+             */
+            count: number;
+        };
+        /** MapWebGroup */
+        MapWebGroup: {
+            /**
+             * Title
+             * @description The title the new footprint will get
+             */
+            title: string;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /**
+             * Start
+             * @description Capture time of its first photo (UTC)
+             */
+            start: string | null;
+            /** Count */
+            count: number;
+        };
+        /** MapWebPlan */
+        MapWebPlan: {
+            /** Url */
+            url: string;
+            /**
+             * Photo Count
+             * @description Photos among the selection
+             */
+            photo_count: number;
+            /**
+             * Video Count
+             * @description Videos (MapWeb keeps photos only, so not sent)
+             */
+            video_count: number;
+            /**
+             * Attach
+             * @description Existing footprints that get photos
+             */
+            attach: components["schemas"]["MapWebAttach"][];
+            /**
+             * Groups
+             * @description New footprints
+             */
+            groups: components["schemas"]["MapWebGroup"][];
+            /**
+             * Duplicate Count
+             * @description Photos sent before (skipped)
+             */
+            duplicate_count: number;
+            /**
+             * Unplaced Count
+             * @description Photos without a location or a nearby footprint
+             */
+            unplaced_count: number;
+        };
+        /** MapWebPlanRequest */
+        MapWebPlanRequest: {
+            /** Asset Ids */
+            asset_ids: number[];
+            /**
+             * Language
+             * @default zh-CN
+             */
+            language: string;
+        };
+        /** MapWebSendRequest */
+        MapWebSendRequest: {
+            /** Asset Ids */
+            asset_ids: number[];
+            /**
+             * Language
+             * @default zh-CN
+             */
+            language: string;
+            /**
+             * Description
+             * @description Text for new footprints (e.g. the portfolio)
+             */
+            description?: string | null;
+        };
+        /** MapWebStatus */
+        MapWebStatus: {
+            /** Url */
+            url: string;
+            /**
+             * Point Count
+             * @description Footprints on the map
+             */
+            point_count: number;
+        };
+        /** MapWebTestRequest */
+        MapWebTestRequest: {
+            /** Url */
+            url: string;
         };
         /** MergeGroup */
         MergeGroup: {
@@ -5995,6 +6173,159 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    testMapWeb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapWebTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapWebStatus"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    planMapWebSend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapWebPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapWebPlan"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    sendToMapWeb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapWebSendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

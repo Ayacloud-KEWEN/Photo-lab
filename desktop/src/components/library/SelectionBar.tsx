@@ -6,6 +6,7 @@ import {
   FolderPlus,
   Heart,
   HeartOff,
+  MapPinned,
   Trophy,
   X,
 } from "lucide-react";
@@ -31,7 +32,7 @@ export function SelectionBar({ ids, onClear, onError }: SelectionBarProps) {
   const { t } = useTranslation();
   const batch = useBatchUpdate();
   const applyEdits = useApplyEdits();
-  const { openCloud, openExport, openCollect, copiedSettings } = useLibraryState();
+  const { openCloud, openExport, openCollect, openMapSend, copiedSettings } = useLibraryState();
   const apply = (changes: {
     rating?: number;
     is_favorite?: boolean;
@@ -113,6 +114,10 @@ export function SelectionBar({ ids, onClear, onError }: SelectionBarProps) {
       <Button variant="ghost" size="sm" onClick={() => openExport(ids)}>
         <Download className="size-3.5" />
         {t("export.action")}
+      </Button>
+      <Button variant="ghost" size="sm" onClick={() => openMapSend(ids)}>
+        <MapPinned className="size-3.5" />
+        {t("mapweb.send")}
       </Button>
       <Button variant="ghost" size="sm" className="ml-auto" onClick={onClear}>
         <X className="size-3.5" />

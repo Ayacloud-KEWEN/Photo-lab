@@ -26,6 +26,19 @@ def _check_url(value: str | None) -> str | None:
     return value.rstrip("/") if value else value
 
 
+def _check_mapweb_url(value: str | None) -> str | None:
+    """MapWeb runs on the user's own machine (a Raspberry Pi at home, reached on the local
+    network or over Tailscale), so plain http is allowed here."""
+    if value is None:
+        return None
+    value = value.strip().rstrip("/")
+    if not value:
+        return ""
+    if not value.startswith(("http://", "https://")) or len(value) <= len("https://"):
+        raise ValueError("the MapWeb address must start with http:// or https://")
+    return value
+
+
 # Basemap styles. Online they are OpenFreeMap styles of the same name; offline "dark" uses
 # the dark country map and the others the light one.
 MapStyle = Literal["dark", "liberty", "bright", "positron"]
@@ -51,6 +64,11 @@ class AppSettings(BaseModel):
     backup_folder: str | None = Field(
         default=None, description="Backup folder (default: the data folder's backups)"
     )
+    mapweb_url: str | None = Field(
+        default=None,
+        description="Address of the user's MapWeb (e.g. http://kevin:8788); photos are sent "
+        "there only when the user asks",
+    )
 
 
 class AppSettingsUpdate(BaseModel):
@@ -70,6 +88,9 @@ class AppSettingsUpdate(BaseModel):
     backup_folder: str | None = Field(
         default=None, max_length=500, description="An empty string goes back to the default"
     )
+    mapweb_url: str | None = Field(
+        default=None, max_length=300, description="An empty string removes the address"
+    )
 
     @field_validator("backup_folder")
     @classmethod
@@ -82,6 +103,11 @@ class AppSettingsUpdate(BaseModel):
     @classmethod
     def _valid_model(cls, value: str | None) -> str | None:
         return _check_model(value)
+
+    @field_validator("mapweb_url")
+    @classmethod
+    def _valid_mapweb_url(cls, value: str | None) -> str | None:
+        return _check_mapweb_url(value)
 
     @field_validator("cloud_base_url")
     @classmethod

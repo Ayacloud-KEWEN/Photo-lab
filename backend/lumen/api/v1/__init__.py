@@ -11,6 +11,7 @@ from lumen.api.v1 import (
     duplicates,
     exports,
     health,
+    mapweb,
     settings,
     storage_roots,
     tags,
@@ -32,3 +33,4 @@ router.include_router(settings.router)
 router.include_router(ai.router)
 router.include_router(backups.router)
 router.include_router(cache.router)
+router.include_router(mapweb.router)

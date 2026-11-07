@@ -24,7 +24,7 @@ def update_settings(conn: sqlite3.Connection, data: AppSettingsUpdate) -> AppSet
     now = utc_now()
     with transaction(conn):
         for key, value in data.model_dump(exclude_none=True).items():
-            if key == "backup_folder" and value == "":  # back to the default folder
+            if key in ("backup_folder", "mapweb_url") and value == "":  # back to the default
                 conn.execute("DELETE FROM app_settings WHERE key = ?", (key,))
                 continue
             conn.execute(

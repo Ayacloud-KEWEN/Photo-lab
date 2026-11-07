@@ -8,6 +8,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { CloudDialog } from "@/components/ai/CloudDialog";
 import { AddToCollectionDialog } from "@/components/collections/AddToCollectionDialog";
 import { ExportDialog } from "@/components/library/ExportDialog";
+import { MapSendDialog } from "@/components/mapweb/MapSendDialog";
 import { Viewer } from "@/components/viewer/Viewer";
 import { cleanQuery, useLibraryState } from "@/library/state";
 import { ALL_NAV, type PageId } from "@/navigation";
@@ -126,6 +127,7 @@ export default function App() {
       <CloudDialog onOpenSettings={() => setPage("settings")} />
       <ExportDialog />
       <AddToCollectionDialog />
+      <MapSendDialog onOpenSettings={() => setPage("settings")} />
     </div>
   );
 }

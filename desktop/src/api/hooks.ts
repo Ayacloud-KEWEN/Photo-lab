@@ -24,6 +24,7 @@ import type {
   ExportRequest,
   DuplicateKind,
   DuplicateReport,
+  MapWebSendRequest,
   MergeRequest,
   RestoreRequest,
   StorageRootCreate,
@@ -391,6 +392,34 @@ export function useCollection(id: number | null) {
     queryFn: () => api.getCollection(requireConnection(conn), id!),
     enabled: conn !== null && id !== null,
   });
+}
+
+/** Where photos would go on MapWeb: asked again each time the dialog opens. */
+export function useMapWebPlan(assetIds: number[], language: string) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: ["mapweb", "plan", assetIds, language] as const,
+    queryFn: () => api.planMapWebSend(requireConnection(conn), assetIds, language),
+    enabled: conn !== null,
+    retry: false,
+    gcTime: 0,
+    staleTime: 0,
+  });
+}
+
+export function useMapWebActions() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  return {
+    test: useMutation({
+      mutationFn: (url: string) => api.testMapWeb(requireConnection(conn), url),
+    }),
+    send: useMutation({
+      mutationFn: (body: MapWebSendRequest) => api.sendToMapWeb(requireConnection(conn), body),
+      // Progress shows in the status bar.
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.tasks }),
+    }),
+  };
 }
 
 /** Where a collection's photos were taken, in capture order, grouped into stops. */

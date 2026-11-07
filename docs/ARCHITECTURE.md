@@ -563,3 +563,29 @@ storage_roots ──scan──▶ media_files (pending) ──ingest──▶ as
 - 实测（用户库副本）：86,370 组、多余 95,341 项、190 GB；首次报告约 10 秒；全部合并 5 分 48 秒；图库 270,347 → 175,006 项，
   2024 年 8 月 2,086 → 1,120 张（剩下的同秒照片是全景图与普通照片、相邻两张，确实不同）。
 
+## 37. 发送到地图程序 MapWeb（ADR-034）
+
+需求（2026-11-07）：把 LUMEN 和用户自己的地图程序 MapWeb（`C:\Users\pc\OneDrive\Documents\My Apps\Map Web\mapweb-pi`，
+部署在树莓派 `http://kevin:8788`，局域网或 Tailscale 访问、没有登录）联动。第一步只做 LUMEN → MapWeb 发照片。
+
+- **方向**：LUMEN 是本机桌面程序、后端只听本机，所以由 LUMEN 调 MapWeb；**MapWeb 不用改**，用它已有的接口：
+  `GET /api/health`、`GET /api/points`（全部足迹，含照片数）、`POST /api/points/photo-keys`、`POST /api/points/batch`、
+  `POST /api/points/:id/photos`（multipart：`image` + `source_key`，单张 ≤ 20 MB，每个足迹 ≤ 50 张）。
+- **设置**：`AppSettings.mapweb_url`（可以是 http，因为是用户自己局域网里的机器；空字符串删除）。只有用户点
+  “发送到地图”时才联网，只发到这个地址。设置页“地图程序（MapWeb）”：地址、测试连接（`POST /mapweb/test`）。
+- **放到哪里**（`services/mapweb.plan_send`）：照搬 MapWeb 照片导入的 `planImport`（`public/js/photoimport.js`），
+  **两边要保持一致**：已有足迹 ≤ 500 m 且 ≤ 3 h（或 ≤ 150 m 同一天）就挂上去，按“距离 + 小时×0.2 km”取最近；
+  否则相邻照片 ≤ 300 m、≤ 2 h 合成新足迹（📷）；没有位置的照片挂到前后一小时内的足迹，否则跳过；每个足迹最多 50 张。
+  新足迹标题是多数照片所在城镇（LUMEN 的离线地名）+ 时间，没有地名时用 MapWeb 的“照片 · 时间”；描述是作品集名。
+- **时间**：LUMEN 存的是拍摄地的墙钟时间；有 EXIF `OffsetTimeOriginal` 时按它换算成 UTC，没有时按这台电脑的时区
+  （和 MapWeb 在浏览器里导入照片时一样）。
+- **发送**（任务 `mapweb_send`，前台优先级）：执行时重新取足迹和已发过的照片再算一次计划，先 `/batch` 建新足迹，
+  再逐张用导出流程生成带编辑效果的 JPEG（长边 2048、质量 85、保留 EXIF 和位置、方向转正）上传。
+  `source_key` = `lumen:<资产 uuid>`，MapWeb 会挡掉重复的，所以中断后再发会跳过已发的。连不上 MapWeb 时任务失败
+  （不自动重试），单张出错记在结果里继续。视频不发（MapWeb 只收照片）。
+- **界面**：作品集顶部和图库多选栏“发送到地图”→ 对话框先显示计划（加到哪些已有足迹、新建几个、跳过多少），
+  确认后后台发送，状态栏“正在发送到地图 N / M”。超过 300 张时建议先挑精选。
+- 实测：Docker 没开，没能用 MapWeb 的真实测试库；改用 MapWeb 自己的 express + multer（与 `points.js` 相同的上传配置）
+  搭的内存替身。用户库副本里 24 张 Kotor 照片：19 张挂到已有足迹、2 个新足迹 4 张、1 张截图无位置跳过；
+  23 张 13 秒传完，2048×1536、带 GPS、方向 1；再发一次全部跳过。**还没对树莓派上的真实 MapWeb 发过。**
+

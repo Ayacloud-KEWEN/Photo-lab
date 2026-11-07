@@ -82,4 +82,7 @@ export type TripSuggestion = Schemas["TripSuggestion"];
 /** Identical files, or copies of one shot in other quality (recompressed, resized). */
 export type DuplicateKind = NonNullable<Schemas["MergeRequest"]["kind"]>;
 export type CollectionRoute = Schemas["CollectionRoute"];
+export type MapWebStatus = Schemas["MapWebStatus"];
+export type MapWebPlan = Schemas["MapWebPlan"];
+export type MapWebSendRequest = Schemas["MapWebSendRequest"];
 export type RouteStop = Schemas["RouteStop"];

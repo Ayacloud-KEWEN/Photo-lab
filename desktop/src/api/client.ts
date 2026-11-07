@@ -19,6 +19,9 @@ import type {
   DuplicateReport,
   CollectionDetail,
   CollectionRoute,
+  MapWebPlan,
+  MapWebSendRequest,
+  MapWebStatus,
   CollectionUpdate,
   CloudPreview,
   CloudRequest,
@@ -242,6 +245,17 @@ export const api = {
 
   getCollectionRoute: (conn: BackendConnection, id: number) =>
     request<CollectionRoute>(conn, "GET", `/api/v1/collections/${id}/route`),
+
+  /** Checks an address answers like MapWeb (the user's map on their Raspberry Pi). */
+  testMapWeb: (conn: BackendConnection, url: string) =>
+    request<MapWebStatus>(conn, "POST", "/api/v1/mapweb/test", { url }),
+
+  /** Where photos would go on the map (asks MapWeb for its footprints). */
+  planMapWebSend: (conn: BackendConnection, assetIds: number[], language: string) =>
+    request<MapWebPlan>(conn, "POST", "/api/v1/mapweb/plan", { asset_ids: assetIds, language }),
+
+  sendToMapWeb: (conn: BackendConnection, body: MapWebSendRequest) =>
+    request<Task>(conn, "POST", "/api/v1/mapweb/send", body),
 
   createCollection: (conn: BackendConnection, body: CollectionCreate) =>
     request<CollectionDetail>(conn, "POST", "/api/v1/collections", body),

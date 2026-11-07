@@ -29,6 +29,17 @@ interface LibraryState {
   collectRequest: CollectRequest | null;
   openCollect: (assetIds: number[]) => void;
   closeCollect: () => void;
+  /** Photos to send to MapWeb (the send dialog is open while set). */
+  mapSendRequest: MapSendRequest | null;
+  openMapSend: (assetIds: number[], options?: { description?: string }) => void;
+  closeMapSend: () => void;
+}
+
+export interface MapSendRequest {
+  assetIds: number[];
+  /** Text for new footprints (the portfolio's name). */
+  description: string | null;
+  nonce: number;
 }
 
 export interface CollectRequest {
@@ -104,6 +115,13 @@ export function LibraryStateProvider({ children }: { children: ReactNode }) {
     [],
   );
   const closeCollect = useCallback(() => setCollectRequest(null), []);
+  const [mapSendRequest, setMapSendRequest] = useState<MapSendRequest | null>(null);
+  const openMapSend = useCallback(
+    (assetIds: number[], options: { description?: string } = {}) =>
+      setMapSendRequest({ assetIds, description: options.description ?? null, nonce: Date.now() }),
+    [],
+  );
+  const closeMapSend = useCallback(() => setMapSendRequest(null), []);
 
   const value = useMemo(
     () => ({
@@ -125,6 +143,9 @@ export function LibraryStateProvider({ children }: { children: ReactNode }) {
       collectRequest,
       openCollect,
       closeCollect,
+      mapSendRequest,
+      openMapSend,
+      closeMapSend,
     }),
     [
       query,
@@ -143,6 +164,9 @@ export function LibraryStateProvider({ children }: { children: ReactNode }) {
       collectRequest,
       openCollect,
       closeCollect,
+      mapSendRequest,
+      openMapSend,
+      closeMapSend,
     ],
   );
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;

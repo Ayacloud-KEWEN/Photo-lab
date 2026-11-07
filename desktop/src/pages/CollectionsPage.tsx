@@ -5,6 +5,7 @@ import {
   Download,
   Grid3x3,
   ImageIcon,
+  MapPinned,
   Map as MapIcon,
   Plane,
   Plus,
@@ -251,7 +252,7 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
   const { t } = useTranslation();
   const collection = useCollection(id);
   const actions = useCollectionActions();
-  const { openViewer, openExport, openCloud } = useLibraryState();
+  const { openViewer, openExport, openCloud, openMapSend } = useLibraryState();
   const [order, setOrder] = useState<CollectionItem[]>([]);
   const [dragged, setDragged] = useState<number | null>(null);
   const [view, setView] = useState<"photos" | MapView>("photos");
@@ -336,6 +337,14 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
               onClick={() => openExport(ids, { numbered: true })}
             >
               <Download /> {t("export.action")}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={ids.length === 0}
+              onClick={() => openMapSend(ids, { description: data.name })}
+            >
+              <MapPinned /> {t("mapweb.send")}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => void remove()}>
               <Trash2 /> {t("collections.delete")}

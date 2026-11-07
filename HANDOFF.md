@@ -27,7 +27,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–5 及之后的扩展（
 | `docs/PROJECT_SPEC.md` | 产品需求（原始需求，勿随意改动） |
 | `docs/phases.md` | 阶段划分 |
 | `docs/Project_Initialization.md` | Phase 1 任务书（工作方式：先查环境、提方案、经确认再实施） |
-| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-033）**，改动架构前先读 |
+| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-034）**，改动架构前先读 |
 | `README.md` | 安装、开发、测试、API 列表、快捷键 |
 
 ## 3. 环境（用户的开发机）
@@ -62,7 +62,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **189** 个测试、前端 **104** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **193** 个测试、前端 **108** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ### 4.1 在浏览器面板里用真实图库副本测试（推荐的验收方式）
 
@@ -74,6 +74,8 @@ cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ... 
    缓存用 `robocopy "...\LUMEN Studio\cache" <scratch>\realdata\cache /E`。
 2. 启动后端（PowerShell 脚本放在 scratch 里）：`LUMEN_DATA_DIR=<scratch>\realdata`、`LUMEN_PORT=8765`、
    `LUMEN_TOKEN=devtoken`、`LUMEN_LOG_TO_FILE=false`，PATH 加上 FFmpeg 和 scoop shims，然后 `backend\.venv\Scripts\python.exe -m lumen`。
+   **启动前先在副本里删掉会指向用户真实位置的设置**：`app_settings` 的 `cache_folder`（用户缓存在 `D:\LUMEN Studio\cache`）、
+   `backup_folder`（`G:\LUMEM Studio备份`）并把 `backup_auto` 设为 false、`mapweb_url`（树莓派），以及未完成的任务。
 3. 前端不能用 Vite 开发服务器（内联脚本被面板 CSP 拦截），要：
    `VITE_LUMEN_API_URL=http://127.0.0.1:8765`、`VITE_LUMEN_API_TOKEN=devtoken`、`NODE_ENV=development`，
    `npx vite build --mode development --outDir <scratch>\devdist`，再 `npx vite preview --outDir <scratch>\devdist --port 1420`
@@ -234,6 +236,10 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
   重新压缩的版本、缩小过的版本，内容指纹不同。按拍摄时间到秒 + 文件名 + 相机 + 比例（缩小的再用 AI 比对）找出，
   保留画质最好的一份。整理页“重复文件”里切换“不同画质的副本”。用户库副本：86,370 组、合并后 27 万 → 17.5 万项。
   `tests/test_drives.py::test_an_import_stops_when_the_drive_goes_and_resumes` 偶尔因 Windows 占用文件夹改名失败（与此无关，单独重跑通过）。
+- **发送到地图程序**（`mapweb-send`，ADR-034）：作品集 / 多选“发送到地图”，照片按 MapWeb 自己的规则挂到已有足迹或
+  新建足迹，2048 像素 JPEG，`source_key` 防重复。MapWeb 本身没改。设置里填 `http://kevin:8788`。只用 MapWeb 的
+  express + multer 替身测过（Docker 没开），**还没对树莓派上的真实 MapWeb 发过**；MapWeb 改了照片导入规则时要同步
+  `services/mapweb.plan_send`。MapWeb 的约定：电脑上 8080 服务和 Docker `mapweb` 库是真实数据，测试另建库。
 
 **用户的图库（2026-11-04 晚）**：来源 `D:\照片`（SSD）、`G:\照片整理202507`、`G:\照片整理`（USB 机械硬盘，
 14.4 万个文件、678 GB，当时仍在导入）；约 19 万个文件。性能问题先在这个规模上验证（方法见 4.1，副本 + 关闭后台任务）。
