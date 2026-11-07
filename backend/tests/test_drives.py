@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import shutil
 import sqlite3
+import time
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,21 @@ needs_tools = pytest.mark.skipif(
 def free_letter() -> str:
     present = logical_drives() or set()
     return next(letter for letter in "QRSTUVWXYZ" if letter not in present)
+
+
+def rename_folder(folder: Path, target: Path, timeout: float = 10) -> None:
+    """Rename ``folder`` (a drive going away or coming back). Windows refuses while any
+    file in it is open: the import's ExifTool reading the files already claimed, or the
+    antivirus looking at the just written ones. Those handles are brief: wait for them."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            folder.rename(target)
+            return
+        except PermissionError:
+            if time.monotonic() > deadline:
+                raise
+            time.sleep(0.02)
 
 
 def add_root(conn: sqlite3.Connection, path: str, *, status: str, serial: str | None = None) -> int:
@@ -140,7 +156,7 @@ def test_an_import_stops_when_the_drive_goes_and_resumes(
         nonlocal unplugged
         if not unplugged and item.relative_path == "IMG_0005.JPG":
             unplugged = True
-            root.rename(gone)  # the drive goes away while importing
+            rename_folder(root, gone)  # the drive goes away while importing
         original(item, *args)  # type: ignore[arg-type]
 
     monkeypatch.setattr(ingest, "_prepare", prepare)
@@ -160,7 +176,7 @@ def test_an_import_stops_when_the_drive_goes_and_resumes(
         ).fetchone()
         assert pending[0] > 0 and pending[1] == 0  # not charged an attempt
 
-        gone.rename(root)  # plugged back in: the watcher finds it and the import resumes
+        rename_folder(gone, root)  # plugged back in: the watcher finds it and the import resumes
         assert check_roots(conn)
         runner.wake()
         wait_idle(db)
