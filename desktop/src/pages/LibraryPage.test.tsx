@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -209,6 +209,70 @@ describe("LibraryPage", () => {
         ),
       ).toBe(true),
     );
+  });
+
+  it("groups by day with a month bar, and jumps to a month", async () => {
+    const assets = [
+      makeAsset(1, { capture_time: "2024-06-10T09:30:00" }),
+      makeAsset(2, { capture_time: "2024-06-09T18:00:00" }),
+      makeAsset(3, { capture_time: "2023-12-24T20:00:00" }),
+    ];
+    const { requests } = stubBackend({ roots: [{ ...root, status: "ready" }], assets });
+    fakeViewport();
+    renderPage();
+    const rail = await screen.findByRole("navigation", { name: "按年月跳转" });
+    expect(await screen.findByText("2024年6月")).toBeInTheDocument();
+    expect(screen.getByText("2023年12月")).toBeInTheDocument();
+
+    await userEvent.click(within(rail).getByRole("button", { name: "2023" }));
+    await waitFor(() =>
+      expect(
+        requests.some(
+          (r) => r.url.pathname === "/api/v1/assets" && r.url.searchParams.get("date_to") === "2024-01",
+        ),
+      ).toBe(true),
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "回到最新" }));
+    expect(screen.queryByRole("button", { name: "回到最新" })).not.toBeInTheDocument();
+
+    // Oldest first: a jump starts at the month instead, and leads back to the oldest.
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "排序" }), "capture_asc");
+    const ascending = await screen.findByRole("navigation", { name: "按年月跳转" });
+    await userEvent.click(within(ascending).getByRole("button", { name: "2024" }));
+    await waitFor(() =>
+      expect(
+        requests.some(
+          (r) =>
+            r.url.pathname === "/api/v1/assets" &&
+            r.url.searchParams.get("date_from") === "2024-06" &&
+            r.url.searchParams.get("sort") === "capture_asc",
+        ),
+      ).toBe(true),
+    );
+    expect(await screen.findByRole("button", { name: "回到最早" })).toBeInTheDocument();
+  });
+
+  it("turns the date grouping off, and offers none when sorted by date added", async () => {
+    stubBackend({
+      roots: [{ ...root, status: "ready" }],
+      assets: [makeAsset(1, { capture_time: "2024-06-10T09:30:00" })],
+    });
+    fakeViewport();
+    renderPage();
+    const toggle = await screen.findByRole("button", { name: /按日期分组/ });
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByRole("navigation", { name: "按年月跳转" })).toBeInTheDocument();
+
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("navigation", { name: "按年月跳转" })).not.toBeInTheDocument();
+    expect(screen.queryByText("2024年6月")).not.toBeInTheDocument();
+    expect(localStorage.getItem("lumen.groupByDate")).toBe("false");
+
+    await userEvent.click(toggle);
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "排序" }), "added_desc");
+    expect(screen.getByRole("button", { name: /按日期分组/ })).toBeDisabled();
+    expect(screen.queryByRole("navigation", { name: "按年月跳转" })).not.toBeInTheDocument();
   });
 
   it("explains when the backend failed to start", () => {

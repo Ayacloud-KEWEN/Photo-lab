@@ -62,7 +62,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **203** 个测试、前端 **115** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **203** 个测试、前端 **117** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ### 4.1 在浏览器面板里用真实图库副本测试（推荐的验收方式）
 
@@ -245,6 +245,7 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
   按时间借用附近照片的位置）和调整拍摄时间；只改数据库，导出和发送到地图时写进新文件，重新扫描后保留。
 - **Google 导出的实况视频**（`fix-live-mp4`，ADR-036）：`.MP4` 动态部分按 ContentIdentifier 配对，多副本整组并入；
   启动时后台任务 `pair_live_photos` 补配一次（用户库副本 10,705 个，16 秒）。
+- **时间轴并入图库**（`merge-timeline`）：去掉时间轴页，图库页“按日期分组”开关 + 年月跳转栏；快捷键 Ctrl 1–5。
 
 **用户的图库（2026-11-04 晚）**：来源 `D:\照片`（SSD）、`G:\照片整理202507`、`G:\照片整理`（USB 机械硬盘，
 14.4 万个文件、678 GB，当时仍在导入）；约 19 万个文件。性能问题先在这个规模上验证（方法见 4.1，副本 + 关闭后台任务）。

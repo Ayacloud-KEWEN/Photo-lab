@@ -4,7 +4,7 @@ import type { AssetQuery, QueryPatch } from "@/api/query";
 import type { AnalysisKind, EditRecipe, RecipeField } from "@/api/types";
 
 /**
- * State shared across pages: filters (library, timeline, map, AI search), the
+ * State shared across pages: filters (library, map, AI search), the
  * full-screen viewer, "find similar" and the cloud analysis dialog.
  */
 interface LibraryState {

@@ -1,6 +1,7 @@
 import type { TFunction } from "i18next";
 import {
   AlertCircle,
+  ArrowUpToLine,
   ChevronDown,
   FolderOpen,
   FolderPlus,
@@ -10,7 +11,7 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useBackendStatus } from "@/api/backend-context";
@@ -26,13 +27,14 @@ import {
   useTimeline,
 } from "@/api/hooks";
 import type { StorageRoot, Task } from "@/api/types";
+import { DateRail, fromMonth, groupByDay } from "@/components/library/DateRail";
 import { FilterBar } from "@/components/library/FilterBar";
 import { PhotoWall } from "@/components/library/PhotoWall";
 import { SelectionBar } from "@/components/library/SelectionBar";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { WallMode } from "@/library/layout";
-import { useLibraryState } from "@/library/state";
+import { cleanQuery, useLibraryState } from "@/library/state";
 import { useWall } from "@/library/useWall";
 import { confirmAction, pickDirectory } from "@/lib/dialogs";
 import { cn } from "@/lib/utils";
@@ -44,6 +46,15 @@ interface LibraryPageProps {
 }
 
 const MODE_KEY = "lumen.wallMode";
+const GROUPED_KEY = "lumen.groupByDate";
+
+function initialGrouped(): boolean {
+  try {
+    return localStorage.getItem(GROUPED_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
 
 function initialMode(): WallMode {
   try {
@@ -69,7 +80,7 @@ export function describeError(t: TFunction, error: unknown): string {
 }
 
 export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const backend = useBackendStatus();
   const roots = useStorageRoots();
   const tasks = useActiveTasks();
@@ -81,6 +92,19 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [mode, setMode] = useState<WallMode>(initialMode);
   const [showSources, setShowSources] = useState<boolean | null>(null);
+  const [grouped, setGrouped] = useState(initialGrouped);
+  // The month jumped to in the date bar (null: from the newest, or oldest, photo).
+  const [anchor, setAnchor] = useState<string | null>(null);
+  const sort = query.sort ?? "capture_desc";
+  const byDate = grouped && sort !== "added_desc";
+  const oldestFirst = sort === "capture_asc";
+  const railQuery = useMemo(() => cleanQuery({ ...query, sort: undefined }), [query]);
+  const wallQuery = useMemo(
+    () => (byDate && anchor ? fromMonth(query, anchor, oldestFirst) : query),
+    [byDate, anchor, query, oldestFirst],
+  );
+  // A new sort order or no grouping: the jump no longer applies.
+  useEffect(() => setAnchor(null), [sort, grouped]);
 
   const focusAsset = useCallback(
     (id: number | null) => {
@@ -88,11 +112,23 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
     },
     [onSelect],
   );
-  const wall = useWall(query, focusAsset);
+  const wall = useWall(wallQuery, focusAsset);
   const counts = useTimeline(query, "year");
   const total = counts.data?.buckets.reduce((sum, bucket) => sum + bucket.count, 0);
   const rootTasks = useMemo(() => tasksByRoot(tasks.data), [tasks.data]);
-  const groups = useMemo(() => [{ key: "all", items: wall.items }], [wall.items]);
+  const groups = useMemo(
+    () => (byDate ? groupByDay(wall.items, i18n.language) : [{ key: "all", items: wall.items }]),
+    [byDate, wall.items, i18n.language],
+  );
+
+  const changeGrouped = (next: boolean) => {
+    setGrouped(next);
+    try {
+      localStorage.setItem(GROUPED_KEY, String(next));
+    } catch {
+      // Preference simply won't persist.
+    }
+  };
 
   const changeMode = (next: WallMode) => {
     setMode(next);
@@ -196,6 +232,12 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
                 {t("filters.results", { count: total })}
               </span>
             )}
+            {byDate && anchor && (
+              <Button variant="ghost" size="sm" onClick={() => setAnchor(null)}>
+                <ArrowUpToLine className="size-3.5" />
+                {oldestFirst ? t("library.backToOldest") : t("library.backToNewest")}
+              </Button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -236,7 +278,14 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
           </ul>
         )}
 
-        <FilterBar query={query} onChange={setQuery} mode={mode} onModeChange={changeMode} />
+        <FilterBar
+          query={query}
+          onChange={setQuery}
+          mode={mode}
+          onModeChange={changeMode}
+          grouped={grouped}
+          onGroupedChange={changeGrouped}
+        />
         {wall.selection.selected.size > 1 && (
           <SelectionBar
             ids={wall.selectedIds}
@@ -246,28 +295,39 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
         )}
       </div>
 
-      <div className="min-h-0 flex-1">
-        {wall.items.length > 0 ? (
-          <PhotoWall
-            groups={groups}
-            mode={mode}
-            selection={wall.selection}
-            onSelect={wall.select}
-            onOpen={wall.open}
-            onReachEnd={wall.loadMore}
-            onKeyDown={wall.onKeyDown}
+      <div className="flex min-h-0 flex-1">
+        <div className="min-h-0 min-w-0 flex-1">
+          {wall.items.length > 0 ? (
+            <PhotoWall
+              key={byDate ? (anchor ?? "start") : "all"}
+              groups={groups}
+              mode={mode}
+              selection={wall.selection}
+              onSelect={wall.select}
+              onOpen={wall.open}
+              onReachEnd={wall.loadMore}
+              onKeyDown={wall.onKeyDown}
+            />
+          ) : (
+            <p className="flex items-start justify-center gap-2 px-6 pt-10 text-center text-xs text-subtle-foreground">
+              <Info className="mt-px size-3.5 shrink-0" />
+              {wall.assets.isPending
+                ? t("wall.loading")
+                : filtered
+                  ? t("wall.empty")
+                  : indexing
+                    ? t("library.gridIndexing")
+                    : t("library.gridEmpty")}
+            </p>
+          )}
+        </div>
+        {byDate && (
+          <DateRail
+            query={railQuery}
+            oldestFirst={oldestFirst}
+            current={anchor}
+            onJump={setAnchor}
           />
-        ) : (
-          <p className="flex items-start justify-center gap-2 px-6 pt-10 text-center text-xs text-subtle-foreground">
-            <Info className="mt-px size-3.5 shrink-0" />
-            {wall.assets.isPending
-              ? t("wall.loading")
-              : filtered
-                ? t("wall.empty")
-                : indexing
-                  ? t("library.gridIndexing")
-                  : t("library.gridEmpty")}
-          </p>
         )}
       </div>
     </div>

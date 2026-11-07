@@ -168,6 +168,9 @@ storage_roots ──scan──▶ media_files (pending) ──ingest──▶ as
   只渲染可见行。
 - 筛选条件在图库、时间轴、地图之间共享（`library/state.tsx`）；顶部搜索栏实时更新筛选。
 - 时间轴按天分组；跳转到某个月是把列表"锚定"在该月（`date_to` 为下个月），可一键回到最新。
+  **2026-11-07 起没有单独的时间轴页**：图库页的“按日期分组”开关（默认开，`localStorage` 的 `lumen.groupByDate`）
+  给照片墙加上每天的标题和右侧的年月跳转栏（`components/library/DateRail.tsx`）；按“最近添加”排序时不分组；
+  “旧→新”排序时跳转用 `date_from` 锚定在该月开头，并“回到最早”。快捷键改为 Ctrl 1–5（图库、地图、AI 搜索、作品集、整理）。
 - 全屏浏览显示 2048px 预览，可用滚轮以鼠标为中心缩放、拖动平移（`viewer/zoom.ts` 纯函数 + `ZoomableImage`）；
   第一次放大时加载全尺寸图：未编辑的 JPEG/PNG 直接用原文件，其余（HEIC、RAW、编辑过的照片）用
   `thumbnail?variant=full`——按编辑配方全尺寸显影、带原图 ICC，按需生成并缓存在缩略图目录（`<digest>[_e<hash>]_f1.jpg`）。

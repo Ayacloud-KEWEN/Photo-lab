@@ -99,6 +99,9 @@ const fr: LocaleResource = {
     never: "Jamais",
   },
   library: {
+    dateRail: "Aller à un mois",
+    backToNewest: "Revenir aux plus récentes",
+    backToOldest: "Revenir aux plus anciennes",
     rescan: "Réanalyser",
     stopTask: "Arrêter",
     allMedia: "Toutes les photos et vidéos",
@@ -160,6 +163,8 @@ const fr: LocaleResource = {
     loading: "Chargement…",
   },
   filters: {
+    groupByDate: "Grouper par date (un titre par jour, accès par mois à droite)",
+    groupByDateOff: "Pas de groupement par date avec le tri « Ajoutées récemment »",
     format: "Format",
     sort: "Tri",
     all: "Tout",

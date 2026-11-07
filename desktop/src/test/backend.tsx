@@ -625,7 +625,17 @@ export function stubBackend(options: StubOptions = {}) {
     }
     if (path === "/api/v1/tags") return json([]);
     if (path === "/api/v1/timeline") {
-      return json({ granularity: "year", buckets: [{ period: "2024", count: assets.length }] });
+      const granularity = url.searchParams.get("granularity") ?? "year";
+      const size = granularity === "year" ? 4 : granularity === "month" ? 7 : 10;
+      const counts = new Map<string, number>();
+      for (const asset of assets) {
+        const period = (asset.capture_time ?? "").slice(0, size);
+        counts.set(period, (counts.get(period) ?? 0) + 1);
+      }
+      const buckets = [...counts.entries()]
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([period, count]) => ({ period, count }));
+      return json({ granularity, buckets });
     }
     if (path === "/api/v1/assets/facets") {
       return json({

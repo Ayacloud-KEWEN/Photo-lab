@@ -1,6 +1,5 @@
 import {
   Album,
-  CalendarDays,
   Images,
   ListChecks,
   MapPinned,
@@ -11,7 +10,6 @@ import {
 
 export type PageId =
   | "library"
-  | "timeline"
   | "map"
   | "aiSearch"
   | "collections"
@@ -27,11 +25,10 @@ export interface NavItem {
 
 export const MAIN_NAV: NavItem[] = [
   { id: "library", icon: Images, shortcut: "1" },
-  { id: "timeline", icon: CalendarDays, shortcut: "2" },
-  { id: "map", icon: MapPinned, shortcut: "3" },
-  { id: "aiSearch", icon: Sparkles, shortcut: "4" },
-  { id: "collections", icon: Album, shortcut: "5" },
-  { id: "cull", icon: ListChecks, shortcut: "6" },
+  { id: "map", icon: MapPinned, shortcut: "2" },
+  { id: "aiSearch", icon: Sparkles, shortcut: "3" },
+  { id: "collections", icon: Album, shortcut: "4" },
+  { id: "cull", icon: ListChecks, shortcut: "5" },
 ];
 
 export const SETTINGS_NAV: NavItem = { id: "settings", icon: Settings, shortcut: "," };

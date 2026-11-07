@@ -19,7 +19,6 @@ import { LibraryPage } from "@/pages/LibraryPage";
 import { CollectionsPage } from "@/pages/CollectionsPage";
 import { CullPage } from "@/pages/CullPage";
 import { SettingsPage } from "@/pages/SettingsPage";
-import { TimelinePage } from "@/pages/TimelinePage";
 import type { Selection } from "@/selection";
 
 // MapLibre is large: load the map page only when it is opened.
@@ -28,9 +27,9 @@ const MapPage = lazy(() => import("@/pages/MapPage").then((module) => ({ default
 const INSPECTOR_KEY = "lumen.inspectorOpen";
 const SEARCH_DELAY_MS = 250;
 /** Pages that show the shared (filtered) library. */
-const LIBRARY_VIEWS: PageId[] = ["library", "timeline", "map", "aiSearch"];
+const LIBRARY_VIEWS: PageId[] = ["library", "map", "aiSearch"];
 /** Pages whose inspector shows the selected photo. */
-const INSPECTED_VIEWS: PageId[] = ["library", "timeline", "aiSearch"];
+const INSPECTED_VIEWS: PageId[] = ["library", "aiSearch"];
 
 function initialInspectorOpen(): boolean {
   try {
@@ -62,7 +61,7 @@ export default function App() {
     }
   }, [inspectorOpen]);
 
-  // Live search: applies to the library, timeline and map.
+  // Live search: applies to the library and the map.
   useEffect(() => {
     const timer = setTimeout(() => {
       setQuery((current) => cleanQuery({ ...current, q: search.trim() || undefined }));
@@ -109,7 +108,6 @@ export default function App() {
         <Sidebar current={page} onNavigate={setPage} />
         <main className="min-w-0 flex-1 overflow-hidden">
           {page === "library" && <LibraryPage selection={selection} onSelect={setSelection} />}
-          {page === "timeline" && <TimelinePage onSelect={setSelection} />}
           {page === "map" && (
             <Suspense fallback={null}>
               <MapPage />

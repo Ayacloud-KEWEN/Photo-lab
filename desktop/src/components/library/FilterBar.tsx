@@ -1,4 +1,4 @@
-import { Grid3x3, Heart, LayoutPanelTop, MapPin, X } from "lucide-react";
+import { CalendarDays, Grid3x3, Heart, LayoutPanelTop, MapPin, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -16,8 +16,11 @@ interface FilterBarProps {
   onChange: (query: AssetQuery) => void;
   mode?: WallMode;
   onModeChange?: (mode: WallMode) => void;
-  /** Hide the sort control (the timeline is always newest first). */
+  /** Hide the sort control. */
   sortable?: boolean;
+  /** Group the wall by day (with headings and a month bar); not offered when undefined. */
+  grouped?: boolean;
+  onGroupedChange?: (grouped: boolean) => void;
   trailing?: ReactNode;
 }
 
@@ -27,6 +30,8 @@ export function FilterBar({
   mode,
   onModeChange,
   sortable = true,
+  grouped,
+  onGroupedChange,
   trailing,
 }: FilterBarProps) {
   const { t, i18n } = useTranslation();
@@ -53,7 +58,9 @@ export function FilterBar({
         onChange={(value) => set({ min_rating: value ? Number(value) : undefined })}
         options={[
           ["", t("filters.anyRating")],
-          ...[5, 4, 3, 2, 1].map((n) => [String(n), t("filters.ratingAtLeast", { count: n })] as const),
+          ...[5, 4, 3, 2, 1].map(
+            (n) => [String(n), t("filters.ratingAtLeast", { count: n })] as const,
+          ),
         ]}
       />
 
@@ -73,9 +80,7 @@ export function FilterBar({
       {(facets.data?.places.length ?? 0) > 0 && (
         <Select
           label={t("inspector.place")}
-          value={
-            query.place_id ? `p:${query.place_id}` : query.country ? `c:${query.country}` : ""
-          }
+          value={query.place_id ? `p:${query.place_id}` : query.country ? `c:${query.country}` : ""}
           onChange={(value) =>
             set({
               country: value.startsWith("c:") ? value.slice(2) : undefined,
@@ -188,6 +193,28 @@ export function FilterBar({
             ]}
           />
         )}
+        {grouped !== undefined && onGroupedChange && (
+          <Tooltip
+            label={
+              query.sort === "added_desc" ? t("filters.groupByDateOff") : t("filters.groupByDate")
+            }
+          >
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-pressed={grouped && query.sort !== "added_desc"}
+              aria-label={t("filters.groupByDate")}
+              disabled={query.sort === "added_desc"}
+              className={cn(
+                "border",
+                grouped && query.sort !== "added_desc" && "bg-accent text-foreground",
+              )}
+              onClick={() => onGroupedChange(!grouped)}
+            >
+              <CalendarDays className="size-3.5" />
+            </Button>
+          </Tooltip>
+        )}
         {mode && onModeChange && (
           <div className="flex rounded-md border">
             <Tooltip label={t("filters.layoutJustified")}>
@@ -196,7 +223,10 @@ export function FilterBar({
                 size="icon-sm"
                 aria-pressed={mode === "justified"}
                 aria-label={t("filters.layoutJustified")}
-                className={cn("rounded-r-none", mode === "justified" && "bg-accent text-foreground")}
+                className={cn(
+                  "rounded-r-none",
+                  mode === "justified" && "bg-accent text-foreground",
+                )}
                 onClick={() => onModeChange("justified")}
               >
                 <LayoutPanelTop className="size-3.5" />

@@ -98,6 +98,9 @@ const zhCN = {
     never: "从未",
   },
   library: {
+    dateRail: "按年月跳转",
+    backToNewest: "回到最新",
+    backToOldest: "回到最早",
     rescan: "重新扫描",
     stopTask: "停止",
     allMedia: "全部照片与视频",
@@ -158,6 +161,8 @@ const zhCN = {
     loading: "正在加载…",
   },
   filters: {
+    groupByDate: "按日期分组（每天一个标题，右侧可按年月跳转）",
+    groupByDateOff: "按“最近添加”排序时不按日期分组",
     format: "格式",
     sort: "排序",
     all: "全部",
