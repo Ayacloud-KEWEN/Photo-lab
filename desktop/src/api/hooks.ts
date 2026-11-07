@@ -55,6 +55,7 @@ export const queryKeys = {
   videoEdit: (id: number) => ["library", "video-edit", id] as const,
   collections: ["library", "collections"] as const,
   collection: (id: number) => ["library", "collections", id] as const,
+  collectionRoute: (id: number) => ["library", "collections", id, "route"] as const,
   tripSuggestions: ["library", "collections", "suggestions"] as const,
   // Under "library": flag changes (batch / asset updates) refresh them.
   similarGroups: (params: SimilarParams) => ["library", "cull", "similar", params] as const,
@@ -387,6 +388,16 @@ export function useCollection(id: number | null) {
     queryKey: queryKeys.collection(id ?? 0),
     queryFn: () => api.getCollection(requireConnection(conn), id!),
     enabled: conn !== null && id !== null,
+  });
+}
+
+/** Where a collection's photos were taken, in capture order, grouped into stops. */
+export function useCollectionRoute(id: number, enabled = true) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.collectionRoute(id),
+    queryFn: () => api.getCollectionRoute(requireConnection(conn), id),
+    enabled: enabled && conn !== null,
   });
 }
 

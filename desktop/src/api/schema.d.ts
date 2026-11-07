@@ -688,6 +688,26 @@ export interface paths {
         patch: operations["updateCollection"];
         trace?: never;
     };
+    "/api/v1/collections/{collection_id}/route": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Route
+         * @description The collection's located photos in capture order, grouped into stops (for its map).
+         */
+        get: operations["getCollectionRoute"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/collections/{collection_id}/items": {
         parameters: {
             query?: never;
@@ -1905,6 +1925,11 @@ export interface components {
             end_date: string | null;
             /** Item Count */
             item_count: number;
+            /**
+             * Cover Asset Id
+             * @description The chosen cover; null: the first item
+             */
+            cover_asset_id: number | null;
             /** @description The chosen cover, else the first item */
             cover: components["schemas"]["AssetSummary"] | null;
             /** First Capture */
@@ -1970,6 +1995,11 @@ export interface components {
             end_date: string | null;
             /** Item Count */
             item_count: number;
+            /**
+             * Cover Asset Id
+             * @description The chosen cover; null: the first item
+             */
+            cover_asset_id: number | null;
             /** @description The chosen cover, else the first item */
             cover: components["schemas"]["AssetSummary"] | null;
             /** First Capture */
@@ -2001,6 +2031,39 @@ export interface components {
         CollectionList: {
             /** Items */
             items: components["schemas"]["Collection"][];
+        };
+        /** CollectionRoute */
+        CollectionRoute: {
+            /**
+             * Points
+             * @description Located photos, in capture order
+             */
+            points: components["schemas"]["MapPoint"][];
+            /**
+             * Places
+             * @description Towns of the points
+             */
+            places: components["schemas"]["NamedPlace"][];
+            /**
+             * Stops
+             * @description Runs of photos taken close together, in order
+             */
+            stops: components["schemas"]["RouteStop"][];
+            /**
+             * Distance Km
+             * @description Straight lines from stop to stop
+             */
+            distance_km: number;
+            /**
+             * Days
+             * @description Calendar days from the first to the last located photo
+             */
+            days: number;
+            /**
+             * Unlocated
+             * @description Photos of the collection without a location
+             */
+            unlocated: number;
         };
         /**
          * CollectionUpdate
@@ -2637,6 +2700,37 @@ export interface components {
         RevealRequest: {
             /** Name */
             name: string;
+        };
+        /** RouteStop */
+        RouteStop: {
+            /**
+             * Lat
+             * @description Centre of the stop's photos
+             */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /**
+             * Start
+             * @description Capture time of its first photo
+             */
+            start: string;
+            /** End */
+            end: string;
+            /**
+             * Day
+             * @description Day of the route: 1 is the day of the first located photo
+             */
+            day: number;
+            /**
+             * Asset Ids
+             * @description In capture order
+             */
+            asset_ids: number[];
+            /** @description The photo shown for the stop (best rated, else first) */
+            cover: components["schemas"]["MapPoint"];
+            /** @description Town most of its photos were taken in */
+            place: components["schemas"]["PlaceName"] | null;
         };
         /**
          * SemanticPage
@@ -4658,6 +4752,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CollectionDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getCollectionRoute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionRoute"];
                 };
             };
             /** @description Not Found */

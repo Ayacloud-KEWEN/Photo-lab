@@ -10,18 +10,21 @@ from datetime import datetime
 
 from lumen.core.errors import LumenError, NotFoundError
 from lumen.db.connection import GenerationCache, transaction, utc_now
+from lumen.library.route import RoutePoint, find_stops, route_km
 from lumen.library.trips import Shot, find_trips, spread
-from lumen.schemas.assets import PlaceName
+from lumen.schemas.assets import MapPoint, NamedPlace, PlaceName
 from lumen.schemas.collections import (
     Collection,
     CollectionCreate,
     CollectionDetail,
     CollectionItem,
+    CollectionRoute,
     CollectionUpdate,
+    RouteStop,
     TripSuggestion,
     TripSuggestions,
 )
-from lumen.services.assets import summaries_by_ids
+from lumen.services.assets import rendition_version, summaries_by_ids
 
 _CHUNK = 500
 MAX_SUGGESTIONS = 20
@@ -251,6 +254,92 @@ def set_caption(
             raise NotFoundError(
                 "Item not found", details={"collection_id": collection_id, "asset_id": asset_id}
             )
+
+
+def collection_route(conn: sqlite3.Connection, collection_id: int) -> CollectionRoute:
+    """Where the collection's photos were taken, in capture order, grouped into stops."""
+    _row(conn, collection_id)
+    rows = conn.execute(
+        """
+        SELECT a.id, a.capture_time, a.rating, a.is_favorite, c.fingerprint, e.recipe_hash,
+               l.latitude, l.longitude, p.place_id, p.city, p.city_zh, p.city_fr
+        FROM collection_items i
+        JOIN media_assets a ON a.id = i.asset_id
+        JOIN media_files c ON c.id = a.cover_file_id
+             AND c.ingest_state = 'done' AND c.status = 'present'
+        LEFT JOIN edit_history e ON e.id = a.current_edit_id
+        LEFT JOIN media_locations l ON l.asset_id = a.id
+        LEFT JOIN media_places p ON p.asset_id = a.id
+        WHERE i.collection_id = ? AND a.capture_time IS NOT NULL
+        ORDER BY a.capture_time, a.id
+        """,
+        (collection_id,),
+    ).fetchall()
+    located = [row for row in rows if row["latitude"] is not None and row["longitude"] is not None]
+    by_id = {int(row["id"]): row for row in located}
+    points: list[RoutePoint] = []
+    for row in located:
+        try:
+            taken = datetime.fromisoformat(row["capture_time"]).replace(tzinfo=None)
+        except ValueError:
+            continue
+        points.append(
+            RoutePoint(
+                int(row["id"]), taken, row["latitude"], row["longitude"], row["place_id"]
+            )
+        )
+
+    def point(row: sqlite3.Row) -> MapPoint:
+        return MapPoint(
+            id=row["id"],
+            lat=round(row["latitude"], 5),
+            lon=round(row["longitude"], 5),
+            v=rendition_version(row["fingerprint"], row["recipe_hash"]),
+            p=row["place_id"],
+        )
+
+    def place(row: sqlite3.Row) -> PlaceName:
+        return PlaceName(name=row["city"], zh=row["city_zh"], fr=row["city_fr"])
+
+    stops = find_stops(points)
+    first_day = points[0].taken.date() if points else None
+    route_stops: list[RouteStop] = []
+    for stop in stops:
+        members = [by_id[p.asset_id] for p in stop.points]
+        _, cover = max(
+            enumerate(members),
+            key=lambda item: (item[1]["rating"], item[1]["is_favorite"], -item[0]),
+        )
+        towns: dict[int, int] = {}
+        for row in members:
+            if row["place_id"] is not None:
+                towns[row["place_id"]] = towns.get(row["place_id"], 0) + 1
+        town = max(towns, key=lambda key: towns[key]) if towns else None
+        route_stops.append(
+            RouteStop(
+                lat=round(stop.latitude, 5),
+                lon=round(stop.longitude, 5),
+                start=stop.start.isoformat(),
+                end=stop.end.isoformat(),
+                day=(stop.start.date() - first_day).days + 1 if first_day else 1,
+                asset_ids=[p.asset_id for p in stop.points],
+                cover=point(cover),
+                place=next(place(r) for r in members if r["place_id"] == town) if town else None,
+            )
+        )
+    places = {
+        row["place_id"]: NamedPlace(place_id=row["place_id"], name=place(row))
+        for row in located
+        if row["place_id"] is not None
+    }
+    return CollectionRoute(
+        points=[point(by_id[p.asset_id]) for p in points],
+        places=list(places.values()),
+        stops=route_stops,
+        distance_km=round(route_km(stops), 1),
+        days=(points[-1].taken.date() - first_day).days + 1 if first_day else 0,
+        unlocated=len(rows) - len(points),
+    )
 
 
 _cache = GenerationCache(size=1)

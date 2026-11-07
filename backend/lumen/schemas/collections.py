@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 
-from lumen.schemas.assets import AssetSummary, PlaceName
+from lumen.schemas.assets import AssetSummary, MapPoint, NamedPlace, PlaceName
 
 CollectionKind = Literal["album", "trip"]
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
@@ -53,6 +53,7 @@ class Collection(BaseModel):
     start_date: str | None
     end_date: str | None
     item_count: int
+    cover_asset_id: int | None = Field(description="The chosen cover; null: the first item")
     cover: AssetSummary | None = Field(description="The chosen cover, else the first item")
     first_capture: str | None
     last_capture: str | None
@@ -100,3 +101,23 @@ class TripSuggestion(BaseModel):
 
 class TripSuggestions(BaseModel):
     items: list[TripSuggestion] = Field(description="Newest first")
+
+
+class RouteStop(BaseModel):
+    lat: float = Field(description="Centre of the stop's photos")
+    lon: float
+    start: str = Field(description="Capture time of its first photo")
+    end: str
+    day: int = Field(description="Day of the route: 1 is the day of the first located photo")
+    asset_ids: list[int] = Field(description="In capture order")
+    cover: MapPoint = Field(description="The photo shown for the stop (best rated, else first)")
+    place: PlaceName | None = Field(description="Town most of its photos were taken in")
+
+
+class CollectionRoute(BaseModel):
+    points: list[MapPoint] = Field(description="Located photos, in capture order")
+    places: list[NamedPlace] = Field(description="Towns of the points")
+    stops: list[RouteStop] = Field(description="Runs of photos taken close together, in order")
+    distance_km: float = Field(description="Straight lines from stop to stop")
+    days: int = Field(description="Calendar days from the first to the last located photo")
+    unlocated: int = Field(description="Photos of the collection without a location")

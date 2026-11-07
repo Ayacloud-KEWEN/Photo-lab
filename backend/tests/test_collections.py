@@ -13,6 +13,7 @@ from lumen.core.config import Settings
 from lumen.db.connection import Database
 from lumen.library import trips
 from lumen.library.live import pair_live_photo
+from lumen.library.route import RoutePoint, find_stops, route_km
 from lumen.library.trips import Shot, distance_km, find_trips, spread
 from tests.test_develop import NOW, add_photo
 from tests.test_live import SAME_ID, add, asset_of
@@ -67,6 +68,33 @@ def test_helpers() -> None:
     assert spread([1, 2], 4) == [1, 2]
 
 
+def test_stops_group_photos_taken_close_together() -> None:
+    day = datetime(2025, 1, 1, 9)
+    near_paris = (PARIS[0] + 0.004, PARIS[1])  # ~450 m away
+    points = [
+        RoutePoint(1, day, *PARIS),
+        RoutePoint(2, day + timedelta(hours=1), *near_paris),
+        RoutePoint(3, day + timedelta(days=1), *ZERMATT),
+        RoutePoint(4, day + timedelta(days=2), *PARIS),  # back again: a new stop
+    ]
+    stops = find_stops(points)
+    assert [[p.asset_id for p in stop.points] for stop in stops] == [[1, 2], [3], [4]]
+    assert abs(stops[0].latitude - (PARIS[0] + 0.002)) < 1e-9
+    assert (stops[0].start, stops[0].end) == (day, day + timedelta(hours=1))
+    assert 1000 < route_km(stops) < 1060
+    assert find_stops([]) == [] and route_km([]) == 0
+
+    # Photos of one town are one stop, however far apart within it.
+    paris, versailles = 2988507, 2969679
+    walk = [
+        RoutePoint(1, day, *PARIS, paris),
+        RoutePoint(2, day + timedelta(hours=1), PARIS[0] + 0.05, PARIS[1], paris),  # 5.5 km
+        RoutePoint(3, day + timedelta(hours=2), PARIS[0] - 0.05, PARIS[1], versailles),
+        RoutePoint(4, day + timedelta(hours=3), PARIS[0] + 0.1, PARIS[1]),  # unnamed
+    ]
+    assert [[p.asset_id for p in stop.points] for stop in find_stops(walk)] == [[1, 2], [3], [4]]
+
+
 # --- API ------------------------------------------------------------------------------------
 
 
@@ -105,6 +133,7 @@ def test_collection_lifecycle(library: tuple[TestClient, list[int]]) -> None:
     assert detail["name"] == "Alps" and detail["place"] == "Zermatt"
     assert [item["asset"]["id"] for item in detail["items"]] == [ids[2], ids[3]]
     assert detail["cover"]["id"] == ids[2]  # the first item until one is chosen
+    assert detail["cover_asset_id"] is None
 
     added = client.post(
         f"/api/v1/collections/{collection}/items", json={"asset_ids": [ids[4], ids[2]]}
@@ -121,7 +150,7 @@ def test_collection_lifecycle(library: tuple[TestClient, list[int]]) -> None:
     )
     assert caption.status_code == 204
     covered = client.patch(f"/api/v1/collections/{collection}", json={"cover_asset_id": ids[3]})
-    assert covered.json()["cover"]["id"] == ids[3]
+    assert covered.json()["cover"]["id"] == covered.json()["cover_asset_id"] == ids[3]
     outside = client.patch(f"/api/v1/collections/{collection}", json={"cover_asset_id": ids[0]})
     assert outside.status_code == 400
     backwards = client.patch(
@@ -201,3 +230,45 @@ def test_live_photo_pairing_keeps_portfolio_membership(conn: sqlite3.Connection)
     assert pair_live_photo(conn, still, NOW)
     rows = conn.execute("SELECT asset_id, position, caption FROM collection_items").fetchall()
     assert [tuple(r) for r in rows] == [(asset_of(conn, still), 3, "boat")]
+
+
+def test_collection_route(library: tuple[TestClient, list[int]], settings: Settings) -> None:
+    client, ids = library
+    places = {ids[0]: PARIS, ids[1]: (PARIS[0] + 0.003, PARIS[1]), ids[3]: ZERMATT, ids[4]: ZERMATT}
+    with Database(settings.database_path).session() as conn:
+        for asset_id, place in places.items():
+            conn.execute(
+                "INSERT INTO media_locations (asset_id, latitude, longitude, source, updated_at) "
+                "VALUES (?, ?, ?, 'exif', ?)",
+                (asset_id, *place, NOW),
+            )
+        for asset_id in ids[:2]:
+            conn.execute(
+                "INSERT INTO media_places (asset_id, place_id, city, city_zh, city_fr, "
+                "country_code, country, country_zh, country_fr, distance_km, data_version, "
+                "located_at, updated_at) VALUES (?, 2988507, 'Paris', '巴黎', 'Paris', 'FR', "
+                "'France', '法国', 'France', 1, 'v', ?, ?)",
+                (asset_id, NOW, NOW),
+            )
+        conn.execute("UPDATE media_assets SET rating = 5 WHERE id = ?", (ids[4],))
+    collection = client.post(
+        "/api/v1/collections", json={"name": "Spring", "asset_ids": [ids[4], *ids[:4]]}
+    ).json()["id"]
+
+    route = client.get(f"/api/v1/collections/{collection}/route").json()
+    assert [point["id"] for point in route["points"]] == [ids[0], ids[1], ids[3], ids[4]]
+    assert route["unlocated"] == 1
+    paris, alps = route["stops"]
+    assert paris["asset_ids"] == ids[:2] and paris["day"] == 1
+    assert paris["place"]["zh"] == "巴黎" and paris["cover"]["id"] == ids[0]
+    assert alps["asset_ids"] == ids[3:] and alps["day"] == 4 and alps["place"] is None
+    assert alps["cover"]["id"] == ids[4]  # the best rated photo
+    assert route["days"] == 5
+    assert 500 < route["distance_km"] < 530
+    assert [place["name"]["name"] for place in route["places"]] == ["Paris"]
+
+    empty = client.post("/api/v1/collections", json={"name": "Empty"}).json()["id"]
+    assert client.get(f"/api/v1/collections/{empty}/route").json() == {
+        "points": [], "places": [], "stops": [], "distance_km": 0, "days": 0, "unlocated": 0,
+    }  # fmt: skip
+    assert client.get("/api/v1/collections/999/route").status_code == 404

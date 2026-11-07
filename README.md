@@ -218,6 +218,7 @@ cd backend
 | POST | `/api/v1/collections/{id}/items` · `/items/remove` | 加入 / 移出资产 |
 | PUT | `/api/v1/collections/{id}/order` | 整体重排 |
 | PATCH | `/api/v1/collections/{id}/items/{asset_id}` | 修改说明 |
+| GET | `/api/v1/collections/{id}/route` | 作品集的地图与路线：有位置的照片（按拍摄时间）、停留点、里程、天数 |
 | GET | `/api/v1/timeline?granularity=year\|month\|day&…` | 按时间段统计数量 |
 | GET | `/api/v1/map/points?…` | 带位置的资产坐标 |
 | GET/POST | `/api/v1/tags` · PATCH/DELETE `/api/v1/tags/{id}` | 标签列表、新建、重命名、删除 |

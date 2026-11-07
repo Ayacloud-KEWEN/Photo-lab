@@ -136,6 +136,8 @@ export interface StubOptions {
   videoEdits?: Record<number, Partial<VideoRecipe>>;
   /** Collections: name, kind and their asset ids (in order). */
   collections?: { name: string; kind?: "album" | "trip"; assetIds?: number[] }[];
+  /** Where assets were taken (asset id: [lat, lon]); a collection's route has a stop for each. */
+  located?: Record<number, [number, number]>;
   /** Cache folder: moved to a custom folder, its drive missing at startup, or a full target. */
   cache?: { folder?: string; missing?: boolean; noSpace?: boolean };
   /** Trip suggestions: date ranges over asset ids. */
@@ -167,7 +169,7 @@ export function stubBackend(options: StubOptions = {}) {
       id: state.id, uuid: `c${state.id}`, name: state.name, kind: state.kind,
       description: state.description, place: state.place,
       start_date: state.start_date, end_date: state.end_date,
-      item_count: state.items.length,
+      item_count: state.items.length, cover_asset_id: state.cover,
       cover: items.find((i) => i.asset!.id === state.cover)?.asset ?? items[0]?.asset ?? null,
       first_capture: null, last_capture: null,
       created_at: "2026-11-03T08:00:00.000Z", updated_at: `2026-11-03T08:00:0${state.items.length % 10}.000Z`,
@@ -224,6 +226,21 @@ export function stubBackend(options: StubOptions = {}) {
     if (rest === "/items/remove") {
       state.items = state.items.filter((item) => !ids.includes(item.id));
       return json({ changed: ids.length });
+    }
+    if (rest === "/route" && method === "GET") {
+      const where = options.located ?? {};
+      const points = state.items
+        .filter((item) => where[item.id])
+        .map((item) => ({ id: item.id, lat: where[item.id]![0], lon: where[item.id]![1], v: `v${item.id}`, p: null }));
+      return json({
+        points, places: [], distance_km: 1234.4, days: points.length,
+        unlocated: state.items.length - points.length,
+        stops: points.map((point, index) => ({
+          lat: point.lat, lon: point.lon, start: `2025-03-0${index + 1}T09:00:00`,
+          end: `2025-03-0${index + 1}T11:30:00`, day: index + 1, asset_ids: [point.id], cover: point,
+          place: index === 0 ? { name: "Zermatt", zh: "采尔马特", fr: "Zermatt" } : null,
+        })),
+      }); // prettier-ignore
     }
     if (rest === "/order") {
       state.items = ids.map((id) => state.items.find((item) => item.id === id)!);

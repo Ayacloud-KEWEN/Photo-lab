@@ -17,6 +17,7 @@ import type {
   CollectionCreate,
   DuplicateReport,
   CollectionDetail,
+  CollectionRoute,
   CollectionUpdate,
   CloudPreview,
   CloudRequest,
@@ -237,6 +238,9 @@ export const api = {
 
   getCollection: (conn: BackendConnection, id: number) =>
     request<CollectionDetail>(conn, "GET", `/api/v1/collections/${id}`),
+
+  getCollectionRoute: (conn: BackendConnection, id: number) =>
+    request<CollectionRoute>(conn, "GET", `/api/v1/collections/${id}/route`),
 
   createCollection: (conn: BackendConnection, body: CollectionCreate) =>
     request<CollectionDetail>(conn, "POST", "/api/v1/collections", body),

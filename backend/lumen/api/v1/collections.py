@@ -12,6 +12,7 @@ from lumen.schemas.collections import (
     CollectionDetail,
     CollectionItemUpdate,
     CollectionList,
+    CollectionRoute,
     CollectionUpdate,
     TripSuggestions,
 )
@@ -49,6 +50,15 @@ def create_collection(conn: Connection, body: CollectionCreate) -> CollectionDet
 )  # fmt: skip
 def get_collection(conn: Connection, collection_id: int = Path(ge=1)) -> CollectionDetail:
     return service.get_collection(conn, collection_id)
+
+
+@router.get(
+    "/collections/{collection_id}/route", response_model=CollectionRoute,
+    operation_id="getCollectionRoute", responses=NOT_FOUND,
+)  # fmt: skip
+def get_route(conn: Connection, collection_id: int = Path(ge=1)) -> CollectionRoute:
+    """The collection's located photos in capture order, grouped into stops (for its map)."""
+    return service.collection_route(conn, collection_id)
 
 
 @router.patch(

@@ -3,14 +3,17 @@ import {
   ArrowLeft,
   BookOpen,
   Download,
+  Grid3x3,
   ImageIcon,
+  Map as MapIcon,
   Plane,
   Plus,
+  Route,
   Star,
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useState, type DragEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { thumbnailUrl } from "@/api/client";
@@ -27,8 +30,10 @@ import type {
   CollectionDetail,
   CollectionItem,
   CollectionUpdate,
+  RenditionVariant,
   TripSuggestion,
 } from "@/api/types";
+import { CollectionMap, type MapView } from "@/components/collections/CollectionMap";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLibraryState } from "@/library/state";
@@ -47,22 +52,39 @@ export function CollectionsPage() {
   );
 }
 
-function dateRange(start: string | null | undefined, end: string | null | undefined, locale: string) {
+function dateRange(
+  start: string | null | undefined,
+  end: string | null | undefined,
+  locale: string,
+) {
   if (!start) return "";
   const format = (value: string) =>
-    new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(`${value.slice(0, 10)}T12:00:00`));
+    new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(
+      new Date(`${value.slice(0, 10)}T12:00:00`),
+    );
   const from = format(start);
   const to = end ? format(end) : from;
   return from === to ? from : `${from} – ${to}`;
 }
 
-function Thumb({ asset, className }: { asset: AssetSummary; className?: string }) {
+function Thumb({
+  asset,
+  className,
+  variant,
+  decorative = false,
+}: {
+  asset: AssetSummary;
+  className?: string;
+  variant?: RenditionVariant;
+  /** Only illustrates a labelled control: no alternative text. */
+  decorative?: boolean;
+}) {
   const conn = useConnection();
   if (!conn) return null;
   return (
     <img
-      src={thumbnailUrl(conn, asset.id, asset.rendition_version)}
-      alt={asset.file_name}
+      src={thumbnailUrl(conn, asset.id, asset.rendition_version, variant)}
+      alt={decorative ? "" : asset.file_name}
       loading="lazy"
       draggable={false}
       className={cn("size-full object-cover", className)}
@@ -136,7 +158,9 @@ function CollectionList({ onOpen }: { onOpen: (id: number) => void }) {
       {(suggestions.data?.length ?? 0) > 0 && (
         <section aria-label={t("collections.suggestions")} className="mt-10">
           <h2 className="mb-1 text-[14px] font-medium">{t("collections.suggestions")}</h2>
-          <p className="mb-4 text-[12px] text-muted-foreground">{t("collections.suggestionsHint")}</p>
+          <p className="mb-4 text-[12px] text-muted-foreground">
+            {t("collections.suggestionsHint")}
+          </p>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
             {suggestions.data?.map((suggestion) => (
               <article
@@ -198,7 +222,7 @@ function CollectionCard({
     >
       <div className="flex aspect-[4/3] items-center justify-center bg-black/40">
         {collection.cover ? (
-          <Thumb asset={collection.cover} />
+          <Thumb asset={collection.cover} variant="preview" />
         ) : (
           <ImageIcon className="size-8 text-subtle-foreground" strokeWidth={1.25} />
         )}
@@ -230,6 +254,8 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
   const { openViewer, openExport, openCloud } = useLibraryState();
   const [order, setOrder] = useState<CollectionItem[]>([]);
   const [dragged, setDragged] = useState<number | null>(null);
+  const [view, setView] = useState<"photos" | MapView>("photos");
+  const [choosingCover, setChoosingCover] = useState(false);
   const data = collection.data;
 
   useEffect(() => {
@@ -238,7 +264,8 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
 
   if (!data) return null;
   const ids = order.map((item) => item.asset.id);
-  const update = (body: CollectionUpdate) => void actions.update(id, body).then(() => collection.refetch());
+  const update = (body: CollectionUpdate) =>
+    void actions.update(id, body).then(() => collection.refetch());
 
   const moveTo = (target: number) => {
     if (dragged === null || dragged === target) return;
@@ -268,11 +295,32 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
     <div className="flex h-full flex-col">
       <header className="shrink-0 space-y-3 border-b border-white/10 px-6 py-4">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon-sm" aria-label={t("collections.back")} onClick={onBack}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("collections.back")}
+            onClick={onBack}
+          >
             <ArrowLeft />
           </Button>
           <CollectionFields key={data.updated_at} collection={data} onSave={update} />
           <div className="ml-auto flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={ids.length === 0}
+              title={t("collections.chooseCover")}
+              onClick={() => setChoosingCover(true)}
+            >
+              {data.cover ? (
+                <span className="block size-5 overflow-hidden rounded-sm">
+                  <Thumb asset={data.cover} decorative />
+                </span>
+              ) : (
+                <ImageIcon />
+              )}
+              {t("collections.cover")}
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -294,83 +342,240 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
             </Button>
           </div>
         </div>
+        <ViewSwitch value={view} onChange={setView} />
       </header>
+      {choosingCover && (
+        <CoverPicker
+          collection={data}
+          items={order}
+          onPick={(cover) => {
+            setChoosingCover(false);
+            if (cover !== data.cover_asset_id) update({ cover_asset_id: cover });
+          }}
+          onClose={() => setChoosingCover(false)}
+        />
+      )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-        {order.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">{t("collections.emptyOne")}</p>
-        ) : (
-          <ol className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-            {order.map((item, index) => (
-              <li
+      {view !== "photos" ? (
+        <CollectionMap id={id} view={view} />
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          {order.length === 0 ? (
+            <p className="text-[13px] text-muted-foreground">{t("collections.emptyOne")}</p>
+          ) : (
+            <ol className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+              {order.map((item, index) => (
+                <li
+                  key={item.asset.id}
+                  draggable
+                  onDragStart={(event: DragEvent) => {
+                    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+                    setDragged(item.asset.id);
+                  }}
+                  onDragOver={(event: DragEvent) => {
+                    event.preventDefault();
+                    moveTo(item.asset.id);
+                  }}
+                  onDragEnd={saveOrder}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    saveOrder();
+                  }}
+                  className={cn(
+                    "group relative overflow-hidden rounded-md border border-white/10 bg-card",
+                    dragged === item.asset.id && "opacity-40",
+                  )}
+                >
+                  <button
+                    type="button"
+                    aria-label={item.asset.file_name}
+                    onDoubleClick={() => openViewer(ids, item.asset.id)}
+                    className="block aspect-[4/3] w-full cursor-grab bg-black/40"
+                  >
+                    <Thumb asset={item.asset} />
+                  </button>
+                  <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 text-[10.5px] text-white">
+                    {index + 1}
+                  </span>
+                  {data.cover?.id === item.asset.id && (
+                    <span className="absolute right-2 top-2 flex items-center gap-1 rounded bg-black/60 px-1.5 text-[10.5px] text-white">
+                      <Star className="size-3 fill-highlight text-highlight" />
+                      {t("collections.cover")}
+                    </span>
+                  )}
+                  <div className="absolute right-1.5 top-8 flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      aria-label={t("collections.setCover")}
+                      aria-pressed={data.cover?.id === item.asset.id}
+                      title={t("collections.setCover")}
+                      onClick={() => {
+                        if (data.cover?.id !== item.asset.id)
+                          update({ cover_asset_id: item.asset.id });
+                      }}
+                    >
+                      <Star
+                        className={cn(
+                          data.cover?.id === item.asset.id && "fill-highlight text-highlight",
+                        )}
+                      />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      aria-label={t("collections.removeItem")}
+                      title={t("collections.removeItem")}
+                      onClick={() =>
+                        void actions
+                          .removeItems(id, [item.asset.id])
+                          .then(() => collection.refetch())
+                      }
+                    >
+                      <X />
+                    </Button>
+                  </div>
+                  <Caption
+                    key={`${item.asset.id}:${item.caption ?? ""}`}
+                    value={item.caption}
+                    label={t("collections.caption", {
+                      name: item.asset.file_name,
+                    })}
+                    onSave={(caption) => void actions.caption(id, item.asset.id, caption)}
+                  />
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Photos, map or route of one collection. */
+function ViewSwitch({
+  value,
+  onChange,
+}: {
+  value: "photos" | MapView;
+  onChange: (view: "photos" | MapView) => void;
+}) {
+  const { t } = useTranslation();
+  const views = [
+    { id: "photos", icon: Grid3x3, label: t("collections.viewPhotos") },
+    { id: "map", icon: MapIcon, label: t("collections.viewMap") },
+    { id: "route", icon: Route, label: t("collections.viewRoute") },
+  ] as const;
+  return (
+    <div
+      role="tablist"
+      aria-label={t("collections.views")}
+      className="inline-flex rounded-md border border-white/10 bg-background/40 p-0.5"
+    >
+      {views.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          role="tab"
+          aria-selected={value === item.id}
+          onClick={() => onChange(item.id)}
+          className={cn(
+            "flex h-7 items-center gap-1.5 rounded px-3 text-[12px] text-muted-foreground hover:text-foreground",
+            value === item.id && "bg-white/10 text-foreground",
+          )}
+        >
+          <item.icon className="size-3.5" />
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Pick the collection's cover among its items (or go back to the first item). */
+function CoverPicker({
+  collection,
+  items,
+  onPick,
+  onClose,
+}: {
+  collection: CollectionDetail;
+  items: CollectionItem[];
+  onPick: (assetId: number | null) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => rootRef.current?.focus(), []);
+  const current = collection.cover?.id;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+      onClick={onClose}
+    >
+      <div
+        ref={rootRef}
+        role="dialog"
+        aria-modal
+        aria-label={t("collections.chooseCover")}
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onClose();
+          event.stopPropagation();
+        }}
+        className="flex max-h-full w-[760px] max-w-full flex-col rounded-lg border bg-popover shadow-xl outline-none"
+      >
+        <div className="flex shrink-0 items-center gap-2 border-b px-5 py-3">
+          <h2 className="text-[14px] font-medium">{t("collections.chooseCover")}</h2>
+          <span className="text-[12px] text-muted-foreground">{t("collections.coverHint")}</span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="ml-auto"
+            aria-label={t("export.close")}
+            onClick={onClose}
+          >
+            <X />
+          </Button>
+        </div>
+        {/* The grid scrolls inside its own box: as the scroll box itself its rows would shrink. */}
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-2">
+            {items.map((item) => (
+              <button
                 key={item.asset.id}
-                draggable
-                onDragStart={(event: DragEvent) => {
-                  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-                  setDragged(item.asset.id);
-                }}
-                onDragOver={(event: DragEvent) => {
-                  event.preventDefault();
-                  moveTo(item.asset.id);
-                }}
-                onDragEnd={saveOrder}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  saveOrder();
-                }}
+                type="button"
+                aria-label={item.asset.file_name}
+                aria-pressed={current === item.asset.id}
+                onClick={() => onPick(item.asset.id)}
                 className={cn(
-                  "group relative overflow-hidden rounded-md border border-white/10 bg-card",
-                  dragged === item.asset.id && "opacity-40",
+                  "relative aspect-[4/3] overflow-hidden rounded-md border-2 border-transparent bg-black/40 hover:border-white/40",
+                  current === item.asset.id && "border-highlight hover:border-highlight",
                 )}
               >
-                <button
-                  type="button"
-                  aria-label={item.asset.file_name}
-                  onDoubleClick={() => openViewer(ids, item.asset.id)}
-                  className="block aspect-[4/3] w-full cursor-grab bg-black/40"
-                >
-                  <Thumb asset={item.asset} />
-                </button>
-                <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 text-[10.5px] text-white">
-                  {index + 1}
-                </span>
-                {data.cover?.id === item.asset.id && (
-                  <span className="absolute right-2 top-2 rounded bg-black/60 px-1.5 text-[10.5px] text-white">
-                    {t("collections.cover")}
-                  </span>
+                <Thumb asset={item.asset} />
+                {current === item.asset.id && (
+                  <Star className="absolute right-1.5 top-1.5 size-4 fill-highlight text-highlight drop-shadow" />
                 )}
-                <div className="absolute right-1.5 top-8 flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                  <Button
-                    variant="secondary"
-                    size="icon-sm"
-                    aria-label={t("collections.setCover")}
-                    title={t("collections.setCover")}
-                    onClick={() => update({ cover_asset_id: item.asset.id })}
-                  >
-                    <Star />
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="icon-sm"
-                    aria-label={t("collections.removeItem")}
-                    title={t("collections.removeItem")}
-                    onClick={() =>
-                      void actions.removeItems(id, [item.asset.id]).then(() => collection.refetch())
-                    }
-                  >
-                    <X />
-                  </Button>
-                </div>
-                <Caption
-                  key={`${item.asset.id}:${item.caption ?? ""}`}
-                  value={item.caption}
-                  label={t("collections.caption", { name: item.asset.file_name })}
-                  onSave={(caption) => void actions.caption(id, item.asset.id, caption)}
-                />
-              </li>
+              </button>
             ))}
-          </ol>
-        )}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 border-t px-5 py-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={collection.cover_asset_id === null}
+            onClick={() => onPick(null)}
+          >
+            {t("collections.coverDefault")}
+          </Button>
+          <Button variant="secondary" size="sm" className="ml-auto" onClick={onClose}>
+            {t("export.close")}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -395,7 +600,9 @@ function CollectionFields({
         aria-label={t("collections.name")}
         value={name}
         onChange={(event) => setName(event.target.value)}
-        onBlur={() => saveIfChanged({ name: name.trim() }, !!name.trim() && name.trim() !== collection.name)}
+        onBlur={() =>
+          saveIfChanged({ name: name.trim() }, !!name.trim() && name.trim() !== collection.name)
+        }
         className="h-8 w-64 text-[14px] font-medium"
       />
       <select

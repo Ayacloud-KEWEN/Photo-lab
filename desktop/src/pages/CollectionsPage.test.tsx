@@ -15,6 +15,23 @@ vi.mock("@/lib/dialogs", () => ({
   confirmAction: vi.fn(() => Promise.resolve(true)),
 }));
 
+// MapLibre needs WebGL: the map shows what it was given instead.
+vi.mock("@/components/map/PhotoMap", () => ({
+  default: (props: {
+    points: { id: number }[];
+    stops?: unknown[];
+    focus?: { ids?: number[] } | null;
+    children?: React.ReactNode;
+  }) => (
+    <div data-testid={props.stops ? "route-map" : "photo-map"}>
+      {`points:${props.points.map((p) => p.id).join(",")}`}
+      {props.stops && ` stops:${props.stops.length}`}
+      {props.focus?.ids && ` focus:${props.focus.ids.join(",")}`}
+      {props.children}
+    </div>
+  ),
+}));
+
 const assets = [1, 2, 3, 4].map((id) => makeAsset(id));
 const calls = (requests: Request[], method: string, path: string) =>
   requests.filter((r) => r.method === method && r.url.pathname === path);
@@ -110,6 +127,73 @@ describe("CollectionsPage", () => {
     const dialog = await screen.findByRole("dialog", { name: "导出" });
     expect(within(dialog).getByRole("checkbox", { name: "按顺序编号文件名（001_…）" })).toBeChecked();
     expect(within(dialog).getByText("2 项")).toBeInTheDocument();
+  });
+
+  it("chooses the cover in a picker and goes back to the default", async () => {
+    const { requests } = stubBackend({
+      assets,
+      collections: [{ name: "Alps", assetIds: [1, 2, 3] }],
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /Alps/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "封面" }));
+    let picker = await screen.findByRole("dialog", { name: "选择封面" });
+    expect(within(picker).getByRole("button", { name: "IMG_1.JPG" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(picker).getByRole("button", { name: "恢复默认（第一张）" })).toBeDisabled();
+    await userEvent.click(within(picker).getByRole("button", { name: "IMG_3.JPG" }));
+    await waitFor(() =>
+      expect(calls(requests, "PATCH", "/api/v1/collections/1").at(-1)?.body).toEqual({
+        cover_asset_id: 3,
+      }),
+    );
+    expect(screen.queryByRole("dialog", { name: "选择封面" })).not.toBeInTheDocument();
+    const third = within(await screen.findByRole("list")).getAllByRole("listitem")[2]!;
+    await waitFor(() =>
+      expect(within(third).getByRole("button", { name: "设为封面" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      ),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "封面" }));
+    picker = await screen.findByRole("dialog", { name: "选择封面" });
+    await userEvent.click(within(picker).getByRole("button", { name: "恢复默认（第一张）" }));
+    await waitFor(() =>
+      expect(calls(requests, "PATCH", "/api/v1/collections/1").at(-1)?.body).toEqual({
+        cover_asset_id: null,
+      }),
+    );
+  });
+
+  it("shows a portfolio's photos on a map and its route by day", async () => {
+    stubBackend({
+      assets,
+      collections: [{ name: "Alps", kind: "trip", assetIds: [1, 2, 3] }],
+      located: { 1: [46.02, 7.75], 3: [46.5, 8.0] },
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /Alps/ }));
+    const views = await screen.findByRole("tablist", { name: "视图" });
+
+    await userEvent.click(within(views).getByRole("tab", { name: "地图" }));
+    const map = await screen.findByTestId("photo-map");
+    expect(map).toHaveTextContent("points:1,3");
+    expect(map).toHaveTextContent("1 张没有位置信息，未显示在地图上");
+
+    await userEvent.click(within(views).getByRole("tab", { name: "路线" }));
+    expect(await screen.findByTestId("route-map")).toHaveTextContent("stops:2");
+    const list = screen.getByRole("complementary", { name: "路线" });
+    expect(within(list).getByText("2 个地点 · 2 天 · 约 1,234 公里")).toBeInTheDocument();
+    const day = within(list).getByRole("region", { name: "第 1 天" });
+    await userEvent.click(within(day).getByRole("button", { name: /采尔马特/ }));
+    expect(screen.getByTestId("route-map")).toHaveTextContent("focus:1");
+    expect(within(list).getByRole("region", { name: "第 2 天" })).toHaveTextContent("未命名地点");
+
+    await userEvent.click(within(views).getByRole("tab", { name: "照片" }));
+    expect(await screen.findByRole("list")).toBeInTheDocument();
   });
 
   it("deletes a portfolio after confirmation", async () => {
