@@ -1,9 +1,12 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useLibraryState } from "@/library/state";
 import { makeAsset, Providers, root, stubBackend } from "@/test/backend";
+
+import { MapSendDialog } from "@/components/mapweb/MapSendDialog";
 
 import { Viewer } from "./Viewer";
 
@@ -29,6 +32,30 @@ afterEach(() => {
 });
 
 describe("Viewer", () => {
+  it("sends the photo shown to MapWeb", async () => {
+    const { requests } = stubBackend({
+      assets: ids.map((id) => makeAsset(id)),
+      mapweb: { url: "http://kevin:8788" },
+    });
+    render(
+      <Providers>
+        <OpenOnMount ids={ids} id={2} />
+        <Viewer />
+        <MapSendDialog onOpenSettings={() => {}} />
+      </Providers>,
+    );
+    const viewer = await screen.findByRole("dialog", { name: "IMG_2.JPG" });
+    await userEvent.click(within(viewer).getByRole("button", { name: "发送到地图" }));
+    const send = await screen.findByRole("dialog", { name: "发送到地图" });
+    expect(within(send).getByText("1 项")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(requests.find((r) => r.url.pathname === "/api/v1/mapweb/plan")?.body).toEqual({
+        asset_ids: [2],
+        language: "zh-CN",
+      }),
+    );
+  });
+
   it("says when the drive with the original is unplugged", async () => {
     stubBackend({
       assets: ids.map((id) => makeAsset(id)),

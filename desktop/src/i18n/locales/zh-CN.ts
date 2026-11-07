@@ -401,6 +401,7 @@ const zhCN = {
     connected_other: "已连接 · 地图上有 {{count, number}} 个足迹",
     unreachable: "连接不上 MapWeb（{{reason}}）。请确认树莓派开着、和这台电脑在同一网络或已连上 Tailscale，地址和端口正确。",
     failed: "MapWeb 返回错误：{{reason}}",
+    sendHint: "把这张照片发到你的地图程序 MapWeb：先显示放到哪个足迹，确认后再发送",
     send: "发送到地图",
     planning: "正在向地图程序查询已有的足迹…",
     notConfigured: "还没有设置地图程序（MapWeb）的地址。",

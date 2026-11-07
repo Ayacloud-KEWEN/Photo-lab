@@ -403,6 +403,7 @@ const fr: LocaleResource = {
     connected_other: "Connecté · {{count, number}} traces sur la carte",
     unreachable: "MapWeb est injoignable ({{reason}}). Vérifiez que le Raspberry Pi est allumé, sur le même réseau que cet ordinateur ou sur Tailscale, et que l’adresse et le port sont corrects.",
     failed: "MapWeb a répondu par une erreur : {{reason}}",
+    sendHint: "Envoyer cette photo sur votre carte MapWeb : vous voyez à quelle trace elle s’ajoute avant l’envoi",
     send: "Envoyer sur la carte",
     planning: "Interrogation de l’application de carte…",
     notConfigured: "L’adresse de l’application de carte (MapWeb) n’est pas encore définie.",

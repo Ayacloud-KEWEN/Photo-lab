@@ -6,6 +6,7 @@ import {
   FolderPlus,
   Heart,
   Info,
+  MapPinPlus,
   Maximize2,
   Minimize2,
   ScanSearch,
@@ -101,7 +102,7 @@ function ViewerOverlay({
   const update = useUpdateAsset();
   const detail = asset.data;
   const aiStatus = useAiStatus();
-  const { findSimilar, openExport, openCollect } = useLibraryState();
+  const { findSimilar, openExport, openCollect, openMapSend } = useLibraryState();
   const aiReady = !!aiStatus.data?.local.enabled && !!aiStatus.data?.local.model_downloaded;
   const roots = useStorageRoots();
   // The drive holding the original is unplugged: only the cached previews can be shown.
@@ -243,6 +244,11 @@ function ViewerOverlay({
           {detail && (
             <IconButton label={t("export.action")} onClick={() => openExport([id])}>
               <Download />
+            </IconButton>
+          )}
+          {detail?.media_type === "photo" && (
+            <IconButton label={t("mapweb.send")} onClick={() => openMapSend([id])}>
+              <MapPinPlus />
             </IconButton>
           )}
           {!showDevelop && (

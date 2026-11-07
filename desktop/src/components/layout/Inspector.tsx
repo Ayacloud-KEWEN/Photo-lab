@@ -1,4 +1,14 @@
-import { ChevronRight, Cloud, FolderOpen, Heart, MapPinned, ScanSearch, Sparkles, X } from "lucide-react";
+import {
+  ChevronRight,
+  Cloud,
+  FolderOpen,
+  Heart,
+  MapPinned,
+  MapPinPlus,
+  ScanSearch,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -100,6 +110,7 @@ export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; 
   const { t, i18n } = useTranslation();
   const conn = useConnection();
   const shell = useShellActions();
+  const { openMapSend } = useLibraryState();
   const roots = useStorageRoots();
   const offline = new Set(roots.data?.filter((root) => !root.is_available).map((root) => root.id));
   const meta = asset.metadata;
@@ -178,6 +189,15 @@ export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; 
               >
                 <MapPinned />
               </LinkButton>
+              {asset.media_type === "photo" && (
+                <LinkButton
+                  label={t("mapweb.send")}
+                  hint={t("mapweb.sendHint")}
+                  onClick={() => openMapSend([asset.id])}
+                >
+                  <MapPinPlus />
+                </LinkButton>
+              )}
             </span>
           </Field>
         )}

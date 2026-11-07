@@ -403,6 +403,7 @@ const en: LocaleResource = {
     connected_other: "Connected · {{count, number}} footprints on the map",
     unreachable: "Cannot reach MapWeb ({{reason}}). Check that the Raspberry Pi is on, on the same network as this computer or on Tailscale, and that the address and port are right.",
     failed: "MapWeb answered with an error: {{reason}}",
+    sendHint: "Send this photo to your MapWeb map: you see which footprint it joins before it is sent",
     send: "Send to map",
     planning: "Asking the map app for its footprints…",
     notConfigured: "The map app (MapWeb) address is not set yet.",
