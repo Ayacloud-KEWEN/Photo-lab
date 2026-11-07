@@ -11,7 +11,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const assets = [1, 2, 3, 4].map((id) => makeAsset(id));
+const assets = [1, 2, 3, 4, 5].map((id) => makeAsset(id));
 const batches = (requests: { method: string; url: URL; body: unknown }[]) =>
   requests.filter((r) => r.url.pathname === "/api/v1/assets/batch").map((r) => r.body);
 
@@ -66,15 +66,6 @@ describe("CullPage", () => {
     expect(within(first!).getByRole("radio", { name: /保留这份的信息/ })).toBeChecked();
     expect(within(first!).getByText("2 个标签")).toBeInTheDocument();
 
-    await userEvent.click(within(first!).getByRole("radio", { name: /改为保留这份/ }));
-    await userEvent.click(within(first!).getByRole("button", { name: /合并为一张/ }));
-    await waitFor(() =>
-      expect(requests.find((r) => r.url.pathname === "/api/v1/duplicates/merge")?.body).toEqual({
-        groups: [{ asset_ids: [1, 2], keep_asset_id: 2 }],
-      }),
-    );
-    expect(await screen.findByRole("status")).toHaveTextContent("已合并 1 组");
-
     await userEvent.click(within(first!).getAllByRole("button", { name: "在资源管理器中显示" })[0]!);
     await waitFor(() =>
       expect(requests.some((r) => r.url.pathname === "/api/v1/files/10/reveal")).toBe(true),
@@ -85,5 +76,52 @@ describe("CullPage", () => {
       expect(requests.some((r) => r.url.pathname === "/api/v1/duplicates/merge-all")).toBe(true),
     );
     expect(await screen.findByRole("status")).toHaveTextContent("已开始在后台合并全部重复文件");
+
+    await userEvent.click(within(first!).getByRole("radio", { name: /改为保留这份/ }));
+    await userEvent.click(within(first!).getByRole("button", { name: /合并为一张/ }));
+    await waitFor(() =>
+      expect(requests.find((r) => r.url.pathname === "/api/v1/duplicates/merge")?.body).toEqual({
+        groups: [{ asset_ids: [1, 2], keep_asset_id: 2 }],
+        kind: "identical",
+      }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("已合并 1 组");
+    await waitFor(() => expect(screen.getAllByRole("article")).toHaveLength(1));
+  });
+
+  it("lists copies in other quality and merges them into the best picture", async () => {
+    const { requests } = stubBackend({ assets, duplicates: [], copies: [[3, 1, 2], [4, 5]] });
+    render(
+      <Providers>
+        <CullPage onShowLibrary={() => {}} />
+      </Providers>,
+    );
+    await userEvent.click(await screen.findByRole("tab", { name: "重复文件" }));
+    expect(await screen.findByText("没有重复的照片。")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("radio", { name: "不同画质的副本" }));
+    expect(await screen.findByText(/2 组副本，较差的副本共占用/)).toBeInTheDocument();
+    expect(screen.getByText(/云端导出时重新压缩/)).toBeInTheDocument();
+    const [first] = screen.getAllByRole("article");
+    expect(first).toHaveAccessibleName("3 份副本");
+    expect(within(first!).getAllByText(/^\d+×\d+ · JPG$/)).toHaveLength(3);
+
+    await userEvent.click(screen.getByRole("button", { name: /全部合并/ }));
+    await waitFor(() =>
+      expect(
+        requests.find((r) => r.url.pathname === "/api/v1/duplicates/merge-all")?.url.search,
+      ).toBe("?kind=copies"),
+    );
+
+    await userEvent.click(within(first!).getByRole("button", { name: /合并为一张/ }));
+    await waitFor(() =>
+      expect(requests.find((r) => r.url.pathname === "/api/v1/duplicates/merge")?.body).toEqual({
+        groups: [{ asset_ids: [3, 1, 2], keep_asset_id: 3 }],
+        kind: "copies",
+      }),
+    );
+    // The merged group goes; the other stays.
+    await waitFor(() => expect(screen.getAllByRole("article")).toHaveLength(1));
+    expect(screen.getByRole("article")).toHaveAccessibleName("2 份副本");
   });
 });

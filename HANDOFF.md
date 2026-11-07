@@ -27,7 +27,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–5 及之后的扩展（
 | `docs/PROJECT_SPEC.md` | 产品需求（原始需求，勿随意改动） |
 | `docs/phases.md` | 阶段划分 |
 | `docs/Project_Initialization.md` | Phase 1 任务书（工作方式：先查环境、提方案、经确认再实施） |
-| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-032）**，改动架构前先读 |
+| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-033）**，改动架构前先读 |
 | `README.md` | 安装、开发、测试、API 列表、快捷键 |
 
 ## 3. 环境（用户的开发机）
@@ -62,7 +62,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **185** 个测试、前端 **103** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **189** 个测试、前端 **104** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ### 4.1 在浏览器面板里用真实图库副本测试（推荐的验收方式）
 
@@ -230,6 +230,10 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 - **作品集封面、地图与路线**（`collection-map`，ADR-032）：“封面”选择框；作品集内“照片 / 地图 / 路线”切换，路线按拍摄
   时间连接停留点（同城或 1 km 内合并），按天着色、编号、方向箭头，左侧按天列表。`GET /collections/{id}/route`；
   地图部分抽成 `components/map/PhotoMap.tsx`，全局地图页也用它。
+- **不同画质的副本**（`fix-near-duplicates`，ADR-033）：合并重复文件后时间轴仍有大量重复——Google 相册导出
+  重新压缩的版本、缩小过的版本，内容指纹不同。按拍摄时间到秒 + 文件名 + 相机 + 比例（缩小的再用 AI 比对）找出，
+  保留画质最好的一份。整理页“重复文件”里切换“不同画质的副本”。用户库副本：86,370 组、合并后 27 万 → 17.5 万项。
+  `tests/test_drives.py::test_an_import_stops_when_the_drive_goes_and_resumes` 偶尔因 Windows 占用文件夹改名失败（与此无关，单独重跑通过）。
 
 **用户的图库（2026-11-04 晚）**：来源 `D:\照片`（SSD）、`G:\照片整理202507`、`G:\照片整理`（USB 机械硬盘，
 14.4 万个文件、678 GB，当时仍在导入）；约 19 万个文件。性能问题先在这个规模上验证（方法见 4.1，副本 + 关闭后台任务）。

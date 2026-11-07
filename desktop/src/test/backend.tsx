@@ -130,6 +130,8 @@ export interface StubOptions {
   suspects?: number[];
   /** Groups of duplicate copies (asset ids; the first is the suggested keep). */
   duplicates?: number[][];
+  /** Groups of copies in other quality (asset ids; the first is the best picture). */
+  copies?: number[][];
   /** Cloud behaviour: "ok" (default), "no_vision" or "not_configured". */
   cloud?: "ok" | "no_vision" | "not_configured";
   /** Saved video edits by asset id. */
@@ -150,6 +152,11 @@ export function stubBackend(options: StubOptions = {}) {
   const requests: Request[] = [];
   const json = (body: unknown, status = 200) => Promise.resolve(Response.json(body, { status }));
   let exportRequest: unknown = null;
+  // Duplicate groups by kind, as the backend reports them (merged ones go away).
+  const duplicateGroups: Record<string, number[][]> = {
+    identical: [...(options.duplicates ?? [])],
+    copies: [...(options.copies ?? [])],
+  };
   // Collections, as the backend keeps them.
   const collections = new Map<number, CollectionState>(
     (options.collections ?? []).map((collection, index) => [
@@ -327,7 +334,8 @@ export function stubBackend(options: StubOptions = {}) {
       return json({ items, total: items.length });
     }
     if (path === "/api/v1/duplicates") {
-      const groups = (options.duplicates ?? []).map((ids) => ({
+      const kind = url.searchParams.get("kind") ?? "identical";
+      const groups = (duplicateGroups[kind] ?? []).map((ids) => ({
         keep_asset_id: ids[0]!, redundant_bytes: 2_000_000,
         assets: ids.map((id) => ({
           asset: assets.find((a) => a.id === id)!, tag_count: id === ids[0] ? 2 : 0, collection_count: 0,
@@ -346,7 +354,10 @@ export function stubBackend(options: StubOptions = {}) {
       }, 202); // prettier-ignore
     }
     if (path === "/api/v1/duplicates/merge") {
-      const groups = (body as { groups: { asset_ids: number[] }[] }).groups;
+      const { groups, kind } = body as { groups: { asset_ids: number[] }[]; kind?: string };
+      const merged = new Set(groups.flatMap((group) => group.asset_ids));
+      const key = kind ?? "identical";
+      duplicateGroups[key] = (duplicateGroups[key] ?? []).filter((ids) => !ids.some((id) => merged.has(id)));
       return json({ merged_groups: groups.length, removed_assets: groups.reduce((n, g) => n + g.asset_ids.length - 1, 0) });
     }
     if (/^\/api\/v1\/files\/\d+\/reveal$/.test(path)) return Promise.resolve(new Response(null, { status: 204 }));

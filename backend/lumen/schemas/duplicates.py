@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from lumen.schemas.assets import AssetSummary, FileRole
@@ -23,7 +25,10 @@ class DuplicateAsset(BaseModel):
 
 class DuplicateGroup(BaseModel):
     assets: list[DuplicateAsset] = Field(description="The copy to keep first")
-    keep_asset_id: int = Field(description="The copy merging keeps (the one with most user data)")
+    keep_asset_id: int = Field(
+        description="The copy merging keeps: of identical copies the one with most user data, "
+        "of copies in different quality the best picture"
+    )
     redundant_bytes: int = Field(description="Space the extra copies take on disk")
 
 
@@ -40,6 +45,10 @@ class MergeGroup(BaseModel):
 
 class MergeRequest(BaseModel):
     groups: list[MergeGroup] = Field(min_length=1, max_length=1000)
+    kind: Literal["identical", "copies"] = Field(
+        default="identical",
+        description="identical: same file content; copies: the same shot in another quality",
+    )
 
 
 class MergeResult(BaseModel):

@@ -79,5 +79,7 @@ export type CollectionItem = Schemas["CollectionItem"];
 export type CollectionCreate = Schemas["CollectionCreate"];
 export type CollectionUpdate = Schemas["CollectionUpdate"];
 export type TripSuggestion = Schemas["TripSuggestion"];
+/** Identical files, or copies of one shot in other quality (recompressed, resized). */
+export type DuplicateKind = NonNullable<Schemas["MergeRequest"]["kind"]>;
 export type CollectionRoute = Schemas["CollectionRoute"];
 export type RouteStop = Schemas["RouteStop"];

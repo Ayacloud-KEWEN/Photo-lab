@@ -22,6 +22,8 @@ import type {
   EditRecipe,
   EditState,
   ExportRequest,
+  DuplicateKind,
+  DuplicateReport,
   MergeRequest,
   RestoreRequest,
   StorageRootCreate,
@@ -60,7 +62,7 @@ export const queryKeys = {
   // Under "library": flag changes (batch / asset updates) refresh them.
   similarGroups: (params: SimilarParams) => ["library", "cull", "similar", params] as const,
   suspects: (pendingOnly: boolean) => ["library", "cull", "suspects", pendingOnly] as const,
-  duplicates: ["library", "cull", "duplicates"] as const,
+  duplicates: (kind: DuplicateKind) => ["library", "cull", "duplicates", kind] as const,
 };
 
 const ASSET_PAGE_SIZE = 300;
@@ -556,11 +558,11 @@ export function useShellActions() {
   };
 }
 
-export function useDuplicates() {
+export function useDuplicates(kind: DuplicateKind = "identical") {
   const conn = useConnection();
   return useQuery({
-    queryKey: queryKeys.duplicates,
-    queryFn: () => api.listDuplicates(requireConnection(conn)),
+    queryKey: queryKeys.duplicates(kind),
+    queryFn: () => api.listDuplicates(requireConnection(conn), kind),
     enabled: conn !== null,
   });
 }
@@ -571,10 +573,27 @@ export function useDuplicateActions() {
   return {
     merge: useMutation({
       mutationFn: (body: MergeRequest) => api.mergeDuplicates(requireConnection(conn), body),
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.library }),
+      onSuccess: (_result, body) => {
+        // The merged groups go at once; the report is worked out again in the background
+        // (finding copies takes seconds on a large library).
+        const merged = new Set(body.groups.flatMap((group) => group.asset_ids));
+        queryClient.setQueryData<DuplicateReport>(
+          queryKeys.duplicates(body.kind ?? "identical"),
+          (report) =>
+            report && {
+              ...report,
+              groups: report.groups.filter(
+                (group) => !group.assets.some((entry) => merged.has(entry.asset.id)),
+              ),
+              group_count: Math.max(0, report.group_count - body.groups.length),
+            },
+        );
+        return queryClient.invalidateQueries({ queryKey: queryKeys.library });
+      },
     }),
     mergeAll: useMutation({
-      mutationFn: () => api.mergeAllDuplicates(requireConnection(conn)),
+      mutationFn: (kind: DuplicateKind = "identical") =>
+        api.mergeAllDuplicates(requireConnection(conn), kind),
       // Progress shows in the status bar; views refresh when the task ends.
       onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.tasks }),
     }),

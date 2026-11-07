@@ -532,7 +532,8 @@ export interface paths {
         };
         /**
          * List Duplicates
-         * @description Photos listed more than once because their files are identical copies.
+         * @description Photos listed more than once: their files are identical copies, or (``copies``) the
+         *     same shot saved again in another quality (recompressed, converted or resized).
          */
         get: operations["listDuplicates"];
         put?: never;
@@ -2184,7 +2185,7 @@ export interface components {
             assets: components["schemas"]["DuplicateAsset"][];
             /**
              * Keep Asset Id
-             * @description The copy merging keeps (the one with most user data)
+             * @description The copy merging keeps: of identical copies the one with most user data, of copies in different quality the best picture
              */
             keep_asset_id: number;
             /**
@@ -2608,6 +2609,13 @@ export interface components {
         MergeRequest: {
             /** Groups */
             groups: components["schemas"]["MergeGroup"][];
+            /**
+             * Kind
+             * @description identical: same file content; copies: the same shot in another quality
+             * @default identical
+             * @enum {string}
+             */
+            kind: "identical" | "copies";
         };
         /** MergeResult */
         MergeResult: {
@@ -4417,6 +4425,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                kind?: "identical" | "copies";
             };
             header?: never;
             path?: never;
@@ -4446,7 +4455,9 @@ export interface operations {
     };
     mergeAllDuplicates: {
         parameters: {
-            query?: never;
+            query?: {
+                kind?: "identical" | "copies";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4460,6 +4471,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -31,6 +31,11 @@ class VectorIndex:
         with self._lock:
             self._generation[model_id] = self._generation.get(model_id, 0) + 1
 
+    def generation(self, model_id: str) -> int:
+        """Changes whenever the model's vectors may have changed (or the database was replaced)."""
+        with self._lock:
+            return self._generation.setdefault(model_id, 0)  # known: clear() moves it on
+
     def clear(self) -> None:
         """Forget every cached matrix (the database was replaced)."""
         with self._lock:

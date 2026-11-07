@@ -15,6 +15,7 @@ import type {
   BackupList,
   CacheStatus,
   CollectionCreate,
+  DuplicateKind,
   DuplicateReport,
   CollectionDetail,
   CollectionRoute,
@@ -346,12 +347,12 @@ export const api = {
       `/api/v1/cull/suspects${toSearchParams({ pending_only: pendingOnly })}`,
     ),
 
-  listDuplicates: (conn: BackendConnection) =>
-    request<DuplicateReport>(conn, "GET", "/api/v1/duplicates"),
+  listDuplicates: (conn: BackendConnection, kind: DuplicateKind = "identical") =>
+    request<DuplicateReport>(conn, "GET", `/api/v1/duplicates${toSearchParams({ kind })}`),
 
   /** Merges every group into its suggested copy, as a background task. */
-  mergeAllDuplicates: (conn: BackendConnection) =>
-    request<Task>(conn, "POST", "/api/v1/duplicates/merge-all"),
+  mergeAllDuplicates: (conn: BackendConnection, kind: DuplicateKind = "identical") =>
+    request<Task>(conn, "POST", `/api/v1/duplicates/merge-all${toSearchParams({ kind })}`),
 
   mergeDuplicates: (conn: BackendConnection, body: MergeRequest) =>
     request<MergeResult>(conn, "POST", "/api/v1/duplicates/merge", body),

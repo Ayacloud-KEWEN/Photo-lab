@@ -15,18 +15,23 @@ router = APIRouter(prefix="/duplicates", tags=["duplicates"])
 
 @router.get("", response_model=DuplicateReport, operation_id="listDuplicates")
 def list_duplicates(
-    conn: Connection, limit: int = Query(default=500, ge=1, le=5000)
+    conn: Connection,
+    limit: int = Query(default=500, ge=1, le=5000),
+    kind: service.DuplicateKind = Query(default="identical"),
 ) -> DuplicateReport:
-    """Photos listed more than once because their files are identical copies."""
-    return service.find_duplicates(conn, limit=limit)
+    """Photos listed more than once: their files are identical copies, or (``copies``) the
+    same shot saved again in another quality (recompressed, converted or resized)."""
+    return service.find_duplicates(conn, limit=limit, kind=kind)
 
 
 @router.post(
     "/merge-all", response_model=Task, status_code=202, operation_id="mergeAllDuplicates"
 )
-def merge_all(conn: Connection, request: Request) -> Task:
+def merge_all(
+    conn: Connection, request: Request, kind: service.DuplicateKind = Query(default="identical")
+) -> Task:
     """Merge every group into its suggested copy, as a background task (no file touched)."""
-    task_id = queue.enqueue(conn, service.MERGE_ALL_TASK)
+    task_id = queue.enqueue(conn, service.MERGE_ALL_TASK, payload={"kind": kind})
     wake_task_runner(request)
     return task_service.get_task(conn, task_id)
 
