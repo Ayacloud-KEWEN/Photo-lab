@@ -614,12 +614,15 @@ def _store_metadata(
 
     if item.asset_id is None or item.format.kind == "sidecar":
         return
-    # Asset capture time: the primary file's EXIF date, else any file's, else file mtime.
+    # Asset capture time: the primary file's EXIF date, else any file's, else file mtime;
+    # a correction made in LUMEN (``time_shift_s``) applies to the file's date again.
     conn.execute(
         """
         UPDATE media_assets
         SET capture_time = COALESCE(
-                (SELECT m.capture_time FROM media_files f
+                (SELECT strftime('%Y-%m-%dT%H:%M:%S', m.capture_time,
+                                 media_assets.time_shift_s || ' seconds')
+                 FROM media_files f
                  JOIN media_metadata m ON m.file_id = f.id
                  WHERE f.asset_id = media_assets.id AND m.capture_time IS NOT NULL
                  ORDER BY f.file_role = 'primary' DESC, f.id LIMIT 1),

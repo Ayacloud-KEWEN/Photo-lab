@@ -394,6 +394,52 @@ export function useCollection(id: number | null) {
   });
 }
 
+/** Towns matching a name (offline); nothing for an empty query. */
+export function usePlaceSearch(query: string) {
+  const conn = useConnection();
+  const text = query.trim();
+  return useQuery({
+    queryKey: ["places", text] as const,
+    queryFn: () => api.searchPlaces(requireConnection(conn), text),
+    enabled: conn !== null && text.length > 0,
+    staleTime: Infinity,
+  });
+}
+
+/** Corrections of location and capture time; every view of the photos refreshes. */
+export function useLocationActions() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  // Not awaited: on a large library refetching every view takes seconds, and the dialog
+  // should close as soon as the change is saved.
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: queryKeys.library });
+  return {
+    set: useMutation({
+      mutationFn: (body: { assetIds: number[]; latitude: number; longitude: number }) =>
+        api.setLocation(requireConnection(conn), body.assetIds, body.latitude, body.longitude),
+      onSuccess: refresh,
+    }),
+    restore: useMutation({
+      mutationFn: (assetIds: number[]) => api.restoreLocation(requireConnection(conn), assetIds),
+      onSuccess: refresh,
+    }),
+    byTime: useMutation({
+      mutationFn: (body: { assetIds: number[]; maxHours: number; apply: boolean }) =>
+        api.locateByTime(requireConnection(conn), body.assetIds, body.maxHours, body.apply),
+      onSuccess: (_result, body) => (body.apply ? refresh() : undefined),
+    }),
+    shift: useMutation({
+      mutationFn: (body: { assetIds: number[]; seconds: number }) =>
+        api.shiftTime(requireConnection(conn), body.assetIds, body.seconds),
+      onSuccess: refresh,
+    }),
+    restoreTime: useMutation({
+      mutationFn: (assetIds: number[]) => api.restoreTime(requireConnection(conn), assetIds),
+      onSuccess: refresh,
+    }),
+  };
+}
+
 /** Where photos would go on MapWeb: asked again each time the dialog opens. */
 export function useMapWebPlan(assetIds: number[], language: string) {
   const conn = useConnection();

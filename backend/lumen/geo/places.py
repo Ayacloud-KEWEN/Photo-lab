@@ -76,6 +76,10 @@ class Gazetteer:
         self._ids = ids
         self._keys = keys
         self._names = names
+        self._coords = coords
+        self._populations = populations
+        # Lower-case names (all three languages) for searching by name.
+        self._search_keys = [f"{n.name}	{n.zh}	{n.fr}".lower() for n in names]
         # float64: in float32 the cosine of a few kilometres rounds to 1.
         self._vectors = _unit_vectors(np.array(coords, dtype=np.float64))
         population = np.maximum(np.array(populations, dtype=np.float64), 1000.0)
@@ -95,6 +99,27 @@ class Gazetteer:
             best = np.argmin(distances / self._radius_km, axis=1)
             for row, index in enumerate(best.tolist()):
                 found.append(self._place(index, float(distances[row, index])))
+        return found
+
+    def search(self, query: str, limit: int = 10) -> list[tuple[Place, float, float]]:
+        """Towns whose name (in any language) contains ``query``: exact names first, then
+        names that start with it, then the rest; larger towns first within each.
+        Returns (place, latitude, longitude)."""
+        text = query.strip().lower()
+        if not text:
+            return []
+        ranked: list[tuple[int, int, int]] = []
+        for index, key in enumerate(self._search_keys):
+            if text not in key:
+                continue
+            names = key.split("	")
+            rank = 0 if text in names else 1 if any(n.startswith(text) for n in names) else 2
+            ranked.append((rank, -self._populations[index], index))
+        ranked.sort()
+        found = []
+        for _, _, index in ranked[:limit]:
+            latitude, longitude = self._coords[index]
+            found.append((self._place(index, 0.0), latitude, longitude))
         return found
 
     def _place(self, index: int, distance_km: float) -> Place:

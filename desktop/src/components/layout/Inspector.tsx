@@ -1,15 +1,18 @@
 import {
   ChevronRight,
+  Clock,
   Cloud,
   FolderOpen,
   Heart,
   MapPinned,
   MapPinPlus,
+  Pencil,
   ScanSearch,
   Sparkles,
   X,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
 import { thumbnailUrl } from "@/api/client";
@@ -110,7 +113,7 @@ export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; 
   const { t, i18n } = useTranslation();
   const conn = useConnection();
   const shell = useShellActions();
-  const { openMapSend } = useLibraryState();
+  const { openMapSend, openLocation, openTimeShift } = useLibraryState();
   const roots = useStorageRoots();
   const offline = new Set(roots.data?.filter((root) => !root.is_available).map((root) => root.id));
   const meta = asset.metadata;
@@ -143,7 +146,24 @@ export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; 
       <dl className="space-y-3">
         {asset.capture_time && (
           <Field label={t("inspector.captureTime")}>
-            {formatDateTime(asset.capture_time, i18n.language)}
+            <span className="flex items-center gap-1.5">
+              <span>
+                {formatDateTime(asset.capture_time, i18n.language)}
+                {asset.time_shift_s !== 0 && (
+                  <span className="text-subtle-foreground">
+                    {" "}
+                    · {t("inspector.shifted", { shift: describeShift(asset.time_shift_s, t) })}
+                  </span>
+                )}
+              </span>
+              <LinkButton
+                label={t("timeShift.title")}
+                hint={t("timeShift.title")}
+                onClick={() => openTimeShift([asset.id], asset.capture_time)}
+              >
+                <Clock />
+              </LinkButton>
+            </span>
           </Field>
         )}
         {meta.width && meta.height && (
@@ -182,6 +202,21 @@ export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; 
               <span className="select-text font-mono text-[11.5px]">
                 {asset.location.latitude.toFixed(5)}, {asset.location.longitude.toFixed(5)}
               </span>
+              {asset.location.source === "manual" && (
+                <span className="text-[11px] text-subtle-foreground">{t("inspector.manual")}</span>
+              )}
+              <LinkButton
+                label={t("location.edit")}
+                hint={t("location.edit")}
+                onClick={() =>
+                  openLocation([asset.id], {
+                    lat: asset.location!.latitude,
+                    lon: asset.location!.longitude,
+                  })
+                }
+              >
+                <Pencil />
+              </LinkButton>
               <LinkButton
                 label={t("inspector.openMap")}
                 hint={t("inspector.openMapHint")}
@@ -199,6 +234,18 @@ export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; 
                 </LinkButton>
               )}
             </span>
+          </Field>
+        )}
+        {!asset.location && (
+          <Field label={t("inspector.location")}>
+            <button
+              type="button"
+              onClick={() => openLocation([asset.id])}
+              className="flex items-center gap-1 text-[12px] text-highlight hover:underline"
+            >
+              <MapPinPlus className="size-3.5" />
+              {t("location.add")}
+            </button>
           </Field>
         )}
         {!editable && asset.tags.length > 0 && (
@@ -350,6 +397,21 @@ function Edits({ asset }: { asset: AssetDetail }) {
       </div>
     </div>
   );
+}
+
+/** "+7 小时", "-1 天 2 小时 30 分钟": a capture time correction in words. */
+function describeShift(seconds: number, t: TFunction): string {
+  const total = Math.abs(seconds);
+  const parts = [
+    [Math.floor(total / 86400), "timeShift.days"],
+    [Math.floor((total % 86400) / 3600), "timeShift.hours"],
+    [Math.floor((total % 3600) / 60), "timeShift.minutes"],
+  ] as const;
+  const text = parts
+    .filter(([value]) => value > 0)
+    .map(([value, key]) => `${value} ${t(key)}`)
+    .join(" ");
+  return `${seconds < 0 ? "-" : "+"}${text}`;
 }
 
 /** A small icon button next to a value (opens something outside the app). */

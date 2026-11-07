@@ -593,3 +593,25 @@ storage_roots ──scan──▶ media_files (pending) ──ingest──▶ as
   搭的内存替身。用户库副本里 24 张 Kotor 照片：19 张挂到已有足迹、2 个新足迹 4 张、1 张截图无位置跳过；
   23 张 13 秒传完，2048×1536、带 GPS、方向 1；再发一次全部跳过。**还没对树莓派上的真实 MapWeb 发过。**
 
+## 38. 修改位置和拍摄时间（ADR-035）
+
+需求（2026-11-07）：像 MapWeb 的工具页 `pages/imgexif.html`（一次一张 JPEG，地图点选 / Nominatim 搜索，piexif 写入 GPS 和时间后
+下载新文件）那样改照片的 GPS。用户没有位置的照片主要是 2006–2012 年的尼康照片，要能批量改。
+
+- **原图只读不变**：位置存 `media_locations`（`source = 'manual'`；导入只更新 `exif` 来源的，表结构本来就有这个值），
+  时间存 `media_assets.time_shift_s`（迁移 0013）：导入从文件读出拍摄时间后加上这个偏移（`ingest.py` 里 `strftime(…, N seconds)`），
+  所以重新扫描后仍然保留。`AssetDetail.time_shift_s`、`location.source` 给界面显示“（手动）”“已调整 +7 小时”。
+- **接口**（`services/locations.py`、`api/v1/locations.py`）：`POST /assets/location {asset_ids, latitude, longitude}`；
+  `POST /assets/location/restore`（恢复为文件里的位置：从 `media_metadata.raw_json` 的 `Composite:GPS*` 重新取，没有就删除）；
+  `POST /assets/location/nearby {asset_ids, max_hours, apply}`：每张取**拍摄时间最近**的一张有位置的照片（不含所选的）的位置，
+  `apply=false` 只预览数量；`POST /assets/time-shift {asset_ids, seconds}`（±400 天）与 `/time-shift/restore`；
+  `GET /places/search?q=`：离线搜内置 GeoNames 的约 16 万个城镇（中/英/法名，不区分大小写；完全相同 > 开头相同 > 包含，
+  同级按人口），每次约 5–10 ms。注意 GeoNames 的中文名不全（“科托尔”搜不到，“Kotor”可以）。
+- **地名**：改位置后在同一事务里马上算地名（`geo.tasks.locate_now`，复用后台任务的写入代码），不用等后台任务。
+- **写进新文件**：导出照片勾选“包含位置”时、发送到 MapWeb 时，`ExifToolSession.copy_metadata` 用手动位置替换 GPS
+  （`-GPS:all=` 后写 `GPSLatitude/Ref`、`GPSLongitude/Ref`），有时间偏移时 `-AllDates=` 写调整后的时间。视频导出暂不改。
+- **界面**：检查器“拍摄时间”旁的时钟按钮（调整时间）、“位置”旁的铅笔（修改）或“添加位置”；图库多选栏“设置位置”“调整时间”。
+  位置对话框：离线搜索、地图点选或拖动图钉（`components/map/LocationPicker.tsx`，与 PhotoMap 共用 `components/map/maplibre.ts`）、
+  粘贴“纬度, 经度”；或“按时间借用附近照片的位置”（1–24 小时，先预览找到多少张）；“恢复为照片里的位置”。
+  时间对话框：推后 / 提前 天、小时、分钟，单张时预览调整前后的时间；“恢复原始时间”。
+

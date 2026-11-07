@@ -60,6 +60,8 @@ def export_photo(
     exiftool: ExifToolSession | None,
     *,
     stem: str | None = None,
+    location: tuple[float, float] | None = None,
+    capture_time: str | None = None,
 ) -> Path:
     """Develop ``source`` with ``recipe`` into a new JPEG in ``folder`` (named ``stem``,
     by default the original's name); returns its path."""
@@ -90,6 +92,8 @@ def export_photo(
                 width=image.width,
                 height=image.height,
                 include_location=options.include_location,
+                location=location,
+                capture_time=capture_time,
             )
         os.replace(temp_name, target)
     except BaseException:

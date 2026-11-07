@@ -29,10 +29,27 @@ interface LibraryState {
   collectRequest: CollectRequest | null;
   openCollect: (assetIds: number[]) => void;
   closeCollect: () => void;
+  /** Photos whose location is being set (the location dialog is open while set). */
+  locationRequest: AssetsRequest | null;
+  openLocation: (assetIds: number[], current?: { lat: number; lon: number } | null) => void;
+  closeLocation: () => void;
+  /** Photos whose capture time is being corrected. */
+  timeRequest: AssetsRequest | null;
+  openTimeShift: (assetIds: number[], sampleTime?: string | null) => void;
+  closeTimeShift: () => void;
   /** Photos to send to MapWeb (the send dialog is open while set). */
   mapSendRequest: MapSendRequest | null;
   openMapSend: (assetIds: number[], options?: { description?: string }) => void;
   closeMapSend: () => void;
+}
+
+export interface AssetsRequest {
+  assetIds: number[];
+  /** The photo's location (one photo): where the map starts. */
+  current: { lat: number; lon: number } | null;
+  /** A capture time to preview the shift with (one photo). */
+  sampleTime: string | null;
+  nonce: number;
 }
 
 export interface MapSendRequest {
@@ -115,6 +132,20 @@ export function LibraryStateProvider({ children }: { children: ReactNode }) {
     [],
   );
   const closeCollect = useCallback(() => setCollectRequest(null), []);
+  const [locationRequest, setLocationRequest] = useState<AssetsRequest | null>(null);
+  const openLocation = useCallback(
+    (assetIds: number[], current: { lat: number; lon: number } | null = null) =>
+      setLocationRequest({ assetIds, current, sampleTime: null, nonce: Date.now() }),
+    [],
+  );
+  const closeLocation = useCallback(() => setLocationRequest(null), []);
+  const [timeRequest, setTimeRequest] = useState<AssetsRequest | null>(null);
+  const openTimeShift = useCallback(
+    (assetIds: number[], sampleTime: string | null = null) =>
+      setTimeRequest({ assetIds, current: null, sampleTime, nonce: Date.now() }),
+    [],
+  );
+  const closeTimeShift = useCallback(() => setTimeRequest(null), []);
   const [mapSendRequest, setMapSendRequest] = useState<MapSendRequest | null>(null);
   const openMapSend = useCallback(
     (assetIds: number[], options: { description?: string } = {}) =>
@@ -146,6 +177,12 @@ export function LibraryStateProvider({ children }: { children: ReactNode }) {
       mapSendRequest,
       openMapSend,
       closeMapSend,
+      locationRequest,
+      openLocation,
+      closeLocation,
+      timeRequest,
+      openTimeShift,
+      closeTimeShift,
     }),
     [
       query,
@@ -167,6 +204,12 @@ export function LibraryStateProvider({ children }: { children: ReactNode }) {
       mapSendRequest,
       openMapSend,
       closeMapSend,
+      locationRequest,
+      openLocation,
+      closeLocation,
+      timeRequest,
+      openTimeShift,
+      closeTimeShift,
     ],
   );
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;

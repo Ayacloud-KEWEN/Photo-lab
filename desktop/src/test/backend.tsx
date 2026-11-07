@@ -61,6 +61,7 @@ export function makeDetail(summary: AssetSummary): AssetDetail {
     uuid: `uuid-${summary.id}`,
     media_type: summary.media_type,
     capture_time: summary.capture_time,
+    time_shift_s: 0,
     rating: summary.rating,
     is_favorite: summary.is_favorite,
     rating_source: null,
@@ -321,6 +322,25 @@ export function stubBackend(options: StubOptions = {}) {
         mapweb_url: options.mapweb?.url ?? null,
         ...((body as object | undefined) ?? {}),
       });
+    }
+    if (path === "/api/v1/places/search") {
+      const q = url.searchParams.get("q") ?? "";
+      const places = [
+        { place_id: 3191281, city: { name: "Sarajevo", zh: "塞拉耶佛", fr: "Sarajevo" },
+          region: null, country: { name: "Bosnia and Herzegovina", zh: "波黑", fr: "Bosnie-Herzégovine" },
+          latitude: 43.84864, longitude: 18.35644 },
+      ]; // prettier-ignore
+      return json(places.filter((place) => place.city.name.toLowerCase().includes(q.toLowerCase())));
+    }
+    if (path === "/api/v1/assets/location/nearby") {
+      const { asset_ids: ids } = body as { asset_ids: number[] };
+      return json({
+        found: ids.length - 1, missing: 1,
+        examples: ids.slice(1).map((id) => ({ asset_id: id, from_asset_id: 99, latitude: 42.4, longitude: 18.7, gap_s: 600 })),
+      }); // prettier-ignore
+    }
+    if (path.startsWith("/api/v1/assets/location") || path.startsWith("/api/v1/assets/time-shift")) {
+      return json({ changed: (body as { asset_ids: number[] }).asset_ids.length });
     }
     if (path.startsWith("/api/v1/mapweb/")) {
       const down = () =>

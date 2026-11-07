@@ -2,10 +2,12 @@ import {
   Ban,
   BookOpen,
   ClipboardPaste,
+  Clock,
   Download,
   FolderPlus,
   Heart,
   HeartOff,
+  MapPin,
   MapPinned,
   Trophy,
   X,
@@ -32,7 +34,8 @@ export function SelectionBar({ ids, onClear, onError }: SelectionBarProps) {
   const { t } = useTranslation();
   const batch = useBatchUpdate();
   const applyEdits = useApplyEdits();
-  const { openCloud, openExport, openCollect, openMapSend, copiedSettings } = useLibraryState();
+  const { openCloud, openExport, openCollect, openMapSend, openLocation, openTimeShift, copiedSettings } =
+    useLibraryState();
   const apply = (changes: {
     rating?: number;
     is_favorite?: boolean;
@@ -114,6 +117,14 @@ export function SelectionBar({ ids, onClear, onError }: SelectionBarProps) {
       <Button variant="ghost" size="sm" onClick={() => openExport(ids)}>
         <Download className="size-3.5" />
         {t("export.action")}
+      </Button>
+      <Button variant="ghost" size="sm" onClick={() => openLocation(ids)}>
+        <MapPin className="size-3.5" />
+        {t("location.title")}
+      </Button>
+      <Button variant="ghost" size="sm" onClick={() => openTimeShift(ids)}>
+        <Clock className="size-3.5" />
+        {t("timeShift.short")}
       </Button>
       <Button variant="ghost" size="sm" onClick={() => openMapSend(ids)}>
         <MapPinned className="size-3.5" />

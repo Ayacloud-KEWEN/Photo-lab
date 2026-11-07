@@ -240,6 +240,9 @@ class AssetDetail(BaseModel):
     uuid: str
     media_type: MediaType
     capture_time: str | None
+    time_shift_s: int = Field(
+        default=0, description="Correction added to the files' capture time, in seconds"
+    )
     rating: int
     is_favorite: bool
     rating_source: Literal["import", "user"] | None

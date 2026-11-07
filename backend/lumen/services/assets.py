@@ -484,6 +484,7 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
         uuid=asset["uuid"],
         media_type=asset["media_type"],
         capture_time=asset["capture_time"],
+        time_shift_s=asset["time_shift_s"],
         rating=asset["rating"],
         is_favorite=bool(asset["is_favorite"]),
         rating_source=asset["rating_source"],

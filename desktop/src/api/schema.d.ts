@@ -1269,6 +1269,124 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assets/location": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Location
+         * @description Put photos at a place. Stored in LUMEN only (originals are not changed); exports
+         *     write it into the new files.
+         */
+        post: operations["setLocation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/location/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Location
+         * @description Back to the location in the photos' files (none if they have none).
+         */
+        post: operations["restoreLocation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/location/nearby": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Locate By Time
+         * @description Each photo gets the location of the photo taken closest in time that has one.
+         */
+        post: operations["locateByTime"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/time-shift": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Shift Time
+         * @description Move capture times (a camera clock set wrong). Exports write the corrected time.
+         */
+        post: operations["shiftTime"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/time-shift/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Time */
+        post: operations["restoreTime"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/places/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Places
+         * @description Towns by name, offline (bundled GeoNames data, any of the three languages).
+         */
+        get: operations["searchPlaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1463,6 +1581,12 @@ export interface components {
             media_type: "photo" | "video";
             /** Capture Time */
             capture_time: string | null;
+            /**
+             * Time Shift S
+             * @description Correction added to the files' capture time, in seconds
+             * @default 0
+             */
+            time_shift_s: number;
             /** Rating */
             rating: number;
             /** Is Favorite */
@@ -1748,6 +1872,11 @@ export interface components {
             /** Cull Flag */
             cull_flag?: ("none" | "pick" | "reject") | null;
         };
+        /** AssetsRequest */
+        AssetsRequest: {
+            /** Asset Ids */
+            asset_ids: number[];
+        };
         /** BackupInfo */
         BackupInfo: {
             /** Name */
@@ -1834,6 +1963,11 @@ export interface components {
             count: number;
             /** Bytes */
             bytes: number;
+        };
+        /** ChangeCount */
+        ChangeCount: {
+            /** Changed */
+            changed: number;
         };
         /** CityFacet */
         CityFacet: {
@@ -2839,6 +2973,68 @@ export interface components {
             place_id: number;
             name: components["schemas"]["PlaceName"];
         };
+        /** NearbyLocation */
+        NearbyLocation: {
+            /** Asset Id */
+            asset_id: number;
+            /**
+             * From Asset Id
+             * @description The photo whose location is used
+             */
+            from_asset_id: number;
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+            /**
+             * Gap S
+             * @description How far apart in time the two were taken
+             */
+            gap_s: number;
+        };
+        /** NearbyRequest */
+        NearbyRequest: {
+            /** Asset Ids */
+            asset_ids: number[];
+            /**
+             * Max Hours
+             * @default 2
+             */
+            max_hours: number;
+            /**
+             * Apply
+             * @description false: only count what would be found
+             * @default false
+             */
+            apply: boolean;
+        };
+        /** NearbyResult */
+        NearbyResult: {
+            /** Found */
+            found: number;
+            /**
+             * Missing
+             * @description No located photo close enough in time
+             */
+            missing: number;
+            /**
+             * Examples
+             * @description The first few, for a preview
+             */
+            examples: components["schemas"]["NearbyLocation"][];
+        };
+        /** PlaceMatch */
+        PlaceMatch: {
+            /** Place Id */
+            place_id: number;
+            city: components["schemas"]["PlaceName"];
+            region: components["schemas"]["PlaceName"] | null;
+            country: components["schemas"]["PlaceName"];
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+        };
         /**
          * PlaceName
          * @description A place name in each interface language (the international name when untranslated).
@@ -2934,6 +3130,15 @@ export interface components {
             relevant_count: number;
             /** Model Id */
             model_id: string;
+        };
+        /** SetLocationRequest */
+        SetLocationRequest: {
+            /** Asset Ids */
+            asset_ids: number[];
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
         };
         /** SimilarGroup */
         SimilarGroup: {
@@ -3118,6 +3323,16 @@ export interface components {
         TaskList: {
             /** Items */
             items: components["schemas"]["Task"][];
+        };
+        /** TimeShiftRequest */
+        TimeShiftRequest: {
+            /** Asset Ids */
+            asset_ids: number[];
+            /**
+             * Seconds
+             * @description Added to capture times
+             */
+            seconds: number;
         };
         /** Timeline */
         Timeline: {
@@ -6331,6 +6546,203 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    setLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLocationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeCount"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restoreLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeCount"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    locateByTime: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NearbyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NearbyResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    shiftTime: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimeShiftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeCount"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restoreTime: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeCount"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    searchPlaces: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaceMatch"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -41,6 +41,7 @@ from lumen.schemas.mapweb import (
 )
 from lumen.services.assets import DevelopUnavailableError, develop_source
 from lumen.services.develop import current_recipe
+from lumen.services.locations import overrides_for
 from lumen.services.settings import get_settings
 from lumen.tasks.runner import PermanentTaskError, TaskContext
 
@@ -545,9 +546,11 @@ def send_task(ctx: TaskContext) -> dict[str, Any]:
             ctx.check()
             try:
                 source = develop_source(ctx.conn, photo.asset_id)
+                corrected = overrides_for(ctx.conn, photo.asset_id)
                 path = export_photo(
                     source.path, source.format, current_recipe(ctx.conn, photo.asset_id),
                     Path(folder), options, exiftool, stem=f"{photo.asset_id}",
+                    location=corrected.location, capture_time=corrected.capture_time,
                 )  # fmt: skip
                 jpeg = path.read_bytes()
                 path.unlink(missing_ok=True)

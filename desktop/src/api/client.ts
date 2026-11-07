@@ -20,6 +20,8 @@ import type {
   CollectionDetail,
   CollectionRoute,
   MapWebPlan,
+  NearbyResult,
+  PlaceMatch,
   MapWebSendRequest,
   MapWebStatus,
   CollectionUpdate,
@@ -245,6 +247,42 @@ export const api = {
 
   getCollectionRoute: (conn: BackendConnection, id: number) =>
     request<CollectionRoute>(conn, "GET", `/api/v1/collections/${id}/route`),
+
+  /** Puts photos at a place (stored in LUMEN only; exports write it into new files). */
+  setLocation: (conn: BackendConnection, assetIds: number[], latitude: number, longitude: number) =>
+    request<{ changed: number }>(conn, "POST", "/api/v1/assets/location", {
+      asset_ids: assetIds,
+      latitude,
+      longitude,
+    }),
+
+  restoreLocation: (conn: BackendConnection, assetIds: number[]) =>
+    request<{ changed: number }>(conn, "POST", "/api/v1/assets/location/restore", {
+      asset_ids: assetIds,
+    }),
+
+  /** Each photo gets the location of the photo taken closest in time (``apply`` false: a preview). */
+  locateByTime: (conn: BackendConnection, assetIds: number[], maxHours: number, apply: boolean) =>
+    request<NearbyResult>(conn, "POST", "/api/v1/assets/location/nearby", {
+      asset_ids: assetIds,
+      max_hours: maxHours,
+      apply,
+    }),
+
+  shiftTime: (conn: BackendConnection, assetIds: number[], seconds: number) =>
+    request<{ changed: number }>(conn, "POST", "/api/v1/assets/time-shift", {
+      asset_ids: assetIds,
+      seconds,
+    }),
+
+  restoreTime: (conn: BackendConnection, assetIds: number[]) =>
+    request<{ changed: number }>(conn, "POST", "/api/v1/assets/time-shift/restore", {
+      asset_ids: assetIds,
+    }),
+
+  /** Towns by name, offline. */
+  searchPlaces: (conn: BackendConnection, query: string) =>
+    request<PlaceMatch[]>(conn, "GET", `/api/v1/places/search${toSearchParams({ q: query })}`),
 
   /** Checks an address answers like MapWeb (the user's map on their Raspberry Pi). */
   testMapWeb: (conn: BackendConnection, url: string) =>

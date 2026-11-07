@@ -9,6 +9,8 @@ import { CloudDialog } from "@/components/ai/CloudDialog";
 import { AddToCollectionDialog } from "@/components/collections/AddToCollectionDialog";
 import { ExportDialog } from "@/components/library/ExportDialog";
 import { MapSendDialog } from "@/components/mapweb/MapSendDialog";
+import { LocationDialog } from "@/components/location/LocationDialog";
+import { TimeShiftDialog } from "@/components/location/TimeShiftDialog";
 import { Viewer } from "@/components/viewer/Viewer";
 import { cleanQuery, useLibraryState } from "@/library/state";
 import { ALL_NAV, type PageId } from "@/navigation";
@@ -128,6 +130,8 @@ export default function App() {
       <ExportDialog />
       <AddToCollectionDialog />
       <MapSendDialog onOpenSettings={() => setPage("settings")} />
+      <LocationDialog />
+      <TimeShiftDialog />
     </div>
   );
 }

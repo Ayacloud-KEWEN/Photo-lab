@@ -1,39 +1,24 @@
-import "maplibre-gl/dist/maplibre-gl.css";
-
-import type { Feature, FeatureCollection, Geometry, LineString, Point } from "geojson";
-import * as maplibregl from "maplibre-gl";
-import type { GeoJSONSource, StyleSpecification } from "maplibre-gl";
-// MapLibre looks for its worker next to its own module, which breaks once Vite bundles
-// it, and Vite's dev server rewrites worker files in a way that stalls them. Load the
-// untouched worker source as text and start it from a blob: URL (allowed by worker-src).
-import workerSource from "maplibre-gl/dist/maplibre-gl-worker.mjs?raw";
+import type { Feature, FeatureCollection, LineString, Point } from "geojson";
+import type { GeoJSONSource } from "maplibre-gl";
 import { X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import Supercluster from "supercluster";
-import { feature } from "topojson-client";
-import type { GeometryCollection, Topology } from "topojson-specification";
 
 import { thumbnailUrl, type BackendConnection } from "@/api/client";
 import { useConnection, useSettings } from "@/api/hooks";
 import type { MapPoint, NamedPlace, RouteStop } from "@/api/types";
-import { BasemapPicker, offlinePalette, type MapStyle } from "@/components/map/BasemapPicker";
+import { BasemapPicker } from "@/components/map/BasemapPicker";
+import { basemapFor, maplibregl, resolveStyle } from "@/components/map/maplibre";
 import { Button } from "@/components/ui/button";
 import { useLibraryState } from "@/library/state";
 import { dayColor, stopsLabel } from "@/lib/route";
 import { placeName } from "@/lib/places";
 
-maplibregl.setWorkerUrl(URL.createObjectURL(new Blob([workerSource], { type: "text/javascript" })));
-
-const onlineStyle = (style: MapStyle) => `https://tiles.openfreemap.org/styles/${style}`;
 const MAX_MARKERS = 300;
 /** Arrows are drawn on route segments at least this long on screen (px). */
 const ARROW_MIN_PX = 70;
 
-const OFFLINE_COLORS = {
-  dark: { ocean: "#0e1114", land: "#1d2024", borders: "#353a40" },
-  light: { ocean: "#d4dde2", land: "#f5f4f0", borders: "#b9c0c6" },
-};
 
 interface PointProps {
   id: number;
@@ -62,41 +47,6 @@ export interface PhotoMapProps {
   stops?: RouteStop[] | undefined;
   focus?: MapFocus | null | undefined;
   children?: ReactNode;
-}
-
-/** Offline basemap: country shapes from Natural Earth (bundled, ~750 KB, loaded on demand). */
-async function offlineStyle(
-  palette: "dark" | "light",
-  attribution: string,
-): Promise<StyleSpecification> {
-  const topology = (await import("world-atlas/countries-50m.json")).default as unknown as Topology<{
-    countries: GeometryCollection;
-  }>;
-  const countries = feature(topology, topology.objects.countries) as FeatureCollection<Geometry>;
-  const colors = OFFLINE_COLORS[palette];
-  return {
-    version: 8,
-    sources: { countries: { type: "geojson", data: countries, attribution } },
-    layers: [
-      {
-        id: "ocean",
-        type: "background",
-        paint: { "background-color": colors.ocean },
-      },
-      {
-        id: "land",
-        type: "fill",
-        source: "countries",
-        paint: { "fill-color": colors.land, "fill-antialias": true },
-      },
-      {
-        id: "borders",
-        type: "line",
-        source: "countries",
-        paint: { "line-color": colors.borders, "line-width": 0.6 },
-      },
-    ],
-  };
 }
 
 /** The route as one line per segment, coloured by the day it arrives on. */
@@ -137,7 +87,7 @@ export default function PhotoMap({ points, places, stops, focus, children }: Pho
   const online = settings.data?.map_online_tiles ?? false;
   const mapStyle = settings.data?.map_style ?? "dark";
   // What is drawn: an online style URL, or the dark / light offline map.
-  const basemap = online ? onlineStyle(mapStyle) : offlinePalette(mapStyle);
+  const basemap = basemapFor(online, mapStyle);
   const route = stops !== undefined;
 
   const byId = useMemo(() => new Map(points.map((point) => [point.id, point])), [points]);
@@ -187,9 +137,7 @@ export default function PhotoMap({ points, places, stops, focus, children }: Pho
     let cancelled = false;
     void (async () => {
       const style =
-        basemap === "dark" || basemap === "light"
-          ? await offlineStyle(basemap, t("map.attributionOffline"))
-          : basemap;
+        await resolveStyle(basemap, t("map.attributionOffline"));
       if (cancelled || !containerRef.current) return;
       let map = mapRef.current;
       if (map) {

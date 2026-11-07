@@ -15,6 +15,7 @@ from lumen.media.metadata import ExifToolSession
 from lumen.schemas.exports import ExportFailure, ExportRequest, ExportResult
 from lumen.services.assets import DevelopUnavailableError, develop_source, video_source
 from lumen.services.develop import current_recipe, current_video_recipe
+from lumen.services.locations import overrides_for
 from lumen.tasks import queue
 from lumen.tasks.runner import PermanentTaskError, TaskContext
 
@@ -87,6 +88,7 @@ def export_assets(ctx: TaskContext) -> dict[str, Any]:
                 else:
                     photo = develop_source(ctx.conn, asset_id)
                     name = photo.path.name
+                    corrected = overrides_for(ctx.conn, asset_id)
                     export_photo(
                         photo.path,
                         photo.format,
@@ -97,6 +99,8 @@ def export_assets(ctx: TaskContext) -> dict[str, Any]:
                         stem=f"{index + 1:0{width}d}_{photo.path.stem}"
                         if request.numbered
                         else None,
+                        location=corrected.location,
+                        capture_time=corrected.capture_time,
                     )
                 exported += 1
             except (_Unavailable, DevelopUnavailableError, NotFoundError):

@@ -345,13 +345,23 @@ class ExifToolSession:
         self._helper.terminate()
 
     def copy_metadata(
-        self, source: Path, target: Path, *, width: int, height: int, include_location: bool
+        self,
+        source: Path,
+        target: Path,
+        *,
+        width: int,
+        height: int,
+        include_location: bool,
+        location: tuple[float, float] | None = None,
+        capture_time: str | None = None,
     ) -> None:
         """Copy ``source``'s metadata into ``target`` (an exported JPEG, never an original).
 
         The pixels were developed (oriented, possibly cropped), so orientation, size and the
         embedded thumbnails are corrected; GPS is removed unless ``include_location``.
-        The ICC profile is left as written with the pixels.
+        The ICC profile is left as written with the pixels. ``location`` and
+        ``capture_time`` ("YYYY:MM:DD HH:MM:SS") replace the original's when the user
+        corrected them in LUMEN.
         """
         args = [
             "-TagsFromFile", str(source), "-all:all", "--ICC_Profile:all",
@@ -360,6 +370,16 @@ class ExifToolSession:
         ]  # fmt: skip
         if not include_location:
             args += ["-GPS:all=", "-XMP:GPS*=", "-XMP-exif:GPS*="]
+        elif location is not None:
+            latitude, longitude = location
+            args += [
+                "-GPS:all=", "-XMP:GPS*=", "-XMP-exif:GPS*=",
+                f"-GPSLatitude={abs(latitude)}", f"-GPSLatitudeRef={'N' if latitude >= 0 else 'S'}",
+                f"-GPSLongitude={abs(longitude)}",
+                f"-GPSLongitudeRef={'E' if longitude >= 0 else 'W'}",
+            ]  # fmt: skip
+        if capture_time is not None:
+            args += [f"-AllDates={capture_time}"]
         self._helper.execute(*args, "-overwrite_original", str(target))
 
     def read(self, paths: Iterable[Path]) -> dict[str, dict[str, Any] | Exception]:
