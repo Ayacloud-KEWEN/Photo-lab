@@ -30,8 +30,10 @@ const fr: LocaleResource = {
     taskQuality: "Évaluation de la qualité {{current, number}} / {{total, number}}",
     taskBackup: "Sauvegarde de la base de données",
     taskMapWeb: "Envoi vers la carte {{current, number}} / {{total, number}}",
+    taskLive: "Association des Live Photos {{current, number}} / {{total, number}}",
     taskCache: "Déplacement du cache {{percent}} %",
     kind: {
+      live: "association des Live Photos",
       mapweb: "envoi vers la carte",
       aiIndex: "Analyse IA",
       aiDownload: "Téléchargement du modèle IA",

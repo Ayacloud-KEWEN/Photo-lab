@@ -19,6 +19,7 @@ const KIND_LABELS: Record<string, `status.kind.${keyof typeof zhCN.status.kind}`
   db_backup: "status.kind.backup",
   move_cache: "status.kind.cache",
   mapweb_send: "status.kind.mapweb",
+  pair_live_photos: "status.kind.live",
 };
 
 export function StatusBar() {
@@ -42,6 +43,11 @@ export function StatusBar() {
     });
   } else if (running?.kind === "move_cache") {
     taskLabel = t("status.taskCache", { percent: percent(running) });
+  } else if (running?.kind === "pair_live_photos") {
+    taskLabel = t("status.taskLive", {
+      current: running.progress_current,
+      total: running.progress_total ?? 0,
+    });
   } else if (running?.kind === "mapweb_send") {
     taskLabel = t("status.taskMapWeb", {
       current: running.progress_current,

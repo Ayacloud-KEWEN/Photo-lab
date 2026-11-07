@@ -7,6 +7,7 @@ import uuid
 
 import pytest
 
+from lumen.library import live
 from lumen.library.common import group_key, path_key
 from lumen.library.live import is_live_match, pair_live_photo
 
@@ -34,7 +35,7 @@ def add(
 ) -> int:
     """A file in its own asset (as ingestion leaves it before pairing); returns the file id."""
     extension = relative_path.rsplit(".", 1)[1].lower()
-    media_type = "video" if extension == "mov" else "photo"
+    media_type = "video" if extension in ("mov", "mp4") else "photo"
     asset_id = conn.execute(
         "INSERT INTO media_assets (uuid, media_type, capture_time, created_at, updated_at) "
         "VALUES (?, ?, '2025-01-01T10:00:00', ?, ?)",
@@ -204,3 +205,96 @@ def test_pairing_does_not_scan_the_whole_root(conn: sqlite3.Connection, root: in
     conn.set_progress_handler(None, 0)
     assert asset_of(conn, clip) == asset_of(conn, still)
     assert steps < 50  # a scan of the 2000 other files takes thousands
+
+
+def files_of(conn: sqlite3.Connection, asset_id: int) -> list[tuple[str, str]]:
+    return [
+        (str(r[0]), str(r[1]))
+        for r in conn.execute(
+            "SELECT file_name, file_role FROM media_files WHERE asset_id = ? ORDER BY id",
+            (asset_id,),
+        )
+    ]
+
+
+def gone(conn: sqlite3.Connection, asset_id: int) -> bool:
+    return conn.execute("SELECT 1 FROM media_assets WHERE id = ?", (asset_id,)).fetchone() is None
+
+
+@pytest.mark.usefixtures("root")
+def test_google_photos_mp4_clips_pair_by_id_only(conn: sqlite3.Connection) -> None:
+    # Google Photos exports a Live Photo's motion as .MP4 next to the .HEIC.
+    still = add(conn, "Photos from 2021\\IMG_0421.HEIC", content_id=SAME_ID)
+    clip = add(conn, "Photos from 2021\\IMG_0421.MP4", content_id=SAME_ID, duration_ms=2433)
+    assert pair_live_photo(conn, clip, NOW)
+    assert asset_of(conn, clip) == asset_of(conn, still) and role_of(conn, clip) == "companion"
+
+    # Without the id, a short mp4 of the same name stays a video (it may be a real one).
+    named = add(conn, "Photos from 2021\\IMG_0422.HEIC")
+    short = add(conn, "Photos from 2021\\IMG_0422.MP4", duration_ms=2000)
+    assert not pair_live_photo(conn, short, NOW)
+    assert asset_of(conn, short) != asset_of(conn, named)
+
+
+@pytest.mark.usefixtures("root")
+def test_a_clip_with_merged_copies_brings_them_all(conn: sqlite3.Connection) -> None:
+    still = add(conn, "Google\\IMG_0001.HEIC", content_id=SAME_ID)
+    clip = add(conn, "Google\\IMG_0001.MP4", content_id=SAME_ID, duration_ms=1800)
+    copy = add(conn, "Sorted\\IMG_0001.MOV", content_id=SAME_ID, duration_ms=1800)
+    video = asset_of(conn, clip)
+    # Merged as copies of one video earlier: one asset, two files.
+    conn.execute("UPDATE media_files SET asset_id = ? WHERE id = ?", (video, copy))
+    conn.execute("DELETE FROM media_assets WHERE id NOT IN (SELECT asset_id FROM media_files)")
+
+    assert pair_live_photo(conn, clip, NOW)
+    photo = asset_of(conn, still)
+    assert files_of(conn, photo) == [
+        ("IMG_0001.HEIC", "primary"), ("IMG_0001.MP4", "companion"), ("IMG_0001.MOV", "companion"),
+    ]  # fmt: skip
+    assert gone(conn, video)
+
+
+@pytest.mark.usefixtures("root")
+def test_further_copies_join_a_photo_that_has_its_clip(conn: sqlite3.Connection) -> None:
+    sorted_still = add(conn, "Sorted\\IMG_0001.JPG", content_id=SAME_ID)
+    sorted_clip = add(conn, "Sorted\\IMG_0001.MOV", content_id=SAME_ID, duration_ms=1800)
+    assert pair_live_photo(conn, sorted_clip, NOW)
+    google_still = add(conn, "Google\\IMG_0001.HEIC", content_id=SAME_ID)
+    photo = asset_of(conn, sorted_still)
+    # The duplicates merge put the Google copy of the still into the same photo.
+    conn.execute("UPDATE media_files SET asset_id = ? WHERE id = ?", (photo, google_still))
+    google_clip = add(conn, "Google\\IMG_0001.MP4", content_id=SAME_ID, duration_ms=1800)
+    other = add(conn, "Google\\IMG_9999.MOV", content_id="OTHER", duration_ms=1800)
+
+    assert pair_live_photo(conn, google_clip, NOW)
+    assert asset_of(conn, google_clip) == photo and role_of(conn, google_clip) == "companion"
+    assert not pair_live_photo(conn, other, NOW)  # another id: not this photo's clip
+
+
+@pytest.mark.usefixtures("root")
+def test_repair_pairs_the_library_once(conn: sqlite3.Connection) -> None:
+    stills = [add(conn, f"G\\IMG_{n}.HEIC", content_id=f"ID{n}") for n in range(3)]
+    clips = [add(conn, f"G\\IMG_{n}.MP4", content_id=f"ID{n}", duration_ms=2000) for n in range(3)]
+    video = add(conn, "G\\VID_1.MP4", duration_ms=3000)  # a real short video, no still
+    assert live.needs_repair(conn)
+
+    progress: list[tuple[int, int | None]] = []
+
+    class Context:
+        def __init__(self) -> None:
+            self.conn = conn
+
+        def check(self) -> None:
+            pass
+
+        def progress(self, current: int, total: int | None = None, *, force: bool = False) -> None:
+            progress.append((current, total))
+
+    result = live.repair_task(Context())  # type: ignore[arg-type]  # a stand-in context
+    assert result == {"clips": 4, "paired": 3}
+    for still, clip in zip(stills, clips, strict=True):
+        assert asset_of(conn, clip) == asset_of(conn, still)
+    assert role_of(conn, video) == "primary"
+    assert not live.needs_repair(conn)
+    assert progress[-1] == (4, 4)
+

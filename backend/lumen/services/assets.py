@@ -24,7 +24,7 @@ from lumen.develop.renditions import (
     render_full,
     touch,
 )
-from lumen.library.live import CLIP_EXTENSION
+from lumen.library.live import CLIP_EXTENSION, CLIP_EXTENSIONS
 from lumen.library.search import like_pattern, search_terms
 from lumen.media import thumbnails
 from lumen.media.fingerprint import fingerprint_digest
@@ -177,7 +177,7 @@ _SUMMARY_COLUMNS = """
     c.file_name, c.extension, c.fingerprint, m.width, m.height, m.duration_ms,
     e.recipe_hash AS edit_hash,
     EXISTS (SELECT 1 FROM media_files lf WHERE lf.asset_id = a.id
-            AND lf.file_role = 'companion' AND lf.extension = 'mov') AS is_live,
+            AND lf.file_role = 'companion' AND lf.extension IN ('mov', 'mp4')) AS is_live,
     (SELECT GROUP_CONCAT(ext, ',') FROM (
          SELECT DISTINCT UPPER(f.extension) AS ext FROM media_files f
          WHERE f.asset_id = a.id AND f.file_role != 'sidecar' ORDER BY ext
@@ -443,8 +443,18 @@ def _file_rows(conn: sqlite3.Connection, asset_id: int) -> list[sqlite3.Row]:
 
 
 def _is_motion(file: sqlite3.Row) -> bool:
-    """The clip of a Live Photo (see lumen.library.live)."""
-    return bool(file["file_role"] == "companion" and file["extension"] == CLIP_EXTENSION)
+    """A clip of a Live Photo (see lumen.library.live)."""
+    return bool(file["file_role"] == "companion" and file["extension"] in CLIP_EXTENSIONS)
+
+
+def _motion(files: list[sqlite3.Row]) -> sqlite3.Row | None:
+    """The clip to play: a present copy first, the iPhone's own .MOV before an export's."""
+    clips = [f for f in files if _is_motion(f)]
+    return min(
+        clips,
+        key=lambda f: (f["status"] != "present", f["extension"] != CLIP_EXTENSION, f["id"]),
+        default=None,
+    )
 
 
 def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
@@ -476,7 +486,7 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
         "SELECT * FROM media_quality WHERE asset_id = ? AND score IS NOT NULL", (asset_id,)
     ).fetchone()
     cover = next((f for f in files if f["id"] == asset["cover_file_id"]), None)
-    motion = next((f for f in files if _is_motion(f)), None)
+    motion = _motion(files)
     edit_hash = current_edit_hash(conn, asset_id)
 
     return AssetDetail(
@@ -776,7 +786,7 @@ def original_file(conn: sqlite3.Connection, asset_id: int) -> tuple[Path, str]:
 
 def motion_file(conn: sqlite3.Connection, asset_id: int) -> tuple[Path, str]:
     """A Live Photo's motion clip on disk and its MIME type."""
-    clip = next((f for f in _file_rows(conn, asset_id) if _is_motion(f)), None)
+    clip = _motion(_file_rows(conn, asset_id))
     if clip is None:
         raise NotFoundError("Asset has no motion clip", details={"id": asset_id})
     path = Path(clip["root_path"]) / clip["relative_path"]

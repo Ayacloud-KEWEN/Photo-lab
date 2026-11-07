@@ -27,7 +27,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–5 及之后的扩展（
 | `docs/PROJECT_SPEC.md` | 产品需求（原始需求，勿随意改动） |
 | `docs/phases.md` | 阶段划分 |
 | `docs/Project_Initialization.md` | Phase 1 任务书（工作方式：先查环境、提方案、经确认再实施） |
-| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-035）**，改动架构前先读 |
+| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-036）**，改动架构前先读 |
 | `README.md` | 安装、开发、测试、API 列表、快捷键 |
 
 ## 3. 环境（用户的开发机）
@@ -62,7 +62,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **199** 个测试、前端 **115** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **203** 个测试、前端 **115** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ### 4.1 在浏览器面板里用真实图库副本测试（推荐的验收方式）
 
@@ -243,6 +243,8 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
   `services/mapweb.plan_send`。MapWeb 的约定：电脑上 8080 服务和 Docker `mapweb` 库是真实数据，测试另建库。
 - **修改位置和拍摄时间**（`edit-location`，迁移 0013，ADR-035）：检查器 / 多选栏设置位置（离线搜地名、地图点选、粘贴坐标、
   按时间借用附近照片的位置）和调整拍摄时间；只改数据库，导出和发送到地图时写进新文件，重新扫描后保留。
+- **Google 导出的实况视频**（`fix-live-mp4`，ADR-036）：`.MP4` 动态部分按 ContentIdentifier 配对，多副本整组并入；
+  启动时后台任务 `pair_live_photos` 补配一次（用户库副本 10,705 个，16 秒）。
 
 **用户的图库（2026-11-04 晚）**：来源 `D:\照片`（SSD）、`G:\照片整理202507`、`G:\照片整理`（USB 机械硬盘，
 14.4 万个文件、678 GB，当时仍在导入）；约 19 万个文件。性能问题先在这个规模上验证（方法见 4.1，副本 + 关闭后台任务）。

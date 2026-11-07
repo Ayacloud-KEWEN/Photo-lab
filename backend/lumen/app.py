@@ -28,6 +28,8 @@ from lumen.db.migrator import migrate
 from lumen.geo.tasks import GEO_TASK, needs_locating
 from lumen.library.drives import DriveWatcher
 from lumen.library.handlers import HANDLERS
+from lumen.library.live import REPAIR_TASK as LIVE_REPAIR_TASK
+from lumen.library.live import needs_repair as live_pairing_outdated
 from lumen.library.quality import QUALITY_TASK, needs_scoring
 from lumen.services.backups import BACKUP_TASK, auto_backup_due
 from lumen.services.cache import apply_configured as apply_cache_folder
@@ -101,6 +103,8 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             watcher.check()
             with db.session() as conn:
                 # Places for assets located before this version (or new place data).
+                if live_pairing_outdated(conn):  # rules widened: pair the library again
+                    queue.enqueue(conn, LIVE_REPAIR_TASK)
                 if needs_locating(conn):
                     queue.enqueue(conn, GEO_TASK)
                 if needs_scoring(conn):

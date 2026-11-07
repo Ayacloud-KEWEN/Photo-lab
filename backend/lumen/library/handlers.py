@@ -3,6 +3,8 @@ from lumen.geo.tasks import GEO_TASK, locate_assets
 from lumen.library.common import INGEST_TASK, SCAN_TASK
 from lumen.library.exports import EXPORT_TASK, export_assets
 from lumen.library.ingest import ingest_storage_root
+from lumen.library.live import REPAIR_TASK as LIVE_REPAIR_TASK
+from lumen.library.live import repair_task as pair_live_photos
 from lumen.library.quality import QUALITY_TASK, score_assets
 from lumen.library.scan import scan_storage_root
 from lumen.services.backups import BACKUP_TASK, backup_task
@@ -24,4 +26,5 @@ HANDLERS: dict[str, Handler] = {
     MERGE_ALL_TASK: merge_all_task,
     MOVE_CACHE_TASK: move_cache,
     MAPWEB_SEND_TASK: mapweb_send,
+    LIVE_REPAIR_TASK: pair_live_photos,
 }

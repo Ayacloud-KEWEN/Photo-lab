@@ -29,8 +29,10 @@ const zhCN = {
     taskQuality: "正在评估画质 {{current, number}} / {{total, number}}",
     taskBackup: "正在备份数据库",
     taskMapWeb: "正在发送到地图 {{current, number}} / {{total, number}}",
+    taskLive: "正在配对实况照片 {{current, number}} / {{total, number}}",
     taskCache: "正在移动缓存 {{percent}}%",
     kind: {
+      live: "配对实况照片",
       mapweb: "发送到地图",
       aiIndex: "AI 分析",
       aiDownload: "下载 AI 模型",
