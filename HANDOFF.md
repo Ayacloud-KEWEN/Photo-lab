@@ -62,7 +62,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **193** 个测试、前端 **108** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **194** 个测试、前端 **108** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ### 4.1 在浏览器面板里用真实图库副本测试（推荐的验收方式）
 
@@ -235,6 +235,7 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 - **不同画质的副本**（`fix-near-duplicates`，ADR-033）：合并重复文件后时间轴仍有大量重复——Google 相册导出
   重新压缩的版本、缩小过的版本，内容指纹不同。按拍摄时间到秒 + 文件名 + 相机 + 比例（缩小的再用 AI 比对）找出，
   保留画质最好的一份。整理页“重复文件”里切换“不同画质的副本”。用户库副本：86,370 组、合并后 27 万 → 17.5 万项。
+  之后（`fix-copy-names`）：文件名前面加了日期等前缀的也算同名（`20160101_IMG_1584` = `IMG_1584`），又找到 5,048 组。
   `tests/test_drives.py::test_an_import_stops_when_the_drive_goes_and_resumes` 偶尔因 Windows 占用文件夹改名失败（与此无关，单独重跑通过）。
 - **发送到地图程序**（`mapweb-send`，ADR-034）：作品集 / 多选“发送到地图”，照片按 MapWeb 自己的规则挂到已有足迹或
   新建足迹，2048 像素 JPEG，`source_key` 防重复。MapWeb 本身没改。设置里填 `http://kevin:8788`。只用 MapWeb 的

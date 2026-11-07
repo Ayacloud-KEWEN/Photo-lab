@@ -147,3 +147,16 @@ def test_merging_copies_keeps_the_best_picture_and_the_user_data(
 def test_names_that_copies_share() -> None:
     assert duplicates._stem("IMG_1000 (1).JPG") == duplicates._stem("img_1000.heic") == "img_1000"
     assert duplicates._stem("IMG_1000-edited.jpg") == "img_1000-edited"  # an edit is not a copy
+
+
+def test_names_with_something_put_in_front_are_the_same_file() -> None:
+    same, stem = duplicates._same_name, duplicates._stem
+    assert same(stem("20160101_IMG_1584.JPG"), stem("IMG_1584.JPG"))  # a folder sorted by date
+    assert same(stem("NEO_IMG_DSC04459.jpg"), stem("DSC04459.JPG"))
+    assert not same(stem("IMG_E0546.JPG"), stem("IMG_0546.JPG"))  # iPhone's edited version
+    assert not same(stem("IMG_7592-已修改.jpg"), stem("IMG_7592.jpg"))  # Google's edited one
+    assert not same(stem("IMG_0781.JPG"), stem("IMG_0780.JPG"))  # the next shot of a burst
+    assert not same("x_123", "123")  # too short to tell
+    entries = [(1, "20160101_img_1584"), (2, "img_1584"), (3, "img_1585"), (4, "img_e1584"),
+               (5, "b_img_1584"), (6, "img_1585")]  # fmt: skip
+    assert sorted(map(sorted, duplicates._name_sets(entries))) == [[1, 2, 5], [3, 6]]

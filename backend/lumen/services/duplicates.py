@@ -98,6 +98,53 @@ def _stem(file_name: str) -> str:
     return _NUMBERED.sub("", os.path.splitext(file_name)[0].lower())
 
 
+_PREFIX_SEPARATORS = "_- ."
+_MIN_SHARED = 4
+
+
+def _same_name(a: str, b: str) -> bool:
+    """Stems of copies of one file: equal, or one is the other with something put in front
+    ("20160101_img_1584" and "img_1584" when a folder was sorted by date, "neo_img_dsc04459").
+    An edit's suffix ("img_1584-edited", "img_e1584") does not count."""
+    if a == b:
+        return True
+    short, long = (a, b) if len(a) < len(b) else (b, a)
+    return (
+        len(short) >= _MIN_SHARED
+        and long.endswith(short)
+        and long[-len(short) - 1] in _PREFIX_SEPARATORS
+    )
+
+
+def _name_sets(entries: list[tuple[int, str]]) -> list[list[int]]:
+    """Assets taken in the same second, joined when their names are the same file's."""
+    parent = list(range(len(entries)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    # Linear, not pairwise: scanned photos can share one capture time by the thousand.
+    first: dict[str, int] = {}
+    for i, (_, stem) in enumerate(entries):
+        if stem in first:
+            parent[find(i)] = find(first[stem])
+        else:
+            first[stem] = i
+    for i, (_, stem) in enumerate(entries):
+        for pos, char in enumerate(stem):
+            if char in _PREFIX_SEPARATORS:
+                j = first.get(stem[pos + 1 :])
+                if j is not None and _same_name(stem, entries[j][1]):
+                    parent[find(i)] = find(j)
+    sets: dict[int, list[int]] = {}
+    for i, (asset_id, _) in enumerate(entries):
+        sets.setdefault(find(i), []).append(asset_id)
+    return [ids for ids in sets.values() if len(ids) > 1]
+
+
 @dataclass(frozen=True)
 class _Copy:
     asset_id: int
@@ -132,7 +179,7 @@ class _Copy:
 
 def _copy_groups(conn: sqlite3.Connection) -> list[list[int]]:
     """Sets of listable assets that are copies of one shot, best copy first."""
-    candidates: dict[tuple[str, str, str], list[int]] = {}
+    candidates: dict[tuple[str, str], list[tuple[int, str]]] = {}
     for asset_id, media_type, taken, file_name in conn.execute(
         """
         SELECT a.id, a.media_type, a.capture_time, c.file_name
@@ -142,8 +189,13 @@ def _copy_groups(conn: sqlite3.Connection) -> list[list[int]]:
         WHERE a.capture_time IS NOT NULL
         """
     ):
-        candidates.setdefault((taken, media_type, _stem(file_name)), []).append(int(asset_id))
-    sets = [ids for ids in candidates.values() if len(ids) > 1]
+        candidates.setdefault((taken, media_type), []).append((int(asset_id), _stem(file_name)))
+    sets = [
+        name_set
+        for entries in candidates.values()
+        if len(entries) > 1
+        for name_set in _name_sets(entries)
+    ]
     if not sets:
         return []
 
