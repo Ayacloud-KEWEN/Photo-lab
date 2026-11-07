@@ -4,6 +4,7 @@ from lumen.api.v1 import (
     ai,
     assets,
     backups,
+    cache,
     collections,
     cull,
     develop,
@@ -30,3 +31,4 @@ router.include_router(tags.router)
 router.include_router(settings.router)
 router.include_router(ai.router)
 router.include_router(backups.router)
+router.include_router(cache.router)

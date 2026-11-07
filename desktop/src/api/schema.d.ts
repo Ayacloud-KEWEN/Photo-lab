@@ -1151,6 +1151,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cache": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cache Status */
+        get: operations["getCacheStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cache/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move Cache
+         * @description Move thumbnails and previews to another folder (a background task).
+         */
+        post: operations["moveCache"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1667,6 +1704,45 @@ export interface components {
         BatchResult: {
             /** Updated */
             updated: number;
+        };
+        /** CacheStatus */
+        CacheStatus: {
+            /**
+             * Folder
+             * @description The folder in use
+             */
+            folder: string;
+            /** Default Folder */
+            default_folder: string;
+            /**
+             * Configured Folder
+             * @description The folder chosen in Settings, if any
+             */
+            configured_folder: string | null;
+            /**
+             * Folder Available
+             * @description False when the chosen folder's drive was missing at startup: the default folder is used until the next start
+             */
+            folder_available: boolean;
+            thumbs: components["schemas"]["CacheUsage"];
+            previews: components["schemas"]["CacheUsage"];
+            /** @description Full-size renditions of edited photos */
+            full: components["schemas"]["CacheUsage"];
+            other: components["schemas"]["CacheUsage"];
+            /** Total Bytes */
+            total_bytes: number;
+            /**
+             * Free Bytes
+             * @description Free space on the cache folder's drive
+             */
+            free_bytes: number | null;
+        };
+        /** CacheUsage */
+        CacheUsage: {
+            /** Count */
+            count: number;
+            /** Bytes */
+            bytes: number;
         };
         /** CityFacet */
         CityFacet: {
@@ -2502,6 +2578,11 @@ export interface components {
             approx_download_gb: number;
             /** Downloaded */
             downloaded: boolean;
+        };
+        /** MoveCacheRequest */
+        MoveCacheRequest: {
+            /** Folder */
+            folder: string;
         };
         /** NamedPlace */
         NamedPlace: {
@@ -5694,6 +5775,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getCacheStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheStatus"];
+                };
+            };
+        };
+    };
+    moveCache: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveCacheRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

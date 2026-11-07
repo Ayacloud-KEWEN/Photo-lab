@@ -25,7 +25,10 @@ from lumen.tasks.runner import PermanentTaskError, TaskContext
 logger = logging.getLogger(__name__)
 
 # Settings that describe where and how to back up stay as they are when restoring.
-KEPT_ON_RESTORE = ("backup_auto", "backup_interval_days", "backup_keep", "backup_folder")
+# Where files are kept on this computer: not taken from the backup (ADR-024, ADR-031).
+KEPT_ON_RESTORE = (
+    "backup_auto", "backup_interval_days", "backup_keep", "backup_folder", "cache_folder",
+)
 
 _PREFIXES: dict[str, BackupKind] = {
     "lumen-backup-": "manual",

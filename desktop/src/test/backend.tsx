@@ -136,6 +136,8 @@ export interface StubOptions {
   videoEdits?: Record<number, Partial<VideoRecipe>>;
   /** Collections: name, kind and their asset ids (in order). */
   collections?: { name: string; kind?: "album" | "trip"; assetIds?: number[] }[];
+  /** Cache folder: moved to a custom folder, its drive missing at startup, or a full target. */
+  cache?: { folder?: string; missing?: boolean; noSpace?: boolean };
   /** Trip suggestions: date ranges over asset ids. */
   trips?: { start: string; end: string; assetIds: number[]; cities?: string[] }[];
 }
@@ -361,6 +363,30 @@ export function stubBackend(options: StubOptions = {}) {
           schema_version: 11,
         }); // prettier-ignore
       }
+    }
+    if (path === "/api/v1/cache" && method === "GET") {
+      const fallback = String.raw`C:\Users\me\AppData\Local\LUMEN Studio\cache`;
+      const usage = (count: number, bytes: number) => ({ count, bytes });
+      return json({
+        folder: options.cache?.missing ? fallback : (options.cache?.folder ?? fallback),
+        default_folder: fallback,
+        configured_folder: options.cache?.folder ?? null,
+        folder_available: !options.cache?.missing,
+        thumbs: usage(278_307, 7_194_000_000), previews: usage(278_307, 110_166_000_000),
+        full: usage(4, 14_000_000), other: usage(0, 0),
+        total_bytes: 117_374_000_000, free_bytes: 85_899_345_920,
+      }); // prettier-ignore
+    }
+    if (path === "/api/v1/cache/move") {
+      if (options.cache?.noSpace) {
+        return json({
+          error: {
+            code: "cache_move_failed", message: "Not enough free space on the target drive",
+            details: { needed_bytes: 122_742_000_000, free_bytes: 53_687_091_200 },
+          },
+        }, 400); // prettier-ignore
+      }
+      return json({ id: 99, kind: "move_cache", status: "pending" }, 202);
     }
     if (path === "/api/v1/ai/status") {
       return json({

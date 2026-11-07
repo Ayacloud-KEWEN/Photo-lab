@@ -30,6 +30,7 @@ from lumen.library.drives import DriveWatcher
 from lumen.library.handlers import HANDLERS
 from lumen.library.quality import QUALITY_TASK, needs_scoring
 from lumen.services.backups import BACKUP_TASK, auto_backup_due
+from lumen.services.cache import apply_configured as apply_cache_folder
 from lumen.tasks import queue
 from lumen.tasks.runner import TaskRunner
 
@@ -89,6 +90,8 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             raise
         app.state.db = db
         app.state.started_at = time.monotonic()
+        with db.session() as conn:
+            apply_cache_folder(conn, settings)  # thumbnails on the drive chosen in Settings
         runner: TaskRunner | None = None
         watcher: DriveWatcher | None = None
         if settings.run_tasks:

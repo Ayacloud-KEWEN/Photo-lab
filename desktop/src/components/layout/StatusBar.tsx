@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { useBackendStatus } from "@/api/backend-context";
 import { useActiveTasks, useHealth, useStorageRoots } from "@/api/hooks";
+import { percent } from "@/components/settings/CacheSettings";
 import { LANGUAGES } from "@/i18n";
 import type zhCN from "@/i18n/locales/zh-CN";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,7 @@ const KIND_LABELS: Record<string, `status.kind.${keyof typeof zhCN.status.kind}`
   export_assets: "status.kind.export",
   merge_duplicates: "status.kind.merge",
   db_backup: "status.kind.backup",
+  move_cache: "status.kind.cache",
 };
 
 export function StatusBar() {
@@ -37,6 +39,8 @@ export function StatusBar() {
       current: running.progress_current,
       total: running.progress_total ?? 0,
     });
+  } else if (running?.kind === "move_cache") {
+    taskLabel = t("status.taskCache", { percent: percent(running) });
   } else if (running?.kind === "db_backup") {
     taskLabel = t("status.taskBackup");
   } else if (running?.kind === "ai_download_model") {

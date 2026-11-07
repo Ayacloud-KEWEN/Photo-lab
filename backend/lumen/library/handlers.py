@@ -6,6 +6,7 @@ from lumen.library.ingest import ingest_storage_root
 from lumen.library.quality import QUALITY_TASK, score_assets
 from lumen.library.scan import scan_storage_root
 from lumen.services.backups import BACKUP_TASK, backup_task
+from lumen.services.cache import MOVE_CACHE_TASK, move_cache
 from lumen.services.duplicates import MERGE_ALL_TASK, merge_all_task
 from lumen.tasks.runner import Handler
 
@@ -19,4 +20,5 @@ HANDLERS: dict[str, Handler] = {
     BACKUP_TASK: backup_task,
     QUALITY_TASK: score_assets,
     MERGE_ALL_TASK: merge_all_task,
+    MOVE_CACHE_TASK: move_cache,
 }

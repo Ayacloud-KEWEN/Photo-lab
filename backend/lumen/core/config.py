@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     # Local AI: "auto" uses the GPU when available; the model is unloaded when idle.
     ai_device: Literal["auto", "cuda", "cpu"] = "auto"
     ai_idle_unload_s: float = Field(default=600, ge=10)
+    # Thumbnails and previews (ADR-031): the folder chosen in Settings is applied at startup
+    # and when the cache is moved; None means ``<data_dir>/cache``.
+    cache_folder: Path | None = None
 
     @field_validator("host")
     @classmethod
@@ -100,9 +103,13 @@ class Settings(BaseSettings):
         return self.data_dir / "backups"
 
     @cached_property
+    def default_cache_dir(self) -> Path:
+        return self.data_dir / "cache"
+
+    @property
     def cache_dir(self) -> Path:
         """Generated thumbnails and previews; safe to delete, rebuilt on demand."""
-        return self.data_dir / "cache"
+        return self.cache_folder or self.default_cache_dir
 
     def tool(self, name: Literal["exiftool", "ffmpeg", "ffprobe"]) -> str | None:
         configured: Path | None = getattr(self, f"{name}_path")

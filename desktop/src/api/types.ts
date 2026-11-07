@@ -46,6 +46,7 @@ export type AppSettings = Schemas["AppSettings"];
 export type AppSettingsUpdate = Schemas["AppSettingsUpdate"];
 export type BackupInfo = Schemas["BackupInfo"];
 export type BackupList = Schemas["BackupList"];
+export type CacheStatus = Schemas["CacheStatus"];
 export type RestoreRequest = Schemas["RestoreRequest"];
 export type RestoreResult = Schemas["RestoreResult"];
 export type AIStatus = Schemas["AIStatus"];

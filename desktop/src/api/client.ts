@@ -13,6 +13,7 @@ import type {
   BatchResult,
   BackupInfo,
   BackupList,
+  CacheStatus,
   CollectionCreate,
   DuplicateReport,
   CollectionDetail,
@@ -371,6 +372,13 @@ export const api = {
 
   revealBackup: (conn: BackendConnection, name: string) =>
     request<void>(conn, "POST", "/api/v1/backups/reveal", { name }),
+
+  getCacheStatus: (conn: BackendConnection) =>
+    request<CacheStatus>(conn, "GET", "/api/v1/cache"),
+
+  /** Move thumbnails and previews to another folder (a background task). */
+  moveCache: (conn: BackendConnection, folder: string) =>
+    request<Task>(conn, "POST", "/api/v1/cache/move", { folder }),
 
   getAiStatus: (conn: BackendConnection) => request<AIStatus>(conn, "GET", "/api/v1/ai/status"),
 

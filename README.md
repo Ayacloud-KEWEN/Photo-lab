@@ -140,6 +140,7 @@ VITE_LUMEN_API_TOKEN=<令牌>
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `LUMEN_DATA_DIR` | `%LOCALAPPDATA%\LUMEN Studio` | 数据库、日志、备份所在目录 |
+| `LUMEN_CACHE_FOLDER` | `<数据目录>\cache` | 缩略图缓存目录（设置页“缓存”里选的文件夹优先） |
 | `LUMEN_HOST` | `127.0.0.1` | 只允许回环地址 |
 | `LUMEN_PORT` | `0` | 0 表示由系统随机分配 |
 | `LUMEN_TOKEN` | 随机生成 | API 令牌（由 Tauri 每次启动时生成） |
@@ -238,6 +239,8 @@ cd backend
 | GET/POST | `/api/v1/backups` | 备份列表（含文件夹是否可用）· 立即备份 |
 | POST | `/api/v1/backups/restore` | 从列表中的备份（`name`）或任意文件（`path`）恢复，先另存“恢复前”备份 |
 | POST | `/api/v1/backups/reveal` | 在资源管理器中显示备份文件 |
+| GET | `/api/v1/cache` | 缓存位置、各类文件占用、所在盘剩余空间 |
+| POST | `/api/v1/cache/move` | 把缓存移动到另一个文件夹（后台任务 `move_cache`：复制 → 切换 → 删除旧文件） |
 | GET | `/api/v1/duplicates` | 因文件内容完全相同而重复出现的照片分组，以及建议保留的一份 |
 | POST | `/api/v1/duplicates/merge` | 把重复的副本合并为一张照片（只改数据库，文件都留在原处） |
 | POST | `/api/v1/duplicates/merge-all` | 后台任务：把全部重复组各自合并到建议保留的那份 |

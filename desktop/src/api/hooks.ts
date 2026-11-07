@@ -37,6 +37,7 @@ export const queryKeys = {
   tasks: ["tasks", "active"] as const,
   settings: ["settings"] as const,
   backups: ["backups"] as const,
+  cache: ["cache"] as const,
   library: ["library"] as const,
   assets: (query: AssetQuery) => ["library", "assets", query] as const,
   facets: ["library", "facets"] as const,
@@ -599,6 +600,25 @@ export function useBackupActions() {
       mutationFn: (name: string) => api.revealBackup(requireConnection(conn), name),
     }),
   };
+}
+
+/** Where thumbnails and previews are kept and how much space they take. */
+export function useCacheStatus() {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.cache,
+    queryFn: () => api.getCacheStatus(requireConnection(conn)),
+    enabled: conn !== null,
+  });
+}
+
+export function useMoveCache() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (folder: string) => api.moveCache(requireConnection(conn), folder),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.tasks }),
+  });
 }
 
 /** Local AI and cloud configuration; polled quickly while AI work is running. */

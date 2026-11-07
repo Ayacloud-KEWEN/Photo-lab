@@ -1,6 +1,6 @@
 # LUMEN Studio — 交接文档（HANDOFF）
 
-> 给接手的开发者或新的 Claude 会话：先读本文，再按需读 `docs/`。最后更新：2026-11-05
+> 给接手的开发者或新的 Claude 会话：先读本文，再按需读 `docs/`。最后更新：2026-11-06
 > （Phase 5 及其后的修复全部合并进 `main`，`main` = `2d58113` 之后的本文更新提交）。
 
 ## 1. 一句话现状
@@ -27,7 +27,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–5 及之后的扩展（
 | `docs/PROJECT_SPEC.md` | 产品需求（原始需求，勿随意改动） |
 | `docs/phases.md` | 阶段划分 |
 | `docs/Project_Initialization.md` | Phase 1 任务书（工作方式：先查环境、提方案、经确认再实施） |
-| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-030）**，改动架构前先读 |
+| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-031）**，改动架构前先读 |
 | `README.md` | 安装、开发、测试、API 列表、快捷键 |
 
 ## 3. 环境（用户的开发机）
@@ -62,7 +62,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **172** 个测试、前端 **90** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **183** 个测试、前端 **98** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ### 4.1 在浏览器面板里用真实图库副本测试（推荐的验收方式）
 
@@ -184,7 +184,7 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 10. 性能：导入默认 8 线程（`ingest_workers`，ADR-027）；HEIC 无降采样解码（12MP 约 1 秒/张）；AI 索引约 44 张/秒；
     前端主包超过 500 KB（构建时 Vite 会提示，可懒加载 AI/作品集页面）。第一次 `GET /ai/status` 约 6 秒（导入 torch）。
 
-## 9. 最近完成的工作（2026-11-03 ~ 05）
+## 9. 最近完成的工作（2026-11-03 ~ 06）
 
 按时间顺序，均已合并进 `main`：
 - **导入修复**：ffmpeg 继承 stdin 导致的超时（1000 多个文件导入从几十分钟降到约 3 分钟）、保留色彩标记的 MP4（迁移 0005）。
@@ -222,6 +222,9 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 - **任务优先级**（`fix-task-queue`，ADR-030）：新加文件夹一直“排队中”、AI 一直“正在分析”——队列按先后执行，排在
   前一天留下的画质评分和 AI 索引后面，界面又不显示画质评分。现在扫描/导入/导出等优先，AI 索引、地名、画质评分排在后面
   并在有其他任务时让位；状态栏、AI 搜索页、设置页如实显示运行中/排队中。日志改记 `task finished` + `status`。
+- **缓存位置**（`cache-location`，ADR-031）：缓存 109 GB 全在 C 盘（预览图 102.6 GB）。设置页新增“缓存”栏，可把缓存
+  移到其他盘：后台任务先复制、再切换（不重启）、再删旧文件，可续传；盘不在时暂用默认位置并提示。
+  `GET /cache`、`POST /cache/move`。用户还没有实际搬过，搬完后 `D:\LUMEN-cache-test`（测试留下的空文件夹）可删除。
 
 **用户的图库（2026-11-04 晚）**：来源 `D:\照片`（SSD）、`G:\照片整理202507`、`G:\照片整理`（USB 机械硬盘，
 14.4 万个文件、678 GB，当时仍在导入）；约 19 万个文件。性能问题先在这个规模上验证（方法见 4.1，副本 + 关闭后台任务）。
