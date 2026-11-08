@@ -9,12 +9,13 @@ import {
   HeartOff,
   MapPin,
   MapPinned,
+  ScanText,
   Trophy,
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { useApplyEdits, useBatchUpdate } from "@/api/hooks";
+import { useApplyEdits, useBatchUpdate, useVlmActions } from "@/api/hooks";
 import type { CullFlag } from "@/api/types";
 import { PRESETS, settingsFor } from "@/components/develop/presets";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ export function SelectionBar({ ids, onClear, onError }: SelectionBarProps) {
   const { t } = useTranslation();
   const batch = useBatchUpdate();
   const applyEdits = useApplyEdits();
+  const { describe } = useVlmActions();
   const { openCloud, openExport, openCollect, openMapSend, openLocation, openTimeShift, copiedSettings } =
     useLibraryState();
   const apply = (changes: {
@@ -125,6 +127,25 @@ export function SelectionBar({ ids, onClear, onError }: SelectionBarProps) {
       <Button variant="ghost" size="sm" onClick={() => openTimeShift(ids)}>
         <Clock className="size-3.5" />
         {t("timeShift.short")}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={describe.isPending}
+        title={t("vlm.readSelectionHint")}
+        onClick={() => describe.mutate({ ids, fine: false }, { onError })}
+      >
+        <ScanText className="size-3.5" />
+        {t("vlm.readSelection")}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={describe.isPending}
+        title={t("vlm.readFineHint")}
+        onClick={() => describe.mutate({ ids, fine: true }, { onError })}
+      >
+        {t("vlm.readFine")}
       </Button>
       <Button variant="ghost" size="sm" onClick={() => openMapSend(ids)}>
         <MapPinned className="size-3.5" />

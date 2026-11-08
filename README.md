@@ -229,6 +229,8 @@ cd backend
 | GET | `/api/v1/ai/search?text=&…` | 语义搜索（可叠加筛选条件），返回相似度和明显相关的数量 |
 | GET | `/api/v1/assets/{id}/similar` | 相似照片 |
 | GET | `/api/v1/ai/long-exposure` | 适合做长曝光的实况照片（流水、车流、烟花等，本地 AI） |
+| GET | `/api/v1/vlm/status` | 本地视觉模型：文件是否齐全、已识别和待识别的照片数 |
+| POST | `/api/v1/vlm/describe` · `/vlm/download` | 优先识别这些照片（`fine` 用 27B 精细识别）· 下载 llama.cpp 和模型（后台任务，可续传） |
 | PUT/DELETE | `/api/v1/ai/cloud/key` | 保存 / 删除 DeepSeek API 密钥（Windows 凭据管理器） |
 | POST | `/api/v1/ai/cloud/test` | 测试密钥并检查模型能否识别图片 |
 | POST | `/api/v1/ai/cloud/preview` | 列出将要发送的内容（图片、字段、目标），不联网 |

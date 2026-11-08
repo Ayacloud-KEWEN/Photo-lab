@@ -43,8 +43,9 @@ def test_background_kinds_queue_after_other_work(conn: sqlite3.Connection) -> No
     from lumen.geo.tasks import GEO_TASK
     from lumen.library.common import SCAN_TASK
     from lumen.library.quality import QUALITY_TASK
+    from lumen.vlm.pipeline import VLM_TASK
 
-    assert {AI_INDEX_TASK, GEO_TASK, QUALITY_TASK} == queue.BACKGROUND_KINDS
+    assert {AI_INDEX_TASK, GEO_TASK, QUALITY_TASK, VLM_TASK} == queue.BACKGROUND_KINDS
     quality = queue.enqueue(conn, QUALITY_TASK)
     ai = queue.enqueue(conn, AI_INDEX_TASK)
     scan = queue.enqueue(conn, SCAN_TASK, storage_root_id=None)

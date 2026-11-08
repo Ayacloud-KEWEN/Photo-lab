@@ -54,6 +54,7 @@ from lumen.schemas.assets import (
     Timeline,
     TimelineBucket,
 )
+from lumen.schemas.vlm import AssetDescription
 
 logger = logging.getLogger(__name__)
 
@@ -542,6 +543,7 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
         )
         if quality_row
         else None,
+        description=_description_of(conn, asset_id),
         files=[
             AssetFile(
                 id=f["id"],
@@ -558,6 +560,12 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
             for f in files
         ],
     )
+
+
+def _description_of(conn: sqlite3.Connection, asset_id: int) -> AssetDescription | None:
+    from lumen.services.vlm import description_of  # imports the task modules
+
+    return description_of(conn, asset_id)
 
 
 def _live_effect(conn: sqlite3.Connection, asset_id: int) -> LiveEffect:

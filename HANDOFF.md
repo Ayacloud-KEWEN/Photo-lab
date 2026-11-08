@@ -16,7 +16,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–5 及之后的扩展（
 | Phase 3 | 照片墙、全屏浏览、时间轴、地图、星级/收藏/标签/备注、搜索筛选 | ✅ |
 | Phase 4 | SigLIP2 语义搜索/相似照片/自动标签、OpenCLIP 对照工具、DeepSeek 云端分析 | ✅ |
 | Phase 5 | 显影（非破坏性编辑）、导出与预设、视频剪辑与导出、旅行作品集 | ✅ |
-| 之后 | 实况照片配对、图库悬停播放实况、地图标记修复、全屏滚轮缩放、测试中发现的问题修复、可选底图样式、离线地名、备份与恢复、整理（相似/废片/淘汰/重复文件）、实况玩法（换一帧/长曝光/循环/来回） | ✅ |
+| 之后 | 实况照片配对、图库悬停播放实况、地图标记修复、全屏滚轮缩放、测试中发现的问题修复、可选底图样式、离线地名、备份与恢复、整理（相似/废片/淘汰/重复文件）、实况玩法（换一帧/长曝光/循环/来回）、本地视觉模型（照片描述与照片里的文字） | ✅ |
 
 `docs/phases.md` 只规划到 Phase 5，**没有 Phase 6**。下一步做什么由用户决定（候选见第 9 节末尾）。
 
@@ -27,7 +27,7 @@ Windows 桌面照片/视频管理工作站，**Phase 1–5 及之后的扩展（
 | `docs/PROJECT_SPEC.md` | 产品需求（原始需求，勿随意改动） |
 | `docs/phases.md` | 阶段划分 |
 | `docs/Project_Initialization.md` | Phase 1 任务书（工作方式：先查环境、提方案、经确认再实施） |
-| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-037）**，改动架构前先读 |
+| `docs/ARCHITECTURE.md` | **所有架构决策（ADR-001 ~ ADR-038）**，改动架构前先读 |
 | `README.md` | 安装、开发、测试、API 列表、快捷键 |
 
 ## 3. 环境（用户的开发机）
@@ -62,7 +62,7 @@ cd backend; .\.venv\Scripts\python.exe -m tests.media_factory D:\LumenSample   #
 cd backend; .\.venv\Scripts\python.exe -m lumen.ai.bench --library --models ...  # 模型对照
 ```
 
-当前检查结果：后端 **214** 个测试、前端 **120** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
+当前检查结果：后端 **228** 个测试、前端 **124** 个测试全部通过；ruff、mypy（strict）、tsc（strict）、clippy 零问题。
 
 ### 4.1 在浏览器面板里用真实图库副本测试（推荐的验收方式）
 
@@ -99,6 +99,7 @@ backend/lumen/
                    search（FTS 重建）、tags、handlers（任务注册表）
   tasks/           queue（SQLite 任务表、任务结果）、runner（后台线程、重试、取消、恢复）
   ai/              models、encoders（SigLIP2/OpenCLIP）、engine、index、labels、pipeline、cloud（DeepSeek）、bench
+  vlm/             本地视觉模型：server（llama-server 进程）、describe（一次请求）、models、pipeline（后台任务）、bench
   develop/         recipe（照片/视频编辑配方）、engine（numpy+OpenCV 渲染、底图缓存）、live（实况片段：取帧、长曝光、循环/来回）、renditions（编辑后的
                    缩略图、全尺寸图及其 2 GB 上限）、exporter（导出 JPEG）、video（FFmpeg 导出视频与单帧）
   services/        供 API 调用的业务逻辑（assets、develop、exports、collections、folders…）；api/v1/ 路由只做输入输出
@@ -250,6 +251,10 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
   效果“实况 / 循环 / 来回 / 长曝光”；长曝光为对齐后在线性光里叠加全部帧；循环 / 来回由后端套用调整生成 H.264 片段；导出可选
   实况为 MP4 / GIF；整理页“长曝光候选”（本地 AI 场景识别）。代码在 `develop/live.py`。用户库副本实测：取帧 0.4 s、长曝光首次 2.5 s、
   循环片段首次 3 s。**未验证**：Google 导出的 `.MP4` 实况（在 G: 盘上）和 HDR 实况片段。
+- **本地视觉模型**（`local-vlm`，迁移 0014，ADR-038）：llama.cpp 运行 Qwen3.6-35B-A3B（默认，约 6 s/张）和 Qwen3.8-27B
+  （精细识别，约 25–50 s/张），写中文描述并抄下照片里的文字，都进入搜索；后台按重点照片 → 含文字的 → 全部的顺序识别。
+  代码在 `lumen/vlm/`；模型与 llama.cpp 在 `D:\LUMEN Studio\models` 和 `tools\llama.cpp\b12207`（共约 52 GB，含对照用的
+  Qwen3-VL-8B 9.5 GB，可删）。对比工具 `python -m lumen.vlm.bench`。**用户的真实设置里还没开启**（只在副本上开过）。
 
 **用户的图库（2026-11-04 晚）**：来源 `D:\照片`（SSD）、`G:\照片整理202507`、`G:\照片整理`（USB 机械硬盘，
 14.4 万个文件、678 GB，当时仍在导入）；约 19 万个文件。性能问题先在这个规模上验证（方法见 4.1，副本 + 关闭后台任务）。

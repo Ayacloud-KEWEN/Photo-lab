@@ -29,6 +29,7 @@ import {
 import { Result } from "@/components/ai/CloudDialog";
 import type { AssetDetail, StorageRoot } from "@/api/types";
 import { CullFlagToggle } from "@/components/library/CullFlagToggle";
+import { PhotoDescription } from "@/components/library/PhotoDescription";
 import { StarRating } from "@/components/library/StarRating";
 import { Button } from "@/components/ui/button";
 import { useLibraryState } from "@/library/state";
@@ -143,6 +144,7 @@ export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; 
       <h2 className="select-text break-all text-sm font-medium">{name}</h2>
       {editable && <Edits asset={asset} />}
       {editable && <AiActions asset={asset} />}
+      <PhotoDescription asset={asset} />
       <dl className="space-y-3">
         {asset.capture_time && (
           <Field label={t("inspector.captureTime")}>

@@ -13,6 +13,7 @@ from lumen.services.duplicates import MERGE_ALL_TASK, merge_all_task
 from lumen.services.mapweb import SEND_TASK as MAPWEB_SEND_TASK
 from lumen.services.mapweb import send_task as mapweb_send
 from lumen.tasks.runner import Handler
+from lumen.vlm.pipeline import VLM_DOWNLOAD_TASK, VLM_TASK, describe_assets, download
 
 HANDLERS: dict[str, Handler] = {
     SCAN_TASK: scan_storage_root,
@@ -27,4 +28,6 @@ HANDLERS: dict[str, Handler] = {
     MOVE_CACHE_TASK: move_cache,
     MAPWEB_SEND_TASK: mapweb_send,
     LIVE_REPAIR_TASK: pair_live_photos,
+    VLM_TASK: describe_assets,
+    VLM_DOWNLOAD_TASK: download,
 }

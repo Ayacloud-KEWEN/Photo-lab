@@ -56,6 +56,7 @@ export const queryKeys = {
   edit: (id: number) => ["library", "edit", id] as const,
   live: (id: number) => ["library", "live", id] as const,
   longExposure: () => ["library", "long-exposure"] as const,
+  vlm: ["vlm"] as const,
   export: (taskId: number) => ["export", taskId] as const,
   videoEdit: (id: number) => ["library", "video-edit", id] as const,
   collections: ["library", "collections"] as const,
@@ -590,6 +591,8 @@ export function useUpdateSettings() {
       // Enabling AI or changing the model starts background work.
       void queryClient.invalidateQueries({ queryKey: queryKeys.aiStatus });
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+      // The model folder, switch or scope change what the local vision model reports.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.vlm });
     },
   });
 }
@@ -762,6 +765,38 @@ export function useLiveInfo(id: number | null, enabled = true) {
     staleTime: Infinity, // the clip does not change
     retry: false,
   });
+}
+
+/** The local vision model's state (refreshed while it is reading or downloading). */
+export function useVlmStatus() {
+  const conn = useConnection();
+  const tasks = useActiveTasks();
+  const busy = tasks.data?.some((task) => task.kind.startsWith("vlm_")) ?? false;
+  return useQuery({
+    queryKey: queryKeys.vlm,
+    queryFn: () => api.getVlmStatus(requireConnection(conn)),
+    enabled: conn !== null,
+    refetchInterval: busy ? 5000 : false,
+  });
+}
+
+export function useVlmActions() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  const settle = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.vlm });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+  };
+  const describe = useMutation({
+    mutationFn: ({ ids, fine }: { ids: number[]; fine: boolean }) =>
+      api.describeAssets(requireConnection(conn), ids, fine),
+    onSuccess: settle,
+  });
+  const download = useMutation({
+    mutationFn: (model: string) => api.downloadVlm(requireConnection(conn), model),
+    onSuccess: settle,
+  });
+  return { describe, download };
 }
 
 export function useLongExposureCandidates(enabled = true) {

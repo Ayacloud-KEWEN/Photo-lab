@@ -46,6 +46,7 @@ from lumen.media.metadata import (
 )
 from lumen.services.settings import get_settings
 from lumen.tasks.runner import PermanentTaskError, TaskContext, TaskInterrupted
+from lumen.vlm.pipeline import VLM_TASK
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +133,8 @@ def _ingest(ctx: TaskContext) -> None:
         ctx.enqueue(QUALITY_TASK)
     if done and get_settings(conn).ai_enabled:
         ctx.enqueue(AI_INDEX_TASK)
+    if done and get_settings(conn).vlm_enabled:
+        ctx.enqueue(VLM_TASK)  # after the AI index (it ranks photos with text first)
 
 
 def _count_pending(conn: sqlite3.Connection, root_id: int) -> int:

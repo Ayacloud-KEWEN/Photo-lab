@@ -68,6 +68,9 @@ select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 [tool.ruff.lint.per-file-ignores]
 # Tests use Chinese text, where full-width punctuation is intended.
 "tests/*" = ["RUF001"]
+# The local model's Chinese prompt and the comparison report's HTML.
+"lumen/vlm/describe.py" = ["RUF001", "E501"]
+"lumen/vlm/bench.py" = ["RUF001", "E501"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Query", "fastapi.Path"]

@@ -16,7 +16,7 @@ def _check_model(value: str | None) -> str | None:
 
 def _check_folder(value: str | None) -> str | None:
     if value and not (PureWindowsPath(value).is_absolute() or value.startswith("/")):
-        raise ValueError("the backup folder must be an absolute path")
+        raise ValueError("the folder must be an absolute path")
     return value
 
 
@@ -42,6 +42,7 @@ def _check_mapweb_url(value: str | None) -> str | None:
 # Basemap styles. Online they are OpenFreeMap styles of the same name; offline "dark" uses
 # the dark country map and the others the light one.
 MapStyle = Literal["dark", "liberty", "bright", "positron"]
+VlmScope = Literal["priority", "all"]
 
 
 class AppSettings(BaseModel):
@@ -69,6 +70,18 @@ class AppSettings(BaseModel):
         description="Address of the user's MapWeb (e.g. http://kevin:8788); photos are sent "
         "there only when the user asks",
     )
+    vlm_enabled: bool = Field(
+        default=False, description="Describe photos and read their text with the local model"
+    )
+    vlm_scope: VlmScope = Field(
+        default="priority",
+        description="priority: favourites, 3+ stars, collections, recent and photos with "
+        "text; all: then the rest of the library",
+    )
+    vlm_folder: str | None = Field(
+        default=None,
+        description="Folder of the local model files and llama.cpp (default: data folder/vlm)",
+    )
 
 
 class AppSettingsUpdate(BaseModel):
@@ -91,8 +104,13 @@ class AppSettingsUpdate(BaseModel):
     mapweb_url: str | None = Field(
         default=None, max_length=300, description="An empty string removes the address"
     )
+    vlm_enabled: bool | None = None
+    vlm_scope: VlmScope | None = None
+    vlm_folder: str | None = Field(
+        default=None, max_length=500, description="An empty string goes back to the default"
+    )
 
-    @field_validator("backup_folder")
+    @field_validator("backup_folder", "vlm_folder")
     @classmethod
     def _valid_folder(cls, value: str | None) -> str | None:
         if value is None:

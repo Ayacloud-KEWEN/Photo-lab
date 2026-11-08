@@ -24,7 +24,9 @@ RETRY_BASE_DELAY = timedelta(seconds=10)
 # Work derived from imported media (ADR-030): it picks up where it stopped, so it runs
 # after anything else and gives way when other work is queued (scanning a new folder,
 # an export…). Kept as strings: the handlers import this module.
-BACKGROUND_KINDS = frozenset({"geo_locate_assets", "quality_score_assets", "ai_index_assets"})
+BACKGROUND_KINDS = frozenset(
+    {"geo_locate_assets", "quality_score_assets", "ai_index_assets", "vlm_describe_assets"}
+)
 BACKGROUND_PRIORITY = 0
 FOREGROUND_PRIORITY = 10
 

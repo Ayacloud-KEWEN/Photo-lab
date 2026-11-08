@@ -20,6 +20,8 @@ const KIND_LABELS: Record<string, `status.kind.${keyof typeof zhCN.status.kind}`
   move_cache: "status.kind.cache",
   mapweb_send: "status.kind.mapweb",
   pair_live_photos: "status.kind.live",
+  vlm_describe_assets: "status.kind.vlm",
+  vlm_download: "status.kind.vlmDownload",
 };
 
 export function StatusBar() {
@@ -74,6 +76,16 @@ export function StatusBar() {
     taskLabel = t("status.taskPlaces", {
       current: running.progress_current,
       total: running.progress_total ?? 0,
+    });
+  } else if (running?.kind === "vlm_describe_assets") {
+    taskLabel = t("status.taskVlm", {
+      current: running.progress_current,
+      total: running.progress_total ?? 0,
+    });
+  } else if (running?.kind === "vlm_download") {
+    taskLabel = t("status.taskVlmDownload", {
+      done: (running.progress_current / 1000).toFixed(1),
+      total: ((running.progress_total ?? 0) / 1000).toFixed(1),
     });
   } else if (running?.kind === "ai_index_assets") {
     taskLabel = t("status.taskAiIndex", {

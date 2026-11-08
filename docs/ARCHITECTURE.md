@@ -673,3 +673,44 @@ storage_roots ──scan──▶ media_files (pending) ──ingest──▶ as
 - **未验证**：Google 相册导出的 `.MP4` 实况片段（都在测试时未连接的 G: 盘上）；HDR（HLG / 杜比视界）的实况片段——用户库里抽查的
   都是 8 位 SDR。
 
+## 41. 本地视觉模型：照片描述与照片里的文字（ADR-038）
+
+需求（2026-11-08）：在本机用 Qwen-VL 看懂照片，写一句中文描述并抄下照片里的文字（路牌、菜单、门票、文件），
+两者都能在搜索框搜到；不上传。补上 SPEC 第 4 节“A locally executable vision-language model”。
+
+- **选型（在用户图库 48 张照片上对比，`python -m lumen.vlm.bench`）**：RTX 4070 SUPER 12 GB + 64 GB 内存。
+  | 模型 | 每张（中位数 / 平均） | 质量 |
+  |---|---|---|
+  | Qwen3.6-35B-A3B（MoE，Q4_K_M，**默认**） | 5.3 s / 7.2 s | 描述丰富、识字准 |
+  | Qwen3.8-27B（稠密，Q4_K_M，**精细识别**） | 24.5 s / 52.7 s | 最细心、识字最准 |
+  | Qwen3-VL-8B（Q8_0，对照） | 3.4 s / 7.8 s | 能用，小字常认错 |
+  35B-A3B 只有约 3B 参数参与每个 token：注意力放 GPU、专家放内存，再加 MTP 推测解码（生成 85–94 token/s），
+  慢在读图（约 3.4 s，专家在 CPU 上）。27B 放不下显卡，生成只有 ~6 token/s。都是 Apache-2.0。
+- **运行方式**：LUMEN 自己启动 llama.cpp 的 `llama-server`（b12207，Windows CUDA 13.5）作为子进程（`vlm/server.py`）：
+  只听 127.0.0.1 的随机端口、无控制台窗口、不继承 stdin（第 7 节的坑）、日志在 `<模型文件夹>/logs/`；任务开始时启动，
+  结束、让位或取消时停止；桌面版里它在后端的 Windows 作业对象内，关程序时一起结束。没有用用户已装的 Ollama：
+  专家放内存、MTP 这类控制不如 llama.cpp 直接，也避免和用户自己的 Ollama 抢显存。
+  参数（`vlm/models.py`）：`--reasoning off`（Qwen 的思考模式对看图无用且慢）、`--flash-attn on`、llama.cpp 默认的 `--fit`
+  自动决定放法；35B 带 MTP 头时加 `--spec-type draft-mtp --model-draft`。
+- **显卡与 SigLIP**：任务开始先卸载 SigLIP，并给 llama.cpp 加 `--fit-target 3072`，留出约 3 GB 给 AI 搜索；
+  实测识别时做 AI 搜索可以正常加载 SigLIP（显存 11.7 / 12.3 GB），识别速度不受影响（约 6 s/张）。
+- **一次请求**（`vlm/describe.py`，提示词第 1 版）：图片缩到长边 1280 发送，要求按 JSON Schema 回答
+  `description`（一两句中文、客观）、`text`（照片里的文字按原文逐行）、`keywords`（5–10 个中文词），输出上限 1536 token。
+  模型抄长篇说明牌时可能陷入重复直到上限：此时保留已完整的描述和截断前的文字（`truncated`），并去掉出现超过两次的行。
+  读不出的照片也存一条空结果，避免每次都重试。
+- **数据**（迁移 0014）：`media_descriptions`（每资产一行：读的哪个文件、模型、提示词版本、描述、文字、关键词、是否截断、耗时）；
+  `vlm_requests`（用户要求优先识别的照片，及是否精细）。搜索视图 `asset_search_source` 加上描述、文字和关键词
+  （三字符全文索引正适合中文和外文的子串搜索），每写一条就重建该资产的搜索文档。关键词只进搜索，不进标签系统。
+- **顺序**（`vlm/pipeline.py`，后台优先级，给扫描/导入/导出让位）：① 用户要求的（精细的先，用 27B）；② 收藏、3 星以上、
+  作品集里的、**最近 30 天拍的**（按拍摄时间：刚导入的整库不算“最近”）；③ SigLIP 判断含文字的（文本查询，余弦 ≥ 0.075，
+  最多 2 万张）；④ 范围为“全部”时其余照片从新到旧。运行中每张之间检查有没有新的请求，有就重新排队并先处理
+  （必要时切换模型；用默认模型读完的照片仍保留其“精细”请求）。用户图库副本：重点 + 含文字约 5,000 张，约 8 小时。
+  “重新识别”把该照片的提示词版本置 0 并加入请求。导入完成、开启功能、改范围、程序启动时排队一次任务。
+- **下载**（任务 `vlm_download`）：llama.cpp 的两个 zip（GitHub 发布页）和模型的 GGUF / mmproj / MTP 文件（Hugging Face），
+  `.part` 文件续传，进度按 MB；默认文件夹为数据目录下 `vlm/`，可在设置里改（用户的在 `D:\LUMEN Studio`）。
+- **界面**：设置页“本地视觉模型”（开关、文件夹、两个模型的下载、范围、进度与暂停）；检查器和全屏信息栏的“AI 描述”
+  （描述、可复制的文字、关键词、“由 … 生成，可能有误”、重新识别 / 精细识别，请求后自动刷新）；多选栏“AI 识别”“精细识别”；
+  状态栏“正在识别照片 N / M”。
+- **接口**：`GET /vlm/status`、`POST /vlm/describe {asset_ids, fine}`、`POST /vlm/download {model}`；
+  `AssetDetail.description`；设置 `vlm_enabled`、`vlm_scope`（priority / all）、`vlm_folder`。
+

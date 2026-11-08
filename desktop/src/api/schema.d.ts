@@ -829,6 +829,66 @@ export interface paths {
         patch: operations["updateCollectionItem"];
         trace?: never;
     };
+    "/api/v1/vlm/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Status
+         * @description The local vision-language model: files present, photos read and still to read.
+         */
+        get: operations["getVlmStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vlm/describe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Describe Assets
+         * @description Read these photos first (again if read before); ``fine`` uses the careful model.
+         */
+        post: operations["describeAssets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vlm/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download
+         * @description Download llama.cpp (if missing) and a model into the model folder (resumable).
+         */
+        post: operations["downloadVlm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cull/similar": {
         parameters: {
             query?: never;
@@ -1577,6 +1637,24 @@ export interface components {
              * @description Address of the user's MapWeb (e.g. http://kevin:8788); photos are sent there only when the user asks
              */
             mapweb_url?: string | null;
+            /**
+             * Vlm Enabled
+             * @description Describe photos and read their text with the local model
+             * @default false
+             */
+            vlm_enabled: boolean;
+            /**
+             * Vlm Scope
+             * @description priority: favourites, 3+ stars, collections, recent and photos with text; all: then the rest of the library
+             * @default priority
+             * @enum {string}
+             */
+            vlm_scope: "priority" | "all";
+            /**
+             * Vlm Folder
+             * @description Folder of the local model files and llama.cpp (default: data folder/vlm)
+             */
+            vlm_folder?: string | null;
         };
         /** AppSettingsUpdate */
         AppSettingsUpdate: {
@@ -1612,6 +1690,15 @@ export interface components {
              * @description An empty string removes the address
              */
             mapweb_url?: string | null;
+            /** Vlm Enabled */
+            vlm_enabled?: boolean | null;
+            /** Vlm Scope */
+            vlm_scope?: ("priority" | "all") | null;
+            /**
+             * Vlm Folder
+             * @description An empty string goes back to the default
+             */
+            vlm_folder?: string | null;
         };
         /** AssetBatchUpdate */
         AssetBatchUpdate: {
@@ -1630,6 +1717,40 @@ export interface components {
             add_tags?: string[];
             /** Remove Tag Ids */
             remove_tag_ids?: number[];
+        };
+        /**
+         * AssetDescription
+         * @description What the local model saw in a photo (machine-written: it can be wrong).
+         */
+        AssetDescription: {
+            /**
+             * Description
+             * @description Empty when the model could not read the photo
+             */
+            description: string;
+            /**
+             * Text
+             * @description Text in the photo as written, one line each
+             */
+            text: string;
+            /** Keywords */
+            keywords: string[];
+            /** Model */
+            model: string;
+            /** Model Label */
+            model_label: string;
+            /**
+             * Fine
+             * @description Read with the slower, more careful model
+             */
+            fine: boolean;
+            /**
+             * Truncated
+             * @description The answer was cut off: the text may be incomplete
+             */
+            truncated: boolean;
+            /** Created At */
+            created_at: string;
         };
         /** AssetDetail */
         AssetDetail: {
@@ -1693,6 +1814,8 @@ export interface components {
             cull_flag: "none" | "pick" | "reject";
             /** @description Photos only, once measured */
             quality: components["schemas"]["AssetQuality"] | null;
+            /** @description What the local vision model saw and read (ADR-038) */
+            description?: components["schemas"]["AssetDescription"] | null;
             /** Files */
             files: components["schemas"]["AssetFile"][];
         };
@@ -3597,6 +3720,83 @@ export interface components {
              * @default false
              */
             mute: boolean;
+        };
+        /** VlmDescribeRequest */
+        VlmDescribeRequest: {
+            /** Asset Ids */
+            asset_ids: number[];
+            /**
+             * Fine
+             * @description Use the slower, more careful model
+             * @default false
+             */
+            fine: boolean;
+        };
+        /** VlmDescribeResult */
+        VlmDescribeResult: {
+            /** Queued */
+            queued: number;
+            /** Task Id */
+            task_id: number;
+        };
+        /** VlmDownloadRequest */
+        VlmDownloadRequest: {
+            /** Model */
+            model: string;
+        };
+        /** VlmModelInfo */
+        VlmModelInfo: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "default" | "fine";
+            /** Downloaded */
+            downloaded: boolean;
+            /** Size Gb */
+            size_gb: number;
+            /** Licence */
+            licence: string;
+            /** Repo */
+            repo: string;
+        };
+        /** VlmStatus */
+        VlmStatus: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "priority" | "all";
+            /** Folder */
+            folder: string;
+            /**
+             * Runtime Installed
+             * @description llama.cpp is present in the folder
+             */
+            runtime_installed: boolean;
+            /** Models */
+            models: components["schemas"]["VlmModelInfo"][];
+            /**
+             * Described
+             * @description Photos read (at the current prompt version)
+             */
+            described: number;
+            /**
+             * Requested
+             * @description Photos waiting because the user asked for them
+             */
+            requested: number;
+            /**
+             * To Read
+             * @description Photos still to read within the scope
+             */
+            to_read: number;
         };
     };
     responses: never;
@@ -5625,6 +5825,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getVlmStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VlmStatus"];
+                };
+            };
+        };
+    };
+    describeAssets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VlmDescribeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VlmDescribeResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    downloadVlm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VlmDownloadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
                 };
             };
             /** @description Validation Error */

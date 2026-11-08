@@ -77,6 +77,7 @@ export function makeDetail(summary: AssetSummary): AssetDetail {
     place: null,
     cull_flag: summary.cull_flag,
     quality: null,
+    description: null,
     files: [
       {
         id: summary.id * 10,
@@ -148,6 +149,12 @@ export interface StubOptions {
   cache?: { folder?: string; missing?: boolean; noSpace?: boolean };
   /** Trip suggestions: date ranges over asset ids. */
   trips?: { start: string; end: string; assetIds: number[]; cities?: string[] }[];
+  /** Local vision model: files present, enabled, and what each asset was read as. */
+  vlm?: {
+    enabled?: boolean;
+    installed?: boolean;
+    descriptions?: Record<number, Partial<AssetDetail["description"]> & object>;
+  };
 }
 
 export function stubBackend(options: StubOptions = {}) {
@@ -321,8 +328,31 @@ export function stubBackend(options: StubOptions = {}) {
         backup_keep: 10,
         backup_folder: null,
         mapweb_url: options.mapweb?.url ?? null,
+        vlm_enabled: options.vlm?.enabled ?? false,
+        vlm_scope: "priority",
+        vlm_folder: null,
         ...((body as object | undefined) ?? {}),
       });
+    }
+    if (path === "/api/v1/vlm/status") {
+      const installed = options.vlm?.installed ?? false;
+      return json({
+        enabled: options.vlm?.enabled ?? false, scope: "priority",
+        folder: "C:\Users\me\AppData\Local\LUMEN Studio\vlm", runtime_installed: installed,
+        models: [
+          { id: "qwen3.6-35b-a3b", label: "Qwen3.6-35B-A3B (MoE, Q4_K_M)", role: "default",
+            downloaded: installed, size_gb: 23.4, licence: "Apache-2.0", repo: "ggml-org/x" },
+          { id: "qwen3.8-27b", label: "Qwen3.8-27B (dense, Q4_K_M)", role: "fine",
+            downloaded: false, size_gb: 17.4, licence: "Apache-2.0", repo: "unsloth/x" },
+        ],
+        described: 120, requested: 0, to_read: options.vlm?.enabled ? 3400 : 0,
+      }); // prettier-ignore
+    }
+    if (path === "/api/v1/vlm/describe") {
+      return json({ queued: (body as { asset_ids: number[] }).asset_ids.length, task_id: 77 }, 202);
+    }
+    if (path === "/api/v1/vlm/download") {
+      return json({ id: 78, kind: "vlm_download", status: "pending" }, 202);
     }
     if (path === "/api/v1/places/search") {
       const q = url.searchParams.get("q") ?? "";
@@ -664,7 +694,15 @@ export function stubBackend(options: StubOptions = {}) {
     if (assetMatch) {
       const asset = assets.find((item) => item.id === Number(assetMatch[1]));
       if (!asset) return json({ error: { code: "not_found", message: "nope" } }, 404);
-      const detail = makeDetail(asset);
+      const read = options.vlm?.descriptions?.[asset.id];
+      const detail = {
+        ...makeDetail(asset),
+        description: read
+          ? { description: "", text: "", keywords: [], model: "qwen3.6-35b-a3b",
+              model_label: "Qwen3.6-35B-A3B (MoE, Q4_K_M)", fine: false, truncated: false,
+              created_at: "2026-11-08T10:00:00.000Z", ...read } // prettier-ignore
+          : null,
+      };
       return json(method === "PATCH" ? { ...detail, ...(body as object) } : detail);
     }
     if (path === "/api/v1/storage-roots") {

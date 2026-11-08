@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from lumen.develop.recipe import LiveEffect
+from lumen.schemas.vlm import AssetDescription
 
 MediaType = Literal["photo", "video"]
 AssetSort = Literal["capture_desc", "capture_asc", "added_desc"]
@@ -265,4 +266,7 @@ class AssetDetail(BaseModel):
     place: AssetPlace | None = Field(description="Where the location is (offline place names)")
     cull_flag: CullFlag
     quality: AssetQuality | None = Field(description="Photos only, once measured")
+    description: AssetDescription | None = Field(
+        default=None, description="What the local vision model saw and read (ADR-038)"
+    )
     files: list[AssetFile]

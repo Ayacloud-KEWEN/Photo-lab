@@ -8,6 +8,7 @@ import { CloudSettings, LocalAiSettings } from "@/components/settings/AiSettings
 import { BackupSettings } from "@/components/settings/BackupSettings";
 import { CacheSettings } from "@/components/settings/CacheSettings";
 import { MapWebSettings } from "@/components/settings/MapWebSettings";
+import { VlmSettings } from "@/components/settings/VlmSettings";
 import { LANGUAGES, setLanguage, type LanguageCode } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +83,10 @@ export function SettingsPage() {
 
       <Section title={t("settings.ai")}>
         <LocalAiSettings />
+      </Section>
+
+      <Section title={t("vlm.settingsTitle")}>
+        <VlmSettings />
       </Section>
 
       <Section title={t("settings.cloud")}>

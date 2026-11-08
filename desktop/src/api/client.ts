@@ -38,6 +38,7 @@ import type {
   ExportStatus,
   FrameExportResult,
   LiveInfo,
+  VlmStatus,
   MotionEffect,
   VideoEditState,
   VideoRecipe,
@@ -459,6 +460,20 @@ export const api = {
   /** Live Photos whose scene (water, traffic at night...) suits a long exposure. */
   longExposureCandidates: (conn: BackendConnection, limit = 120) =>
     request<SemanticPage>(conn, "GET", `/api/v1/ai/long-exposure${toSearchParams({ limit })}`),
+
+  /** The local vision-language model: files present, photos read and still to read. */
+  getVlmStatus: (conn: BackendConnection) =>
+    request<VlmStatus>(conn, "GET", "/api/v1/vlm/status"),
+
+  /** Read these photos first; `fine` uses the slower, more careful model. */
+  describeAssets: (conn: BackendConnection, assetIds: number[], fine: boolean) =>
+    request<{ queued: number; task_id: number }>(conn, "POST", "/api/v1/vlm/describe", {
+      asset_ids: assetIds,
+      fine,
+    }),
+
+  downloadVlm: (conn: BackendConnection, model: string) =>
+    request<Task>(conn, "POST", "/api/v1/vlm/download", { model }),
 
   /** A Live Photo's frames, the still's position and the sharpest frame. */
   getLiveInfo: (conn: BackendConnection, id: number) =>

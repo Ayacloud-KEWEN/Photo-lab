@@ -33,8 +33,10 @@ from lumen.library.live import needs_repair as live_pairing_outdated
 from lumen.library.quality import QUALITY_TASK, needs_scoring
 from lumen.services.backups import BACKUP_TASK, auto_backup_due
 from lumen.services.cache import apply_configured as apply_cache_folder
+from lumen.services.settings import get_settings
 from lumen.tasks import queue
 from lumen.tasks.runner import TaskRunner
+from lumen.vlm.pipeline import VLM_TASK
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +113,8 @@ def create_app(settings: Settings, token: str) -> FastAPI:
                     queue.enqueue(conn, QUALITY_TASK)
                 if auto_backup_due(conn, settings):
                     queue.enqueue(conn, BACKUP_TASK)
+                if get_settings(conn).vlm_enabled:  # carry on reading photos
+                    queue.enqueue(conn, VLM_TASK)
             runner.start()
             watcher.start()
         app.state.task_runner = runner
