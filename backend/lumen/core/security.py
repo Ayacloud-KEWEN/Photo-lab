@@ -15,7 +15,7 @@ from starlette.types import ASGIApp
 logger = logging.getLogger(__name__)
 
 # <img>/<video> cannot send headers, so media endpoints also accept ?token=.
-_QUERY_TOKEN_PATHS = re.compile(r"^/api/v1/assets/\d+/(thumbnail|original|motion)$")
+_QUERY_TOKEN_PATHS = re.compile(r"^/api/v1/assets/\d+/(thumbnail|original|motion|live/strip)$")
 
 
 def generate_token() -> str:

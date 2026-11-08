@@ -108,6 +108,32 @@ describe("Viewer", () => {
     expect(new URL(dialog.querySelector("video")!.src).pathname).toBe("/api/v1/assets/1/original");
   });
 
+  it("loops a Live Photo set to loop, and shows a long exposure as a still", async () => {
+    stubBackend({
+      assets: [
+        makeAsset(1, { is_live: true, live_effect: "loop", is_edited: true, rendition_version: "v1-e1" }),
+        makeAsset(2, { is_live: true, live_effect: "long_exposure", is_edited: true }),
+      ],
+    });
+    render(
+      <Providers>
+        <OpenOnMount ids={[1, 2]} id={1} />
+        <Viewer />
+      </Providers>,
+    );
+    const loop = await screen.findByLabelText("循环");
+    const url = new URL(loop.getAttribute("src")!);
+    expect(url.pathname).toBe("/api/v1/assets/1/motion");
+    expect(url.searchParams.get("effect")).toBe("loop");
+    expect(url.searchParams.get("v")).toBe("v1-e1"); // re-rendered when the edit changes
+    expect(loop).toHaveAttribute("loop");
+    expect(screen.queryByRole("button", { name: "悬停播放实况" })).not.toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "ArrowRight" });
+    expect(await screen.findByText("长曝光")).toBeInTheDocument();
+    expect(screen.getByRole("dialog").querySelector("video")).toBeNull();
+  });
+
   it("plays a Live Photo's clip over the still while LIVE is hovered", async () => {
     const play = vi
       .spyOn(HTMLMediaElement.prototype, "play")

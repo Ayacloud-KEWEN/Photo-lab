@@ -15,7 +15,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from lumen.develop import engine
+from lumen.develop import engine, live
 from lumen.develop.recipe import EditRecipe
 from lumen.media.formats import MediaFormat
 from lumen.media.metadata import ExifToolSession
@@ -62,15 +62,21 @@ def export_photo(
     stem: str | None = None,
     location: tuple[float, float] | None = None,
     capture_time: str | None = None,
+    motion: live.Clip | None = None,
 ) -> Path:
     """Develop ``source`` with ``recipe`` into a new JPEG in ``folder`` (named ``stem``,
     by default the original's name); returns its path."""
     image = engine.develop(
-        source, media_format, recipe, decode_edge(recipe, options.long_edge), cache=False
+        source,
+        media_format,
+        recipe,
+        decode_edge(recipe, options.long_edge),
+        cache=False,
+        motion=motion,
     )
     if options.long_edge is not None and max(image.size) > options.long_edge:
         image.thumbnail((options.long_edge, options.long_edge), Image.Resampling.LANCZOS)
-    icc_profile = engine.source_icc_profile(source, media_format)
+    icc_profile = engine.icc_profile(source, media_format, recipe, motion)
 
     target = reserve_path(folder, stem or source.stem)
     handle, temp_name = tempfile.mkstemp(dir=folder, prefix=".lumen-", suffix=".jpg")

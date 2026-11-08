@@ -23,8 +23,9 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ApiError } from "@/api/client";
+import { ApiError, motionUrl } from "@/api/client";
 import {
+  useAsset,
   useConnection,
   useEditActions,
   useEditState,
@@ -39,6 +40,7 @@ import { cn } from "@/lib/utils";
 
 import { CropOverlay } from "./CropOverlay";
 import { Histogram } from "./Histogram";
+import { LivePanel } from "./LivePanel";
 import { COPY_FIELDS, PRESETS, pick } from "./presets";
 import {
   ASPECTS,
@@ -106,6 +108,11 @@ export function DevelopWorkspace({
   const [draft, setDraft] = useState<Crop>(FULL_FRAME);
   const [aspect, setAspect] = useState<AspectId>("free");
   const [natural, setNatural] = useState<{ width: number; height: number } | null>(null);
+  // Live Photos: the clip's frame under the pointer while choosing one, kept until the
+  // developed frame arrives ("holding").
+  const [scrub, setScrub] = useState<{ time: number; holding: boolean } | null>(null);
+  const detail = useAsset(assetId).data;
+  const isLive = !!detail?.motion_file_id;
 
   // Adopt the saved recipe once it has loaded.
   useEffect(() => {
@@ -279,6 +286,10 @@ export function DevelopWorkspace({
   const preview = useDevelopPreview(conn, assetId, loaded ? shown : DEFAULT_RECIPE, edge);
   const unavailable =
     editState.error instanceof ApiError && editState.error.code === "develop_unavailable";
+  // The developed frame (or a failure) replaces the clip's frame shown while choosing.
+  useEffect(() => {
+    setScrub((current) => (current?.holding ? null : current));
+  }, [preview.src, preview.failed]);
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -296,6 +307,12 @@ export function DevelopWorkspace({
             />
           )}
         </FittedImage>
+        {scrub && conn && detail?.rendition_version && (
+          <ScrubFrame
+            src={motionUrl(conn, assetId, detail.rendition_version)}
+            time={scrub.time}
+          />
+        )}
         {before && (
           <span className="absolute left-4 top-4 rounded bg-black/60 px-2 py-0.5 text-[11px] text-white">
             {t("develop.beforeLabel")}
@@ -332,6 +349,26 @@ export function DevelopWorkspace({
         ) : (
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-3">
             <Histogram data={preview.histogram} />
+
+            {isLive && conn && detail?.rendition_version && (
+              <LivePanel
+                conn={conn}
+                assetId={assetId}
+                contentVersion={detail.rendition_version}
+                editVersion={state?.rendition_version ?? detail.rendition_version}
+                recipe={recipe}
+                stillSize={
+                  detail.metadata.width && detail.metadata.height
+                    ? { width: detail.metadata.width, height: detail.metadata.height }
+                    : null
+                }
+                onChange={(patch) => {
+                  if ("live_frame_ms" in patch && scrub) setScrub({ ...scrub, holding: true });
+                  change(patch, COMMIT_DELAY_MS);
+                }}
+                onScrub={(time) => setScrub(time === null ? null : { time, holding: false })}
+              />
+            )}
 
             <section aria-label={t("develop.groups.geometry")}>
               <GroupTitle>{t("develop.groups.geometry")}</GroupTitle>
@@ -601,5 +638,28 @@ function FittedImage({
         image
       )}
     </div>
+  );
+}
+
+/** A frame of the Live Photo's clip, shown at once while choosing one (unadjusted). */
+function ScrubFrame({ src, time }: { src: string; time: number }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const video = ref.current;
+    // Just past the frame's start, so the decoder shows that frame and not the previous.
+    if (video && video.readyState >= 1) video.currentTime = time / 1000 + 0.001;
+  }, [time]);
+  return (
+    <video
+      ref={ref}
+      src={src}
+      muted
+      playsInline
+      preload="auto"
+      onLoadedMetadata={(event) => {
+        event.currentTarget.currentTime = time / 1000 + 0.001;
+      }}
+      className="pointer-events-none absolute inset-3 size-[calc(100%-1.5rem)] bg-black object-contain"
+    />
   );
 }

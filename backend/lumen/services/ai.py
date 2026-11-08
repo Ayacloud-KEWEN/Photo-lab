@@ -176,3 +176,50 @@ def similar(conn: sqlite3.Connection, asset_id: int, query: AssetQuery, limit: i
 
 def pending_count(conn: sqlite3.Connection) -> int:
     return pipeline.count_pending(conn, get_settings(conn).ai_model)
+
+
+# Scenes where blending a Live Photo's frames gives a long exposure worth having (ADR-037).
+LONG_EXPOSURE_SCENES = (
+    "a waterfall",
+    "a flowing river or stream",
+    "waves breaking on the sea shore",
+    "a fountain",
+    "car light trails on a road at night",
+    "fireworks in the night sky",
+    "a busy street with people walking",
+    "clouds moving over the sky",
+)
+
+
+def long_exposure_candidates(
+    conn: sqlite3.Connection, settings: Settings, limit: int
+) -> SemanticPage:
+    """Live Photos (not yet long exposures) whose scene suits a long exposure, best first:
+    each photo scores its best match among ``LONG_EXPOSURE_SCENES``. Only clips that can
+    be read now (not on a disconnected drive) are suggested."""
+    model_id = _ready_model(conn)
+    live_ids = [
+        int(row[0])
+        for row in conn.execute(
+            """
+            SELECT a.id FROM media_assets a
+            LEFT JOIN edit_history e ON e.id = a.current_edit_id
+            WHERE a.media_type = 'photo'
+              AND COALESCE(json_extract(e.recipe, '$.live_effect'), 'live') != 'long_exposure'
+              AND EXISTS (SELECT 1 FROM media_files f
+                          JOIN storage_roots r ON r.id = f.storage_root_id
+                          WHERE f.asset_id = a.id AND f.file_role = 'companion'
+                            AND f.extension IN ('mov', 'mp4') AND f.status = 'present'
+                            AND r.status != 'offline')
+            """
+        )
+    ]
+    if not live_ids:
+        return SemanticPage(items=[], scores=[], relevant_count=0, model_id=model_id)
+    encoder = get_engine(settings.ai_idle_unload_s, settings.ai_device).encoder(model_id)
+    best: dict[int, float] = {}
+    for vector in encoder.encode_texts(list(LONG_EXPOSURE_SCENES)):
+        for asset_id, score in index.search(conn, model_id, vector, limit=limit, allowed=live_ids):
+            best[asset_id] = max(score, best.get(asset_id, -1.0))
+    hits = sorted(best.items(), key=lambda hit: -hit[1])[:limit]
+    return _page(conn, model_id, hits, TEXT_RELEVANCE.get(get_spec(model_id).backend, 0.2))

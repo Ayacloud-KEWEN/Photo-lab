@@ -44,6 +44,10 @@ describe("ExportDialog", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "选择…" }));
     expect(within(dialog).getByDisplayValue("D:\\Exports")).toBeInTheDocument();
     fireEvent.change(within(dialog).getAllByRole("combobox")[0]!, { target: { value: "2048" } });
+    // Live Photos can go out as a GIF (other photos stay JPEGs).
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "实况照片" }), {
+      target: { value: "gif" },
+    });
     // Location is off by default, and only possible with the photo information.
     const location = within(dialog).getByRole("checkbox", { name: "包含位置（GPS）" });
     expect(location).not.toBeChecked();
@@ -60,6 +64,7 @@ describe("ExportDialog", () => {
         include_metadata: false,
         include_location: false,
         video_mode: "copy",
+        live_as: "gif",
         numbered: false,
       }),
     );
@@ -71,6 +76,7 @@ describe("ExportDialog", () => {
       destination: "D:\\Exports",
       long_edge: 2048,
       include_metadata: false,
+      live_as: "gif",
     });
     // Esc still closes it: the focus came back to the dialog when the export started.
     expect(dialog).toHaveFocus();

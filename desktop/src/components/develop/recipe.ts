@@ -19,6 +19,8 @@ export const DEFAULT_RECIPE: EditRecipe = {
   flip_horizontal: false,
   straighten: 0,
   crop: null,
+  live_frame_ms: null,
+  live_effect: "live",
 };
 
 export type SliderKey =

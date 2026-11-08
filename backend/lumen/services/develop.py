@@ -15,8 +15,9 @@ from pathlib import Path
 
 from lumen.core.errors import LumenError, NotFoundError
 from lumen.db.connection import transaction, utc_now
-from lumen.develop import engine
+from lumen.develop import engine, live
 from lumen.develop.recipe import IDENTITY, EditRecipe, VideoRecipe, parse_recipe
+from lumen.develop.renditions import prune_full_renditions
 from lumen.develop.video import export_frame as write_frame
 from lumen.media.thumbnails import RenderError
 from lumen.schemas.develop import (
@@ -25,6 +26,8 @@ from lumen.schemas.develop import (
     EditState,
     EditStep,
     FrameExport,
+    LiveFrame,
+    LiveInfo,
     VideoEditState,
 )
 from lumen.services.assets import (
@@ -101,7 +104,14 @@ def get_edit_state(conn: sqlite3.Connection, asset_id: int) -> EditState:
 
 def save_edit(conn: sqlite3.Connection, asset_id: int, recipe: EditRecipe) -> EditState:
     """Append ``recipe`` as the step in effect (nothing happens if it is already in effect)."""
-    develop_source(conn, asset_id)  # only photos with an available original are edited
+    source = develop_source(conn, asset_id)  # only photos with an available original
+    if (recipe.live_effect != "live" or recipe.live_frame_ms is not None) and (
+        source.motion_path is None
+    ):
+        raise DevelopUnavailableError(
+            "Only Live Photos with their clip can use a frame or an effect",
+            details={"id": asset_id},
+        )
     _save_step(conn, asset_id, recipe, current_recipe)
     return get_edit_state(conn, asset_id)
 
@@ -261,15 +271,78 @@ def step_edit(conn: sqlite3.Connection, asset_id: int, offset: int) -> EditState
 
 
 def render_preview(
-    conn: sqlite3.Connection, asset_id: int, recipe: EditRecipe, edge: int
+    conn: sqlite3.Connection,
+    asset_id: int,
+    recipe: EditRecipe,
+    edge: int,
+    tools: live.Tools | None = None,
 ) -> tuple[bytes, list[list[int]]]:
     """A JPEG of the photo developed with ``recipe`` (which need not be saved), and its
     RGB histogram."""
     source = develop_source(conn, asset_id)
+    motion = source.clip(tools) if tools is not None else None
     try:
-        image = engine.develop(source.path, source.format, recipe, edge)
+        image = engine.develop(source.path, source.format, recipe, edge, motion=motion)
     except engine.DevelopError as exc:
         raise DevelopUnavailableError(f"Cannot develop the photo: {exc}") from exc
     out = io.BytesIO()
     image.save(out, "JPEG", quality=PREVIEW_QUALITY)
     return out.getvalue(), engine.histogram(image)
+
+
+# --- Live Photos (ADR-037) ------------------------------------------------------------------
+
+
+def live_clip(conn: sqlite3.Connection, asset_id: int, tools: live.Tools) -> live.Clip:
+    """The clip of a Live Photo whose still and clip are both available."""
+    clip = develop_source(conn, asset_id).clip(tools)
+    if clip is None:
+        raise DevelopUnavailableError(
+            "Not a Live Photo, or its clip is not available", details={"id": asset_id}
+        )
+    return clip
+
+
+def live_info(conn: sqlite3.Connection, asset_id: int, tools: live.Tools) -> LiveInfo:
+    clip = live_clip(conn, asset_id, tools)
+    try:
+        analysis = live.analyse(clip)
+    except live.LiveError as exc:
+        raise DevelopUnavailableError(f"Cannot read the clip: {exc}") from exc
+    info = analysis.info
+    return LiveInfo(
+        asset_id=asset_id,
+        width=info.width,
+        height=info.height,
+        duration_ms=info.duration_ms,
+        still_ms=info.still_ms,
+        recommended_ms=analysis.recommended_ms,
+        frames=[
+            LiveFrame(time_ms=time, sharpness=score)
+            for time, score in zip(info.frame_times_ms, analysis.sharpness, strict=False)
+        ],
+        strip_tiles=live.STRIP_TILES,
+    )
+
+
+def live_strip(conn: sqlite3.Connection, asset_id: int, tools: live.Tools) -> bytes:
+    """JPEG of evenly spaced frames side by side (the frame picker's background)."""
+    clip = live_clip(conn, asset_id, tools)
+    try:
+        return live.analyse(clip).strip
+    except live.LiveError as exc:
+        raise DevelopUnavailableError(f"Cannot read the clip: {exc}") from exc
+
+
+def live_playback(
+    conn: sqlite3.Connection, asset_id: int, effect: live.MotionEffect, tools: live.Tools
+) -> Path:
+    """The clip played as ``effect`` with the photo's adjustments (rendered once, cached)."""
+    clip = live_clip(conn, asset_id, tools)
+    recipe = current_recipe(conn, asset_id).model_copy(update={"live_effect": effect})
+    try:
+        path = live.playback(clip, recipe)
+    except live.LiveError as exc:
+        raise DevelopUnavailableError(f"Cannot render the clip: {exc}") from exc
+    prune_full_renditions(tools.cache_dir, keep=path)
+    return path

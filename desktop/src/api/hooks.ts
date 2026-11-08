@@ -54,6 +54,8 @@ export const queryKeys = {
   similar: (id: number, query: AssetQuery) => ["library", "similar", id, query] as const,
   analyses: (id: number) => ["library", "analyses", id] as const,
   edit: (id: number) => ["library", "edit", id] as const,
+  live: (id: number) => ["library", "live", id] as const,
+  longExposure: () => ["library", "long-exposure"] as const,
   export: (taskId: number) => ["export", taskId] as const,
   videoEdit: (id: number) => ["library", "video-edit", id] as const,
   collections: ["library", "collections"] as const,
@@ -746,6 +748,28 @@ export function useAiSearch(text: string, query: AssetQuery, enabled: boolean) {
     queryFn: () => api.aiSearch(requireConnection(conn), text, query),
     enabled: conn !== null && enabled && text.trim().length > 0,
     placeholderData: (previous) => previous,
+    retry: false,
+  });
+}
+
+/** A Live Photo's frames (analysed on the backend on first use, then cached). */
+export function useLiveInfo(id: number | null, enabled = true) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.live(id ?? 0),
+    queryFn: () => api.getLiveInfo(requireConnection(conn), id!),
+    enabled: conn !== null && id !== null && enabled,
+    staleTime: Infinity, // the clip does not change
+    retry: false,
+  });
+}
+
+export function useLongExposureCandidates(enabled = true) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.longExposure(),
+    queryFn: () => api.longExposureCandidates(requireConnection(conn)),
+    enabled: conn !== null && enabled,
     retry: false,
   });
 }

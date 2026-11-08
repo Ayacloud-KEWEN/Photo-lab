@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
+import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from lumen.core.errors import NotFoundError
+from lumen.develop import live
 from lumen.develop.engine import DevelopError
-from lumen.develop.exporter import ExportOptions, export_photo
+from lumen.develop.exporter import ExportOptions, export_photo, reserve_path
+from lumen.develop.recipe import EditRecipe
 from lumen.develop.video import VideoExportError, VideoExportStopped, VideoOptions, export_video
 from lumen.media.metadata import ExifToolSession
 from lumen.schemas.exports import ExportFailure, ExportRequest, ExportResult
@@ -44,6 +49,7 @@ def export_assets(ctx: TaskContext) -> dict[str, Any]:
         include_location=request.include_location,
     )
     ids = request.asset_ids
+    tools = live.Tools.of(ctx.settings)
     # Resume after a restart: progress is recorded after every item.
     start = min(int(queue.get(ctx.conn, ctx.task_id)["progress_current"]), len(ids))
     exported, skipped = start, 0
@@ -89,6 +95,21 @@ def export_assets(ctx: TaskContext) -> dict[str, Any]:
                     photo = develop_source(ctx.conn, asset_id)
                     name = photo.path.name
                     corrected = overrides_for(ctx.conn, asset_id)
+                    clip = photo.clip(tools)
+                    stem = f"{index + 1:0{width}d}_{photo.path.stem}" if request.numbered else None
+                    if request.live_as != "photo" and clip is not None:
+                        _export_motion(
+                            clip,
+                            current_recipe(ctx.conn, asset_id),
+                            folder,
+                            stem or photo.path.stem,
+                            request,
+                            corrected.capture_time,
+                            stop_video,
+                        )
+                        exported += 1
+                        ctx.progress(index + 1, len(ids), force=True)
+                        continue
                     export_photo(
                         photo.path,
                         photo.format,
@@ -101,14 +122,15 @@ def export_assets(ctx: TaskContext) -> dict[str, Any]:
                         else None,
                         location=corrected.location,
                         capture_time=corrected.capture_time,
+                        motion=clip,
                     )
                 exported += 1
             except (_Unavailable, DevelopUnavailableError, NotFoundError):
                 skipped += 1
-            except VideoExportStopped:
+            except (VideoExportStopped, live.LiveStopped):
                 ctx.progress(index, len(ids), force=True)  # raises: cancelled or shutting down
                 raise
-            except (DevelopError, VideoExportError, OSError, ValueError) as exc:
+            except (DevelopError, VideoExportError, live.LiveError, OSError, ValueError) as exc:
                 logger.warning("export failed", extra={"asset_id": asset_id, "error": str(exc)})
                 failed.append(ExportFailure(asset_id=asset_id, file_name=name, error=str(exc)))
             ctx.progress(index + 1, len(ids), force=True)
@@ -122,6 +144,42 @@ def export_assets(ctx: TaskContext) -> dict[str, Any]:
         failed=failed[:MAX_REPORTED_FAILURES],
     )
     return result.model_dump()
+
+
+def _export_motion(
+    clip: live.Clip,
+    recipe: EditRecipe,
+    folder: Path,
+    stem: str,
+    request: ExportRequest,
+    capture_time: str | None,
+    should_stop: Callable[[], bool],
+) -> Path:
+    """A Live Photo as a video (its effect and adjustments, H.264) or a looping GIF.
+
+    Only the capture time is written to an MP4: no location, whatever the GPS option.
+    """
+    extension = ".gif" if request.live_as == "gif" else ".mp4"
+    edge = request.long_edge or (live.GIF_EDGE if request.live_as == "gif" else None)
+    target = reserve_path(folder, stem, extension)
+    handle, temp = tempfile.mkstemp(dir=folder, prefix=".lumen-", suffix=extension)
+    os.close(handle)
+    try:
+        live.render_motion(
+            clip,
+            recipe,
+            Path(temp),
+            format="gif" if request.live_as == "gif" else "mp4",
+            edge=edge,
+            creation_time=capture_time if request.include_metadata else None,
+            should_stop=should_stop,
+        )
+        os.replace(temp, target)
+    except BaseException:
+        Path(temp).unlink(missing_ok=True)
+        target.unlink(missing_ok=True)
+        raise
+    return target
 
 
 def _media_type(ctx: TaskContext, asset_id: int) -> str:

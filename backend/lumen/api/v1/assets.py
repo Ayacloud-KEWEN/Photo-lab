@@ -10,6 +10,7 @@ from lumen.api.deps import Connection
 from lumen.core.config import Settings
 from lumen.core.errors import NotFoundError
 from lumen.core.reveal import open_in_browser
+from lumen.develop import live
 from lumen.schemas.assets import (
     AssetBatchUpdate,
     AssetDetail,
@@ -25,6 +26,7 @@ from lumen.schemas.assets import (
 )
 from lumen.schemas.common import ErrorResponse
 from lumen.services import assets as service
+from lumen.services import develop as develop_service
 from lumen.services import edits
 
 router = APIRouter(tags=["assets"])
@@ -82,9 +84,7 @@ def open_map(conn: Connection, asset_id: int = Path(ge=1)) -> None:
     ).fetchone()
     if row is None:
         raise NotFoundError("This photo has no location", details={"id": asset_id})
-    open_in_browser(
-        f"https://www.google.com/maps/search/?api=1&query={row[0]:.6f},{row[1]:.6f}"
-    )
+    open_in_browser(f"https://www.google.com/maps/search/?api=1&query={row[0]:.6f},{row[1]:.6f}")
 
 
 @router.patch(
@@ -115,7 +115,7 @@ async def get_asset_thumbnail(
     settings: Settings = request.app.state.settings
     path = await run_in_threadpool(
         service.rendition_path, conn, settings.cache_dir, asset_id, variant,
-        ffmpeg=settings.tool("ffmpeg"),
+        ffmpeg=settings.tool("ffmpeg"), ffprobe=settings.tool("ffprobe"),
     )  # fmt: skip
     # URLs carry the content version (?v=...), so the response never goes stale.
     return FileResponse(
@@ -152,12 +152,29 @@ def get_asset_original(conn: Connection, asset_id: int = Path(ge=1)) -> FileResp
     response_class=FileResponse,
     responses=NOT_FOUND,
 )
-def get_asset_motion(conn: Connection, asset_id: int = Path(ge=1)) -> FileResponse:
+async def get_asset_motion(
+    conn: Connection,
+    request: Request,
+    asset_id: int = Path(ge=1),
+    effect: Literal["live", "loop", "bounce"] = Query(default="live"),
+) -> FileResponse:
     """A Live Photo's motion clip, read-only, with HTTP Range support.
 
-    Accepts ``?token=`` for use in ``<video>``.
+    ``live`` is the clip as shot; ``loop`` and ``bounce`` are rendered with the photo's
+    adjustments (H.264 MP4, cached; the first request takes a few seconds). Accepts
+    ``?token=`` for use in ``<video>``.
     """
-    path, media_type = service.motion_file(conn, asset_id)
+    if effect != "live":
+        settings: Settings = request.app.state.settings
+        rendered = await run_in_threadpool(
+            develop_service.live_playback, conn, asset_id, effect, live.Tools.of(settings)
+        )
+        return FileResponse(
+            rendered,
+            media_type="video/mp4",
+            headers={"Cache-Control": "private, max-age=31536000, immutable"},
+        )
+    path, media_type = await run_in_threadpool(service.motion_file, conn, asset_id)
     return FileResponse(
         path,
         media_type=media_type,

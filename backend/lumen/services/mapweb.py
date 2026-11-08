@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from lumen.core.errors import LumenError, NotFoundError
+from lumen.develop import live
 from lumen.develop.engine import DevelopError
 from lumen.develop.exporter import ExportOptions, export_photo
 from lumen.media.metadata import ExifToolSession
@@ -551,6 +552,7 @@ def send_task(ctx: TaskContext) -> dict[str, Any]:
                     source.path, source.format, current_recipe(ctx.conn, photo.asset_id),
                     Path(folder), options, exiftool, stem=f"{photo.asset_id}",
                     location=corrected.location, capture_time=corrected.capture_time,
+                    motion=source.clip(live.Tools.of(ctx.settings)),
                 )  # fmt: skip
                 jpeg = path.read_bytes()
                 path.unlink(missing_ok=True)

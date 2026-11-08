@@ -203,12 +203,13 @@ cd backend
 | GET | `/api/v1/assets/{id}` | 资产详情：元数据、位置、全部文件 |
 | GET | `/api/v1/assets/{id}/thumbnail?variant=thumb\|preview\|full` | 缩略图（400px）、预览图（2048px）或全尺寸图（按需生成并缓存，含编辑效果） |
 | GET | `/api/v1/assets/{id}/original` | 原文件（只读，支持 Range，用于视频播放和原图查看） |
-| GET | `/api/v1/assets/{id}/motion` | 实况照片的视频片段（只读，支持 Range） |
+| GET | `/api/v1/assets/{id}/motion?effect=live\|loop\|bounce` | 实况照片的视频片段（只读，支持 Range）；`loop`/`bounce` 为按当前编辑生成的循环 / 来回 H.264 片段（缓存） |
+| GET | `/api/v1/assets/{id}/live` · `/live/strip` | 实况片段的每一帧（时间、清晰度）、原照片位置、最清晰的一帧 · 帧条缩略图 |
 | GET/PUT | `/api/v1/assets/{id}/edit` | 当前编辑配方与历史 / 保存新的一步（非破坏性，不写原文件） |
 | POST | `/api/v1/assets/{id}/edit/undo` · `/redo` · `/select` | 撤销、重做、回到历史中的某一步（`null` 为原图） |
 | POST | `/api/v1/assets/{id}/develop/preview` | 按未保存的配方渲染 JPEG（`X-Histogram` 头为 RGB 直方图） |
 | POST | `/api/v1/edits/batch` | 把配方中的指定字段应用到多张照片（粘贴设置、预设） |
-| POST | `/api/v1/exports` | 导出照片为新的 JPEG（后台任务；长边、质量、是否保留 EXIF / GPS） |
+| POST | `/api/v1/exports` | 导出照片为新的 JPEG（后台任务；长边、质量、是否保留 EXIF / GPS；实况照片可选 `live_as=video\|gif`） |
 | GET | `/api/v1/exports/{task_id}` | 导出进度与结果（导出、跳过、失败） |
 | GET/PUT | `/api/v1/assets/{id}/video-edit` | 视频剪辑：起止时间、旋转、静音（非破坏性） |
 | POST | `/api/v1/assets/{id}/frame-export` | 把视频某一帧存成新的 JPEG |
@@ -227,6 +228,7 @@ cd backend
 | POST | `/api/v1/ai/model/download` · `/api/v1/ai/index` | 下载模型 / 分析照片（后台任务） |
 | GET | `/api/v1/ai/search?text=&…` | 语义搜索（可叠加筛选条件），返回相似度和明显相关的数量 |
 | GET | `/api/v1/assets/{id}/similar` | 相似照片 |
+| GET | `/api/v1/ai/long-exposure` | 适合做长曝光的实况照片（流水、车流、烟花等，本地 AI） |
 | PUT/DELETE | `/api/v1/ai/cloud/key` | 保存 / 删除 DeepSeek API 密钥（Windows 凭据管理器） |
 | POST | `/api/v1/ai/cloud/test` | 测试密钥并检查模型能否识别图片 |
 | POST | `/api/v1/ai/cloud/preview` | 列出将要发送的内容（图片、字段、目标），不联网 |

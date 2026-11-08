@@ -13,6 +13,7 @@ import functools
 import math
 import threading
 from collections import OrderedDict
+from collections.abc import Callable
 from pathlib import Path
 
 import cv2
@@ -20,6 +21,7 @@ import numpy as np
 import numpy.typing as npt
 from PIL import Image
 
+from lumen.develop import live
 from lumen.develop.recipe import EditRecipe
 from lumen.media import thumbnails
 from lumen.media.formats import MediaFormat
@@ -40,7 +42,7 @@ class DevelopError(Exception):
 # --- Decoding -------------------------------------------------------------------------------
 
 _CACHE_SIZE = 6
-_cache: OrderedDict[tuple[str, int, int, int | None], Array] = OrderedDict()
+_cache: OrderedDict[tuple[str, int, int, int | None, str], Array] = OrderedDict()
 _cache_lock = threading.Lock()
 
 
@@ -57,13 +59,58 @@ def load_base(
         stat = source.stat()
     except OSError as exc:
         raise DevelopError(f"cannot read original: {exc}") from exc
-    key = (str(source), stat.st_mtime_ns, stat.st_size, edge)
+    key = (str(source), stat.st_mtime_ns, stat.st_size, edge, "")
+    return _cached(key, lambda: _decode(source, media_format, edge), edge, cache=cache)
+
+
+def load_picture(
+    source: Path,
+    media_format: MediaFormat,
+    recipe: EditRecipe,
+    edge: int | None,
+    *,
+    motion: live.Clip | None = None,
+    cache: bool = True,
+) -> Array:
+    """The picture ``recipe`` develops: the still, or for a Live Photo a frame of its clip
+    or the clip's long exposure (ADR-037)."""
+    if not recipe.uses_motion():
+        return load_base(source, media_format, edge, cache=cache)
+    if motion is None:
+        raise DevelopError("the Live Photo's motion clip is not available")
+    clip = motion
+    try:
+        stat = clip.path.stat()
+    except OSError as exc:
+        raise DevelopError(f"cannot read the motion clip: {exc}") from exc
+    long_exposure = recipe.live_effect == "long_exposure"
+    tag = "lx" if long_exposure else f"f{recipe.live_frame_ms}"
+    key = (str(clip.path), stat.st_mtime_ns, stat.st_size, edge, tag)
+
+    def decode() -> Array:
+        try:
+            if long_exposure:
+                return live.long_exposure(clip)
+            return live.to_float(live.frame_at(clip, recipe.live_frame_ms or 0))
+        except live.LiveError as exc:
+            raise DevelopError(str(exc)) from exc
+
+    return _cached(key, decode, edge, cache=cache)
+
+
+def _cached(
+    key: tuple[str, int, int, int | None, str],
+    decode: Callable[[], Array],
+    edge: int | None,
+    *,
+    cache: bool,
+) -> Array:
     with _cache_lock:
         if key in _cache:
             _cache.move_to_end(key)
             return _cache[key]
 
-    base = _decode(source, media_format, edge)
+    base = decode()
     if edge is not None and max(base.shape[:2]) > edge:
         base = _resize(base, edge)
     base.setflags(write=False)
@@ -159,8 +206,24 @@ def develop(
     edge: int | None,
     *,
     cache: bool = True,
+    motion: live.Clip | None = None,
 ) -> Image.Image:
-    return to_image(render(load_base(source, media_format, edge, cache=cache), recipe))
+    base = load_picture(source, media_format, recipe, edge, motion=motion, cache=cache)
+    return to_image(render(base, recipe))
+
+
+def icc_profile(
+    source: Path, media_format: MediaFormat, recipe: EditRecipe, motion: live.Clip | None
+) -> bytes | None:
+    """The colour profile of what ``recipe`` develops. iPhone clips are Display P3 like
+    their stills, so a frame keeps the still's profile; other clips are sRGB."""
+    if recipe.uses_motion():
+        try:
+            wide = motion is not None and live.probe(motion).wide_gamut
+        except live.LiveError:
+            wide = False
+        return source_icc_profile(source, media_format) if wide else None
+    return source_icc_profile(source, media_format)
 
 
 def source_icc_profile(source: Path, media_format: MediaFormat) -> bytes | None:

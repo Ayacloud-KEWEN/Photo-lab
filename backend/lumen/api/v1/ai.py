@@ -90,6 +90,19 @@ async def ai_search(
 
 
 @router.get(
+    "/ai/long-exposure", response_model=SemanticPage, operation_id="longExposureCandidates",
+    responses=ERRORS,
+)  # fmt: skip
+async def long_exposure_candidates(
+    conn: Connection, request: Request, limit: int = Query(default=120, ge=1, le=1000)
+) -> SemanticPage:
+    """Live Photos whose scene (water, traffic at night, fireworks...) suits a long exposure."""
+    return await run_in_threadpool(
+        service.long_exposure_candidates, conn, _settings(request), limit
+    )
+
+
+@router.get(
     "/assets/{asset_id}/similar", response_model=SemanticPage, operation_id="similarAssets",
     responses=ERRORS,
 )  # fmt: skip

@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from lumen.develop.recipe import LiveEffect
+
 MediaType = Literal["photo", "video"]
 AssetSort = Literal["capture_desc", "capture_asc", "added_desc"]
 FileRole = Literal["primary", "companion", "sidecar"]
@@ -61,6 +63,9 @@ class AssetSummary(BaseModel):
     height: int | None
     duration_ms: int | None
     is_live: bool = Field(description="A Live Photo: has a motion clip (see /motion)")
+    live_effect: LiveEffect | None = Field(
+        default=None, description="Live Photos: how the clip plays (or long exposure)"
+    )
     is_edited: bool = Field(description="Shown with a non-destructive edit applied")
     cover_extension: str = Field(description="Lower-case extension of the cover file")
     rendition_version: str = Field(
@@ -250,6 +255,9 @@ class AssetDetail(BaseModel):
     tags: list[AssetTag]
     cover_file_id: int | None = Field(description="File shown as thumbnail and by /original")
     motion_file_id: int | None = Field(description="Live Photo clip, served by /motion")
+    live_effect: LiveEffect | None = Field(
+        default=None, description="Live Photos: how the clip plays (or long exposure)"
+    )
     is_edited: bool = Field(description="Shown with a non-destructive edit applied")
     rendition_version: str | None
     metadata: AssetMetadata

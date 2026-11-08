@@ -13,7 +13,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 
-import { motionUrl, thumbnailUrl } from "@/api/client";
+import { motionEffectOf, motionUrl, thumbnailUrl } from "@/api/client";
 import { useConnection } from "@/api/hooks";
 import type { AssetSummary } from "@/api/types";
 import { LiveIcon } from "@/components/library/LiveIcon";
@@ -272,6 +272,8 @@ const Tile = memo(function Tile({
   const conn = useConnection();
   const [failed, setFailed] = useState(false);
   const src = conn ? thumbnailUrl(conn, asset.id, asset.rendition_version) : undefined;
+  const effect = motionEffectOf(asset.live_effect);
+  const longExposure = asset.live_effect === "long_exposure";
 
   // The clip is only mounted while the LIVE badge is hovered: no preloading across the wall.
   const [motion, setMotion] = useState<"off" | "loading" | "playing">("off");
@@ -326,10 +328,11 @@ const Tile = memo(function Tile({
       )}
       {conn && motion !== "off" && (
         <video
-          src={motionUrl(conn, asset.id, asset.rendition_version)}
+          src={motionUrl(conn, asset.id, asset.rendition_version, effect)}
           muted
           playsInline
           autoPlay
+          loop={effect !== "live"}
           onPlaying={() => setMotion("playing")}
           onEnded={stopMotion}
           onError={() => {
@@ -393,10 +396,15 @@ const Tile = memo(function Tile({
             {asset.duration_ms ? formatDuration(asset.duration_ms) : null}
           </span>
         )}
-        {asset.is_live && (
+        {asset.is_live && longExposure && (
+          <span className="text-[10px] font-medium text-white">
+            {t("develop.live.effects.long_exposure")}
+          </span>
+        )}
+        {asset.is_live && !longExposure && (
           <span
             role="img"
-            aria-label={t("viewer.live")}
+            aria-label={effect === "live" ? t("viewer.live") : t(`develop.live.effects.${effect}`)}
             title={t("viewer.livePlay")}
             data-playing={motion === "playing"}
             onMouseEnter={startMotion}

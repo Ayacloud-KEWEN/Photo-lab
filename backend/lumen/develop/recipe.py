@@ -37,8 +37,15 @@ class _Recipe(BaseModel):
         return self == type(self)()
 
     def canonical_json(self) -> str:
-        """Stable serialisation: equal recipes give equal strings (and hashes)."""
+        """Stable serialisation: equal recipes give equal strings (and hashes).
+
+        Fields added after recipes were first stored are left out while they hold their
+        default, so older edits keep their hash (and their cached renditions).
+        """
         data = self.model_dump(mode="json")
+        for name, default in _LATER_FIELDS.items():
+            if data.get(name, default) == default:
+                data.pop(name, None)
         return json.dumps(_rounded(data), sort_keys=True, separators=(",", ":"))
 
     def content_hash(self) -> str:
@@ -46,6 +53,9 @@ class _Recipe(BaseModel):
         if self.is_identity():
             return ""
         return hashlib.sha256(self.canonical_json().encode()).hexdigest()[:16]
+
+
+LiveEffect = Literal["live", "loop", "bounce", "long_exposure"]
 
 
 class EditRecipe(_Recipe):
@@ -74,7 +84,27 @@ class EditRecipe(_Recipe):
     flip_horizontal: bool = False
     straighten: float = Field(default=0, ge=-45, le=45, description="degrees, clockwise")
     crop: Crop | None = None
+    # Live Photos: which picture is developed and how the motion plays (ADR-037).
+    live_frame_ms: int | None = Field(
+        default=None, ge=0, description="Develop this frame of the clip instead of the still"
+    )
+    live_effect: LiveEffect = Field(
+        default="live",
+        description="live: the clip as shot; loop / bounce: how it plays; "
+        "long_exposure: all frames blended into one picture, which is developed",
+    )
 
+    def uses_motion(self) -> bool:
+        """Whether the picture comes from the Live Photo's clip rather than its still."""
+        return self.live_effect == "long_exposure" or self.live_frame_ms is not None
+
+    def without_live(self) -> EditRecipe:
+        """The adjustments alone (what is applied to every frame of a clip)."""
+        return self.model_copy(update={"live_frame_ms": None, "live_effect": "live"})
+
+
+# Defaults of fields that older stored recipes do not have (see ``canonical_json``).
+_LATER_FIELDS: dict[str, object] = {"live_frame_ms": None, "live_effect": "live"}
 
 MIN_CLIP_MS = 100
 

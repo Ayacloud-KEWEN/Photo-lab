@@ -310,7 +310,9 @@ export interface paths {
          * Get Asset Motion
          * @description A Live Photo's motion clip, read-only, with HTTP Range support.
          *
-         *     Accepts ``?token=`` for use in ``<video>``.
+         *     ``live`` is the clip as shot; ``loop`` and ``bounce`` are rendered with the photo's
+         *     adjustments (H.264 MP4, cached; the first request takes a few seconds). Accepts
+         *     ``?token=`` for use in ``<video>``.
          */
         get: operations["getAssetMotion"];
         put?: never;
@@ -517,6 +519,47 @@ export interface paths {
          *     comma-separated pixel counts.
          */
         post: operations["renderDevelopPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{asset_id}/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Live Info
+         * @description A Live Photo's frames: their times and sharpness, the still's position and the
+         *     sharpest frame (for choosing the frame to show).
+         */
+        get: operations["getLiveInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{asset_id}/live/strip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Live Strip
+         * @description JPEG of the clip's frames side by side, evenly spaced in time. Accepts ``?token=``.
+         */
+        get: operations["getLiveStrip"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -997,6 +1040,26 @@ export interface paths {
          * @description Photos best matching a natural-language description (Chinese works directly).
          */
         get: operations["aiSearch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/long-exposure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Long Exposure Candidates
+         * @description Live Photos whose scene (water, traffic at night, fireworks...) suits a long exposure.
+         */
+        get: operations["longExposureCandidates"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1608,6 +1671,11 @@ export interface components {
              */
             motion_file_id: number | null;
             /**
+             * Live Effect
+             * @description Live Photos: how the clip plays (or long exposure)
+             */
+            live_effect?: ("live" | "loop" | "bounce" | "long_exposure") | null;
+            /**
              * Is Edited
              * @description Shown with a non-destructive edit applied
              */
@@ -1820,6 +1888,11 @@ export interface components {
              * @description A Live Photo: has a motion clip (see /motion)
              */
             is_live: boolean;
+            /**
+             * Live Effect
+             * @description Live Photos: how the clip plays (or long exposure)
+             */
+            live_effect?: ("live" | "loop" | "bounce" | "long_exposure") | null;
             /**
              * Is Edited
              * @description Shown with a non-destructive edit applied
@@ -2531,6 +2604,18 @@ export interface components {
              */
             straighten: number;
             crop?: components["schemas"]["Crop"] | null;
+            /**
+             * Live Frame Ms
+             * @description Develop this frame of the clip instead of the still
+             */
+            live_frame_ms?: number | null;
+            /**
+             * Live Effect
+             * @description live: the clip as shot; loop / bounce: how it plays; long_exposure: all frames blended into one picture, which is developed
+             * @default live
+             * @enum {string}
+             */
+            live_effect: "live" | "loop" | "bounce" | "long_exposure";
         };
         /** EditSelect */
         EditSelect: {
@@ -2653,6 +2738,13 @@ export interface components {
              */
             numbered: boolean;
             /**
+             * Live As
+             * @description Live Photos: the picture (JPEG), the clip with its effect and adjustments (H.264 MP4) or a looping GIF (720 px unless long_edge is set)
+             * @default photo
+             * @enum {string}
+             */
+            live_as: "photo" | "video" | "gif";
+            /**
              * Video Mode
              * @description Videos: copy the streams (original quality, fast) or re-encode to H.264
              * @default copy
@@ -2732,6 +2824,50 @@ export interface components {
             /** Uptime Seconds */
             uptime_seconds: number;
             database: components["schemas"]["DatabaseHealth"];
+        };
+        /** LiveFrame */
+        LiveFrame: {
+            /** Time Ms */
+            time_ms: number;
+            /**
+             * Sharpness
+             * @description 0..1, relative to the sharpest frame
+             */
+            sharpness: number;
+        };
+        /**
+         * LiveInfo
+         * @description A Live Photo's clip, for choosing a frame (see /live/strip for its thumbnails).
+         */
+        LiveInfo: {
+            /** Asset Id */
+            asset_id: number;
+            /**
+             * Width
+             * @description Frame size, upright
+             */
+            width: number;
+            /** Height */
+            height: number;
+            /** Duration Ms */
+            duration_ms: number;
+            /**
+             * Still Ms
+             * @description Where the still was taken, when recorded
+             */
+            still_ms: number | null;
+            /**
+             * Recommended Ms
+             * @description The sharpest frame
+             */
+            recommended_ms: number | null;
+            /** Frames */
+            frames: components["schemas"]["LiveFrame"][];
+            /**
+             * Strip Tiles
+             * @description Frames in the strip image, evenly spaced in time
+             */
+            strip_tiles: number;
         };
         /** LocalAIStatus */
         LocalAIStatus: {
@@ -4172,7 +4308,9 @@ export interface operations {
     };
     getAssetMotion: {
         parameters: {
-            query?: never;
+            query?: {
+                effect?: "live" | "loop" | "bounce";
+            };
             header?: never;
             path: {
                 asset_id: number;
@@ -4775,6 +4913,104 @@ export interface operations {
                 "application/json": components["schemas"]["DevelopPreviewRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a photo, or its original is unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getLiveInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveInfo"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a photo, or its original is unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getLiveStrip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -5862,6 +6098,64 @@ export interface operations {
                 sort?: "capture_desc" | "capture_asc" | "added_desc";
                 /** @description What to look for */
                 text: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticPage"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    longExposureCandidates: {
+        parameters: {
+            query?: {
                 limit?: number;
             };
             header?: never;

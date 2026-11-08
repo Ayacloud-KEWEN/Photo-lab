@@ -14,8 +14,9 @@ from PIL import Image
 
 from lumen.core.errors import LumenError, NotFoundError
 from lumen.db.connection import GenerationCache
+from lumen.develop import live
 from lumen.develop.engine import DevelopError
-from lumen.develop.recipe import IDENTITY, EditRecipe, VideoRecipe, parse_recipe
+from lumen.develop.recipe import IDENTITY, EditRecipe, LiveEffect, VideoRecipe, parse_recipe
 from lumen.develop.renditions import (
     edited_rendition_paths,
     full_rendition_path,
@@ -175,7 +176,7 @@ def _decode_cursor(cursor: str, sort: str) -> list[object]:
 _SUMMARY_COLUMNS = """
     a.id, a.media_type, a.capture_time, a.rating, a.is_favorite, a.cull_flag,
     c.file_name, c.extension, c.fingerprint, m.width, m.height, m.duration_ms,
-    e.recipe_hash AS edit_hash,
+    e.recipe_hash AS edit_hash, json_extract(e.recipe, '$.live_effect') AS live_effect,
     EXISTS (SELECT 1 FROM media_files lf WHERE lf.asset_id = a.id
             AND lf.file_role = 'companion' AND lf.extension IN ('mov', 'mp4')) AS is_live,
     (SELECT GROUP_CONCAT(ext, ',') FROM (
@@ -198,6 +199,7 @@ def _summary(row: sqlite3.Row) -> AssetSummary:
         height=row["height"],
         duration_ms=row["duration_ms"],
         is_live=bool(row["is_live"]),
+        live_effect=(row["live_effect"] or "live") if row["is_live"] else None,
         is_edited=bool(row["edit_hash"]),
         cover_extension=row["extension"],
         rendition_version=rendition_version(row["fingerprint"], row["edit_hash"]),
@@ -509,6 +511,7 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
         ],
         cover_file_id=asset["cover_file_id"],
         motion_file_id=motion["id"] if motion else None,
+        live_effect=_live_effect(conn, asset_id) if motion else None,
         is_edited=bool(edit_hash),
         rendition_version=rendition_version(cover["fingerprint"], edit_hash) if cover else None,
         metadata=metadata,
@@ -557,6 +560,16 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
     )
 
 
+def _live_effect(conn: sqlite3.Connection, asset_id: int) -> LiveEffect:
+    row = conn.execute(
+        "SELECT json_extract(e.recipe, '$.live_effect') FROM media_assets a "
+        "JOIN edit_history e ON e.id = a.current_edit_id WHERE a.id = ?",
+        (asset_id,),
+    ).fetchone()
+    effect = row[0] if row else None
+    return effect if effect in ("loop", "bounce", "long_exposure") else "live"
+
+
 def current_edit_hash(conn: sqlite3.Connection, asset_id: int) -> str:
     """Hash of the edit in effect; '' when the asset shows its original."""
     row = conn.execute(
@@ -578,6 +591,13 @@ class DevelopSource:
     format: MediaFormat
     extension: str
     fingerprint: str
+    motion_path: Path | None = None  # a Live Photo's clip, when present
+    motion_fingerprint: str | None = None
+
+    def clip(self, tools: live.Tools) -> live.Clip | None:
+        if self.motion_path is None or not self.motion_fingerprint:
+            return None
+        return live.Clip(self.motion_path, self.motion_fingerprint, tools)
 
 
 def develop_source(conn: sqlite3.Connection, asset_id: int) -> DevelopSource:
@@ -589,8 +609,13 @@ def develop_source(conn: sqlite3.Connection, asset_id: int) -> DevelopSource:
         raise NotFoundError("Asset not found", details={"id": asset_id})
     if asset["media_type"] != "photo":
         raise DevelopUnavailableError("Only photos can be developed", details={"id": asset_id})
+    files = _file_rows(conn, asset_id)
+    motion_path: Path | None = None
+    clip = _motion(files)
+    if clip is not None and clip["status"] == "present" and clip["fingerprint"]:
+        motion_path = Path(clip["root_path"]) / clip["relative_path"]
     candidates = sorted(
-        (f for f in _file_rows(conn, asset_id) if f["file_role"] != "sidecar"),
+        (f for f in files if f["file_role"] != "sidecar"),
         key=lambda f: (f["file_role"] != "primary", f["id"] != asset["cover_file_id"]),
     )
     for file in candidates:
@@ -603,7 +628,14 @@ def develop_source(conn: sqlite3.Connection, asset_id: int) -> DevelopSource:
             and file["status"] == "present"
             and path.is_file()
         ):
-            return DevelopSource(path, media_format, file["extension"], file["fingerprint"])
+            return DevelopSource(
+                path,
+                media_format,
+                file["extension"],
+                file["fingerprint"],
+                motion_path,
+                clip["fingerprint"] if motion_path is not None and clip is not None else None,
+            )
     raise DevelopUnavailableError("The original file is not available", details={"id": asset_id})
 
 
@@ -642,7 +674,7 @@ def video_source(conn: sqlite3.Connection, asset_id: int) -> VideoSource:
 
 def rendition_path(
     conn: sqlite3.Connection, cache_dir: Path, asset_id: int, variant: RenditionVariant,
-    *, ffmpeg: str | None,
+    *, ffmpeg: str | None, ffprobe: str | None = None,
 ) -> Path:  # fmt: skip
     """Path of the asset's thumbnail/preview, re-rendering it if the cache was cleared.
 
@@ -665,15 +697,18 @@ def rendition_path(
             if not isinstance(recipe, EditRecipe):
                 recipe = IDENTITY
             edit_hash = edited["recipe_hash"] if edited is not None else ""
-            return _full_rendition_path(conn, cache_dir, asset_id, recipe, edit_hash)
+            return _full_rendition_path(
+                conn, live.Tools(ffmpeg, ffprobe, cache_dir), asset_id, recipe, edit_hash
+            )
     if edited is not None:
         recipe = parse_recipe(edited["recipe"])
         if isinstance(recipe, VideoRecipe):
             original = _original_rendition_path(conn, cache_dir, asset_id, variant, ffmpeg=ffmpeg)
             return _turned_rendition(original, recipe.rotate, edited["recipe_hash"])
         return _edited_rendition_path(
-            conn, cache_dir, asset_id, variant, recipe, edited["recipe_hash"]
-        )
+            conn, live.Tools(ffmpeg, ffprobe, cache_dir), asset_id, variant, recipe,
+            edited["recipe_hash"],
+        )  # fmt: skip
     return _original_rendition_path(conn, cache_dir, asset_id, variant, ffmpeg=ffmpeg)
 
 
@@ -725,8 +760,9 @@ def _turned_rendition(original: Path, quarter_turns: int, recipe_hash: str) -> P
 
 
 def _full_rendition_path(
-    conn: sqlite3.Connection, cache_dir: Path, asset_id: int, recipe: EditRecipe, recipe_hash: str
+    conn: sqlite3.Connection, tools: live.Tools, asset_id: int, recipe: EditRecipe, recipe_hash: str
 ) -> Path:
+    cache_dir = tools.cache_dir
     try:
         source = develop_source(conn, asset_id)
     except DevelopUnavailableError as exc:
@@ -736,7 +772,7 @@ def _full_rendition_path(
         touch(path)
         return path
     try:
-        render_full(source.path, source.format, recipe, path)
+        render_full(source.path, source.format, recipe, path, motion=source.clip(tools))
         prune_full_renditions(cache_dir, keep=path)
     except (DevelopError, ValueError, OSError) as exc:
         logger.warning("full render failed", extra={"asset_id": asset_id, "error": str(exc)})
@@ -745,9 +781,10 @@ def _full_rendition_path(
 
 
 def _edited_rendition_path(
-    conn: sqlite3.Connection, cache_dir: Path, asset_id: int, variant: RenditionVariant,
+    conn: sqlite3.Connection, tools: live.Tools, asset_id: int, variant: RenditionVariant,
     recipe: EditRecipe, recipe_hash: str,
 ) -> Path:  # fmt: skip
+    cache_dir = tools.cache_dir
     try:
         source = develop_source(conn, asset_id)
     except DevelopUnavailableError as exc:
@@ -757,7 +794,7 @@ def _edited_rendition_path(
     if path.exists():
         return path
     try:
-        render_edited(source.path, source.format, recipe, target)
+        render_edited(source.path, source.format, recipe, target, motion=source.clip(tools))
     except (DevelopError, ValueError, OSError) as exc:
         logger.warning("edited render failed", extra={"asset_id": asset_id, "error": str(exc)})
         raise RenditionUnavailableError(f"Cannot render edited preview: {exc}") from exc

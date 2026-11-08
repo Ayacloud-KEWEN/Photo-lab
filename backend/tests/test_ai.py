@@ -18,7 +18,7 @@ from lumen.ai.models import DEFAULT_MODEL, get_spec
 from lumen.app import create_app
 from lumen.core.config import Settings
 from tests.conftest import TOKEN
-from tests.media_factory import make_jpeg
+from tests.media_factory import make_jpeg, make_video
 from tests.test_pipeline import wait_idle
 
 needs_tools = pytest.mark.skipif(
@@ -460,3 +460,29 @@ def test_real_siglip2_on_gpu() -> None:
         assert similarities[1, 1] > similarities[1, 0]
     finally:
         real.close()
+
+
+@needs_tools
+def test_long_exposure_candidates_are_live_photos_of_suitable_scenes(
+    tmp_path: Path, fake_ai: FakeEngine
+) -> None:
+    root = tmp_path / "Phone"
+    make_jpeg(root / "IMG_1.jpg", color=(30, 60, 230), taken="2024:01:01 10:00:00")  # "the sea"
+    make_video(root / "IMG_1.MOV", seconds=2)
+    make_jpeg(root / "IMG_2.jpg", color=(128, 128, 128), taken="2024:01:02 10:00:00")
+    make_video(root / "IMG_2.MOV", seconds=2)
+    make_jpeg(root / "IMG_3.jpg", color=(30, 60, 230), taken="2024:01:03 10:00:00")  # no clip
+    app = create_app(Settings(data_dir=tmp_path / "data", log_to_file=False), TOKEN)
+    with TestClient(app, headers={"Authorization": f"Bearer {TOKEN}"}) as client:
+        client.post("/api/v1/storage-roots", json={"path": str(root)})
+        wait_idle(app.state.db)
+        enable_ai(client)
+        found = client.get("/api/v1/ai/long-exposure").json()
+        assert [i["file_name"] for i in found["items"]] == ["IMG_1.jpg", "IMG_2.jpg"]
+        assert found["scores"] == sorted(found["scores"], reverse=True)
+
+        # Once it is a long exposure it is no longer suggested.
+        first = found["items"][0]["id"]
+        client.put(f"/api/v1/assets/{first}/edit", json={"live_effect": "long_exposure"})
+        again = client.get("/api/v1/ai/long-exposure").json()
+        assert [i["file_name"] for i in again["items"]] == ["IMG_2.jpg"]

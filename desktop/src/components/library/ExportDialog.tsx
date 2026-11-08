@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
 import { useCancelTask, useExportStatus, useStartExport } from "@/api/hooks";
-import type { ExportRequest, VideoMode } from "@/api/types";
+import type { ExportRequest, LiveExport, VideoMode } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLibraryState, type ExportDialogRequest } from "@/library/state";
@@ -19,6 +19,7 @@ interface Remembered {
   quality: number;
   include_metadata: boolean;
   video_mode: VideoMode;
+  live_as: LiveExport;
 }
 
 const DEFAULTS: Remembered = {
@@ -27,6 +28,7 @@ const DEFAULTS: Remembered = {
   quality: 90,
   include_metadata: true,
   video_mode: "copy",
+  live_as: "photo",
 };
 
 /** The last choices (not the location setting: that is opted into for each export). */
@@ -101,6 +103,7 @@ function ExportDialogBody({
       include_metadata: options.include_metadata,
       include_location: options.include_metadata && includeLocation,
       video_mode: options.video_mode,
+      live_as: options.live_as,
       numbered,
     };
     remember({ ...options, destination: body.destination });
@@ -204,6 +207,19 @@ function ExportDialogBody({
               >
                 <option value="copy">{t("export.videoCopy")}</option>
                 <option value="h264">{t("export.videoH264")}</option>
+              </select>
+            </label>
+
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">{t("export.livePhotos")}</span>
+              <select
+                value={options.live_as}
+                onChange={(event) => set({ live_as: event.target.value as LiveExport })}
+                className="h-8 rounded-md border border-input bg-background/60 px-2"
+              >
+                <option value="photo">{t("export.livePhoto")}</option>
+                <option value="video">{t("export.liveVideo")}</option>
+                <option value="gif">{t("export.liveGif")}</option>
               </select>
             </label>
 

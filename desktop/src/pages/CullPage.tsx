@@ -12,12 +12,13 @@ import {
 } from "@/api/hooks";
 import type { CullFlag, CullItem, SimilarGroup } from "@/api/types";
 import { DuplicatesTab } from "@/components/cull/DuplicatesTab";
+import { LongExposureTab } from "@/components/cull/LongExposureTab";
 import { Button } from "@/components/ui/button";
 import { cleanQuery, useLibraryState } from "@/library/state";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type Tab = "similar" | "suspects" | "duplicates";
+type Tab = "similar" | "suspects" | "duplicates" | "longExposure";
 
 const WINDOWS = [1, 10, 60] as const;
 const SIMILARITIES = [
@@ -51,7 +52,7 @@ export function CullPage({ onShowLibrary }: { onShowLibrary: () => void }) {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h1 className="text-lg font-medium">{t("nav.cull")}</h1>
         <div role="tablist" className="flex h-7 rounded-md border p-0.5">
-          {(["similar", "suspects", "duplicates"] as const).map((id) => (
+          {(["similar", "suspects", "duplicates", "longExposure"] as const).map((id) => (
             <button
               key={id}
               type="button"
@@ -92,6 +93,7 @@ export function CullPage({ onShowLibrary }: { onShowLibrary: () => void }) {
       {tab === "similar" && <SimilarTab />}
       {tab === "suspects" && <SuspectsTab />}
       {tab === "duplicates" && <DuplicatesTab />}
+      {tab === "longExposure" && <LongExposureTab />}
     </div>
   );
 }

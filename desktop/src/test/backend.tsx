@@ -69,6 +69,7 @@ export function makeDetail(summary: AssetSummary): AssetDetail {
     tags: [],
     cover_file_id: summary.id * 10,
     motion_file_id: summary.is_live ? summary.id * 10 + 1 : null,
+    live_effect: summary.is_live ? (summary.live_effect ?? "live") : null,
     is_edited: summary.is_edited,
     rendition_version: summary.rendition_version,
     metadata: { width: summary.width, height: summary.height },
@@ -592,6 +593,19 @@ export function stubBackend(options: StubOptions = {}) {
         ? null
         : { destination: request.destination, exported: total - 1, skipped: 1, failed: [] };
       return json({ task: { ...task, result }, result }, started ? 202 : 200);
+    }
+    const liveMatch = /^\/api\/v1\/assets\/(\d+)\/live$/.exec(path);
+    if (liveMatch) {
+      const asset = assets.find((item) => item.id === Number(liveMatch[1]));
+      if (!asset?.is_live) {
+        return json({ error: { code: "develop_unavailable", message: "not live" } }, 409);
+      }
+      // 10 frames, 100 ms apart; the still at 500 ms, the sharpest at 700 ms.
+      const frames = Array.from({ length: 10 }, (_, i) => ({ time_ms: i * 100, sharpness: i === 7 ? 1 : 0.5 }));
+      return json({
+        asset_id: asset.id, width: 1920, height: 1440, duration_ms: 1000, still_ms: 500,
+        recommended_ms: 700, frames, strip_tiles: 10,
+      }); // prettier-ignore
     }
     const editMatch = /^\/api\/v1\/assets\/(\d+)\/(edit(?:\/undo|\/redo|\/select)?|develop\/preview)$/.exec(path);
     if (editMatch) {

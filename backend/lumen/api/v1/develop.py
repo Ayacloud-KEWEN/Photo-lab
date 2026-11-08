@@ -8,6 +8,7 @@ from starlette.concurrency import run_in_threadpool
 
 from lumen.api.deps import Connection
 from lumen.core.config import Settings
+from lumen.develop import live
 from lumen.develop.recipe import EditRecipe, VideoRecipe
 from lumen.schemas.common import ErrorResponse
 from lumen.schemas.develop import (
@@ -18,6 +19,7 @@ from lumen.schemas.develop import (
     EditState,
     FrameExport,
     FrameExportResult,
+    LiveInfo,
     VideoEditState,
 )
 from lumen.services import develop as service
@@ -123,15 +125,16 @@ def select_edit(conn: Connection, body: EditSelect, asset_id: int = Path(ge=1)) 
     responses={200: {"content": {"image/jpeg": {}}}, **ERRORS},
 )
 async def render_preview(
-    conn: Connection, body: DevelopPreviewRequest, asset_id: int = Path(ge=1)
+    conn: Connection, request: Request, body: DevelopPreviewRequest, asset_id: int = Path(ge=1)
 ) -> Response:
     """JPEG of the photo developed with an unsaved recipe (for live slider feedback).
 
     The ``X-Histogram`` header holds its RGB histogram: three ``;``-separated lists of
     comma-separated pixel counts.
     """
+    settings: Settings = request.app.state.settings
     data, histogram = await run_in_threadpool(
-        service.render_preview, conn, asset_id, body.recipe, body.edge
+        service.render_preview, conn, asset_id, body.recipe, body.edge, live.Tools.of(settings)
     )
     return Response(
         data,
@@ -140,4 +143,32 @@ async def render_preview(
             "Cache-Control": "no-store",
             HISTOGRAM_HEADER: ";".join(",".join(map(str, channel)) for channel in histogram),
         },
+    )
+
+
+@router.get(
+    "/assets/{asset_id}/live", response_model=LiveInfo, operation_id="getLiveInfo",
+    responses=ERRORS,
+)  # fmt: skip
+async def get_live_info(conn: Connection, request: Request, asset_id: int = Path(ge=1)) -> LiveInfo:
+    """A Live Photo's frames: their times and sharpness, the still's position and the
+    sharpest frame (for choosing the frame to show)."""
+    settings: Settings = request.app.state.settings
+    return await run_in_threadpool(service.live_info, conn, asset_id, live.Tools.of(settings))
+
+
+@router.get(
+    "/assets/{asset_id}/live/strip",
+    operation_id="getLiveStrip",
+    response_class=Response,
+    responses={200: {"content": {"image/jpeg": {}}}, **ERRORS},
+)
+async def get_live_strip(
+    conn: Connection, request: Request, asset_id: int = Path(ge=1)
+) -> Response:
+    """JPEG of the clip's frames side by side, evenly spaced in time. Accepts ``?token=``."""
+    settings: Settings = request.app.state.settings
+    data = await run_in_threadpool(service.live_strip, conn, asset_id, live.Tools.of(settings))
+    return Response(
+        data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"}
     )

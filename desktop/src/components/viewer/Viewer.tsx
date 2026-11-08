@@ -26,6 +26,7 @@ import { useTranslation } from "react-i18next";
 
 import {
   api,
+  motionEffectOf,
   motionUrl,
   originalUrl,
   thumbnailUrl,
@@ -317,8 +318,14 @@ function ViewerOverlay({
               }
               originalSrc={originalUrl(conn, detail.id, detail.rendition_version ?? "")}
               motionSrc={
-                detail.motion_file_id
-                  ? motionUrl(conn, detail.id, detail.rendition_version ?? "")
+                // A long exposure is a still picture: its clip is not played.
+                detail.motion_file_id && detail.live_effect !== "long_exposure"
+                  ? motionUrl(
+                      conn,
+                      detail.id,
+                      detail.rendition_version ?? "",
+                      motionEffectOf(detail.live_effect),
+                    )
                   : undefined
               }
             />
@@ -379,6 +386,7 @@ function Stage({
   originalSrc: string;
   motionSrc: string | undefined;
 }) {
+  const { t } = useTranslation();
   const [videoFailed, setVideoFailed] = useState(false);
   const [zoomed, setZoomed] = useState(false);
 
@@ -424,10 +432,31 @@ function Stage({
       }}
     />
   );
-  return motionSrc ? (
-    <LivePhoto key={detail.id} still={still} motionSrc={motionSrc} hidden={zoomed} />
-  ) : (
-    <div className="relative size-full">{still}</div>
+  const effect = motionEffectOf(detail.live_effect);
+  if (motionSrc && effect !== "live") {
+    return (
+      <LiveLoop
+        key={`${detail.id}-${effect}`}
+        still={still}
+        motionSrc={motionSrc}
+        label={t(`develop.live.effects.${effect}`)}
+        hidden={zoomed}
+      />
+    );
+  }
+  return (
+    <div className="relative size-full">
+      {motionSrc ? (
+        <LivePhoto key={detail.id} still={still} motionSrc={motionSrc} hidden={zoomed} />
+      ) : (
+        still
+      )}
+      {detail.live_effect === "long_exposure" && !zoomed && (
+        <span className="pointer-events-none absolute left-4 top-4 rounded-full bg-black/50 px-2 py-1 text-[11px] font-semibold tracking-wide text-white/90">
+          {t("develop.live.effects.long_exposure")}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -494,6 +523,49 @@ function LivePhoto({
             <LiveIcon className="size-3.5" />
             {t("viewer.live")}
           </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** A Live Photo set to loop or bounce: it plays over the still, over and over. */
+function LiveLoop({
+  still,
+  motionSrc,
+  label,
+  hidden,
+}: {
+  still: ReactNode;
+  motionSrc: string;
+  label: string;
+  hidden: boolean;
+}) {
+  const [playing, setPlaying] = useState(false);
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="relative size-full">
+      {still}
+      {!failed && !hidden && (
+        <>
+          <video
+            src={motionSrc}
+            aria-label={label}
+            muted
+            playsInline
+            autoPlay
+            loop
+            onPlaying={() => setPlaying(true)}
+            onError={() => setFailed(true)}
+            className={cn(
+              "pointer-events-none absolute inset-0 size-full object-contain p-2 transition-opacity duration-300",
+              playing ? "opacity-100" : "opacity-0",
+            )}
+          />
+          <span className="pointer-events-none absolute left-4 top-4 flex items-center gap-1 rounded-full bg-black/50 px-2 py-1 text-[11px] font-semibold tracking-wide text-white/90">
+            <LiveIcon className="size-3.5" />
+            {label}
+          </span>
         </>
       )}
     </div>

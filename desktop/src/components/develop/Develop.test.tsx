@@ -34,6 +34,56 @@ afterEach(() => {
 });
 
 describe("Develop", () => {
+  it("chooses a Live Photo's frame and effect", async () => {
+    const { requests } = stubBackend({
+      assets: [makeAsset(1, { is_live: true, file_name: "IMG_1.HEIC", width: 4032, height: 3024 })],
+    });
+    renderViewer([1]);
+    const dialog = await screen.findByRole("dialog", { name: "IMG_1.HEIC" });
+    fireEvent.keyDown(dialog, { key: "d" });
+    const panel = await screen.findByRole("complementary", { name: "显影" });
+    const live = await within(panel).findByRole("region", { name: "实况" });
+    expect(within(live).getByRole("radio", { name: "实况" })).toHaveAttribute("aria-checked", "true");
+    expect(await within(live).findByText("原照片")).toBeInTheDocument();
+
+    // Dragging over the frames shows the clip at once; letting go saves the frame.
+    const frame = await within(live).findByRole("slider", { name: "封面帧" });
+    expect(frame).toHaveValue("5"); // the still's position
+    fireEvent.change(frame, { target: { value: "3" } });
+    expect(document.querySelector("video[src*='/motion']")).not.toBeNull();
+    fireEvent.pointerUp(frame);
+    await waitFor(() => expect(saves(requests).at(-1)?.body).toMatchObject({ live_frame_ms: 300 }));
+    expect(within(live).getByText("此帧 1920×1440（原照片 4032×3024）")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(previews(requests).at(-1)?.body).toMatchObject({ recipe: { live_frame_ms: 300 } }),
+    );
+
+    fireEvent.click(within(live).getByRole("button", { name: /最清晰的一帧/ }));
+    await waitFor(() => expect(saves(requests).at(-1)?.body).toMatchObject({ live_frame_ms: 700 }));
+    fireEvent.click(within(live).getByRole("button", { name: /用原照片/ }));
+    await waitFor(() => expect(saves(requests).at(-1)?.body).toMatchObject({ live_frame_ms: null }));
+
+    // A loop plays as it will look; a long exposure has no frame to choose.
+    fireEvent.click(within(live).getByRole("radio", { name: "循环" }));
+    await waitFor(() => expect(saves(requests).at(-1)?.body).toMatchObject({ live_effect: "loop" }));
+    expect(within(live).getByLabelText("实况效果预览").getAttribute("src")).toContain("effect=loop");
+    fireEvent.click(within(live).getByRole("radio", { name: "长曝光" }));
+    await waitFor(() =>
+      expect(saves(requests).at(-1)?.body).toMatchObject({ live_effect: "long_exposure" }),
+    );
+    expect(within(live).queryByRole("slider", { name: "封面帧" })).not.toBeInTheDocument();
+    expect(within(live).getByText(/把整段实况叠成一张照片/)).toBeInTheDocument();
+  });
+
+  it("has no Live group for ordinary photos", async () => {
+    stubBackend({ assets: [makeAsset(1)] });
+    renderViewer([1]);
+    fireEvent.keyDown(await screen.findByRole("dialog", { name: "IMG_1.JPG" }), { key: "d" });
+    const panel = await screen.findByRole("complementary", { name: "显影" });
+    await within(panel).findByLabelText("曝光");
+    expect(within(panel).queryByRole("region", { name: "实况" })).not.toBeInTheDocument();
+  });
+
   it("edits a photo: live preview, saved history, undo and leaving", async () => {
     const { requests } = stubBackend({ assets: [makeAsset(1), makeAsset(2)] });
     renderViewer();

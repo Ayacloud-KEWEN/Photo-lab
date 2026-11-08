@@ -21,6 +21,11 @@ class ExportRequest(BaseModel):
     numbered: bool = Field(
         default=False, description='Prefix names with their order ("001_IMG_0001.jpg")'
     )
+    live_as: Literal["photo", "video", "gif"] = Field(
+        default="photo",
+        description="Live Photos: the picture (JPEG), the clip with its effect and "
+        "adjustments (H.264 MP4) or a looping GIF (720 px unless long_edge is set)",
+    )
     video_mode: Literal["copy", "h264"] = Field(
         default="copy",
         description="Videos: copy the streams (original quality, fast) or re-encode to H.264",

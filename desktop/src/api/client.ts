@@ -37,6 +37,8 @@ import type {
   ExportRequest,
   ExportStatus,
   FrameExportResult,
+  LiveInfo,
+  MotionEffect,
   VideoEditState,
   VideoRecipe,
   HealthResponse,
@@ -454,6 +456,14 @@ export const api = {
       `/api/v1/ai/search${toSearchParams({ ...filters(query), text, limit })}`,
     ),
 
+  /** Live Photos whose scene (water, traffic at night...) suits a long exposure. */
+  longExposureCandidates: (conn: BackendConnection, limit = 120) =>
+    request<SemanticPage>(conn, "GET", `/api/v1/ai/long-exposure${toSearchParams({ limit })}`),
+
+  /** A Live Photo's frames, the still's position and the sharpest frame. */
+  getLiveInfo: (conn: BackendConnection, id: number) =>
+    request<LiveInfo>(conn, "GET", `/api/v1/assets/${id}/live`),
+
   similarAssets: (conn: BackendConnection, id: number, query: AssetQuery, limit = 200) =>
     request<SemanticPage>(
       conn,
@@ -508,9 +518,30 @@ export function contentVersion(version: string): string {
   return version.split("-")[0] ?? "";
 }
 
-/** A Live Photo's motion clip. */
-export function motionUrl(conn: BackendConnection, assetId: number, version: string): string {
+/**
+ * A Live Photo's motion clip: as shot, or rendered as a loop / bounce with the photo's
+ * adjustments (then the whole rendition version, edit included, keys the cache).
+ */
+export function motionUrl(
+  conn: BackendConnection,
+  assetId: number,
+  version: string,
+  effect: MotionEffect = "live",
+): string {
   return `${conn.baseUrl}/api/v1/assets/${assetId}/motion${toSearchParams({
+    ...(effect === "live" ? { v: contentVersion(version) } : { effect, v: version }),
+    token: conn.token,
+  })}`;
+}
+
+/** How a Live Photo's clip plays, from its effect. */
+export function motionEffectOf(effect: string | null | undefined): MotionEffect {
+  return effect === "loop" || effect === "bounce" ? effect : "live";
+}
+
+/** The Live Photo's frames side by side (the frame picker's background). */
+export function liveStripUrl(conn: BackendConnection, assetId: number, version: string): string {
+  return `${conn.baseUrl}/api/v1/assets/${assetId}/live/strip${toSearchParams({
     v: contentVersion(version),
     token: conn.token,
   })}`;

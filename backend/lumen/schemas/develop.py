@@ -34,7 +34,12 @@ RecipeField = Literal[
     "temperature", "tint", "vibrance", "saturation", "clarity", "sharpness", "vignette",
     "rotate", "flip_horizontal", "straighten", "crop",
 ]  # fmt: skip
-assert set(get_args(RecipeField)) == set(EditRecipe.model_fields) - {"version"}
+# Live Photo fields belong to one clip and are not copied to other photos.
+assert set(get_args(RecipeField)) == set(EditRecipe.model_fields) - {
+    "version",
+    "live_frame_ms",
+    "live_effect",
+}
 
 
 class EditBatch(BaseModel):
@@ -73,3 +78,21 @@ class FrameExport(BaseModel):
 
 class FrameExportResult(BaseModel):
     path: str
+
+
+class LiveFrame(BaseModel):
+    time_ms: int
+    sharpness: float = Field(description="0..1, relative to the sharpest frame")
+
+
+class LiveInfo(BaseModel):
+    """A Live Photo's clip, for choosing a frame (see /live/strip for its thumbnails)."""
+
+    asset_id: int
+    width: int = Field(description="Frame size, upright")
+    height: int
+    duration_ms: int
+    still_ms: int | None = Field(description="Where the still was taken, when recorded")
+    recommended_ms: int | None = Field(description="The sharpest frame")
+    frames: list[LiveFrame]
+    strip_tiles: int = Field(description="Frames in the strip image, evenly spaced in time")

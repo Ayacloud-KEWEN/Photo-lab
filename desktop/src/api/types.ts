@@ -73,6 +73,12 @@ export type VideoRecipe = Schemas["VideoRecipe"];
 export type VideoEditState = Schemas["VideoEditState"];
 export type VideoMode = ExportRequest["video_mode"];
 export type FrameExportResult = Schemas["FrameExportResult"];
+export type LiveInfo = Schemas["LiveInfo"];
+export type LiveFrame = Schemas["LiveFrame"];
+export type LiveEffect = NonNullable<EditRecipe["live_effect"]>;
+export type LiveExport = NonNullable<ExportRequest["live_as"]>;
+/** How a Live Photo's clip plays (a long exposure's clip plays as shot). */
+export type MotionEffect = Exclude<LiveEffect, "long_exposure">;
 export type Collection = Schemas["Collection"];
 export type CollectionDetail = Schemas["CollectionDetail"];
 export type CollectionItem = Schemas["CollectionItem"];
