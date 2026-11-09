@@ -17,6 +17,8 @@ export const COPY_FIELDS: RecipeField[] = [
   "clarity",
   "sharpness",
   "vignette",
+  "lut",
+  "lut_strength",
 ];
 
 export type PresetId =

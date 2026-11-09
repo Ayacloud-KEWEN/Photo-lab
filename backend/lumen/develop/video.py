@@ -16,6 +16,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
+from PIL import Image
+
+from lumen.develop import lut
 from lumen.develop.exporter import reserve_path
 from lumen.develop.recipe import VideoRecipe
 from lumen.media import thumbnails
@@ -69,6 +73,37 @@ def probe_rotation(ffprobe: str | None, source: Path) -> int:
     return 0
 
 
+def effective_mode(recipe: VideoRecipe, options: VideoOptions) -> str:
+    """A LUT changes the pixels, so the video is re-encoded whatever the option says."""
+    return "h264" if recipe.lut and recipe.lut_strength > 0 else options.mode
+
+
+def lut_filters(recipe: VideoRecipe) -> list[str]:
+    """ffmpeg filters grading with the recipe's LUT (mixed in at its strength)."""
+    if not recipe.lut or recipe.lut_strength <= 0:
+        return []
+    lut_id, _space = lut.split_ref(recipe.lut)
+    # Inside a filter graph the drive letter's colon must be escaped.
+    path = (lut.store_folder() / f"{lut_id}.cube").as_posix().replace(":", "\\:")
+    graded = f"lut3d=file='{path}'"
+    if recipe.lut_strength >= 100:
+        return [graded]
+    opacity = f"{recipe.lut_strength / 100:.3f}"
+    return [
+        f"split[lumen_a][lumen_b];[lumen_b]{graded}[lumen_g];"
+        f"[lumen_g][lumen_a]blend=all_mode=normal:all_opacity={opacity}"
+    ]
+
+
+def grade_frame(image: Image.Image, recipe: VideoRecipe) -> Image.Image:
+    """A frame of the video with the recipe's LUT (video frames are Rec.709)."""
+    if not recipe.lut or recipe.lut_strength <= 0:
+        return image
+    pixels = np.asarray(image.convert("RGB"), dtype=np.float32) / np.float32(255)
+    graded = lut.grade(pixels, recipe.lut, recipe.lut_strength / 100, "srgb")
+    return Image.fromarray((np.clip(graded, 0, 1) * 255 + 0.5).astype(np.uint8), "RGB")
+
+
 def build_command(
     ffmpeg: str,
     source: Path,
@@ -80,7 +115,8 @@ def build_command(
 ) -> list[str]:
     """The ffmpeg command line for one export (exposed for tests)."""
     command = [ffmpeg, "-nostdin", "-v", "error", "-y"]
-    if options.mode == "copy" and recipe.rotate:
+    mode = effective_mode(recipe, options)
+    if mode == "copy" and recipe.rotate:
         # Without re-encoding, rotation is metadata: the stored one turned further.
         angle = (stored_rotation - 90 * recipe.rotate + 180) % 360 - 180
         command += ["-display_rotation:v:0", str(angle)]
@@ -93,10 +129,11 @@ def build_command(
     if not recipe.mute:
         command += ["-map", "0:a:0?"]  # the main track; not spatial audio or data tracks
 
-    if options.mode == "copy":
+    if mode == "copy":
         command += ["-c", "copy"]
     else:
         filters = [_TURNS[recipe.rotate]] if recipe.rotate else []
+        filters += lut_filters(recipe)
         filters.append("format=yuv420p")  # 8-bit 4:2:0, playable everywhere
         command += [
             "-vf", ",".join(filters),
@@ -132,12 +169,13 @@ def export_video(
     Copying keeps the original quality and container (cut points snap to keyframes);
     H.264 re-encodes to an MP4 that plays everywhere.
     """
-    extension = source.suffix.lower() if options.mode == "copy" else ".mp4"
+    mode = effective_mode(recipe, options)
+    extension = source.suffix.lower() if mode == "copy" else ".mp4"
     target = reserve_path(folder, stem or source.stem, extension)
     handle, temp_name = tempfile.mkstemp(dir=folder, prefix=".lumen-", suffix=extension)
     os.close(handle)
     try:
-        rotation = probe_rotation(ffprobe, source) if options.mode == "copy" else 0
+        rotation = probe_rotation(ffprobe, source) if mode == "copy" else 0
         command = build_command(
             ffmpeg, source, Path(temp_name), recipe, options, stored_rotation=rotation
         )
@@ -189,6 +227,7 @@ def export_frame(
     image = thumbnails.video_frame_at(source, ffmpeg, time_ms / 1000)
     if recipe.rotate:
         image = image.rotate(-90 * recipe.rotate, expand=True)
+    image = grade_frame(image, recipe)
     seconds = time_ms // 1000
     target = reserve_path(folder, f"{source.stem}_{seconds // 60:02d}-{seconds % 60:02d}", ".jpg")
     try:

@@ -12,6 +12,7 @@ from lumen.api.v1 import (
     exports,
     health,
     locations,
+    luts,
     mapweb,
     settings,
     storage_roots,
@@ -30,6 +31,7 @@ router.include_router(duplicates.router)
 router.include_router(exports.router)
 router.include_router(collections.router)
 router.include_router(vlm.router)
+router.include_router(luts.router)
 router.include_router(cull.router)
 router.include_router(tags.router)
 router.include_router(settings.router)

@@ -23,7 +23,7 @@ export function Slider({
   const { t } = useTranslation();
   const id = useId();
   const reset = () => {
-    onChange(0);
+    onChange(spec.reset ?? 0);
     onCommit();
   };
 

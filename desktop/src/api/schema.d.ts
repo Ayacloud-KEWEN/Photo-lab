@@ -566,6 +566,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assets/{asset_id}/lut-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Lut Preview
+         * @description A small picture of the photo graded by a LUT (the develop panel's LUT grid).
+         *     Accepts ``?token=``; the URL carries a version, so it is cached.
+         */
+        get: operations["getLutPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{asset_id}/video-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Video Preview
+         * @description A frame of a video as its saved edit shows it (turned, LUT applied). Accepts
+         *     ``?token=``.
+         */
+        get: operations["getVideoPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/duplicates": {
         parameters: {
             query?: never;
@@ -887,6 +929,64 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/luts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Luts */
+        get: operations["listLuts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/luts/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Luts
+         * @description Copy .cube files (or every .cube in folders) into the LUT library.
+         */
+        post: operations["importLuts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/luts/{lut_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Lut
+         * @description Delete a LUT (hidden instead when an edit uses it).
+         */
+        delete: operations["deleteLut"];
+        options?: never;
+        head?: never;
+        /** Update Lut */
+        patch: operations["updateLut"];
         trace?: never;
     };
     "/api/v1/cull/similar": {
@@ -2616,7 +2716,7 @@ export interface components {
              * Fields
              * @description Which values to apply
              */
-            fields: ("exposure" | "contrast" | "highlights" | "shadows" | "whites" | "blacks" | "temperature" | "tint" | "vibrance" | "saturation" | "clarity" | "sharpness" | "vignette" | "rotate" | "flip_horizontal" | "straighten" | "crop")[];
+            fields: ("exposure" | "contrast" | "highlights" | "shadows" | "whites" | "blacks" | "temperature" | "tint" | "vibrance" | "saturation" | "clarity" | "sharpness" | "vignette" | "rotate" | "flip_horizontal" | "straighten" | "crop" | "lut" | "lut_strength")[];
         };
         /** EditBatchResult */
         EditBatchResult: {
@@ -2732,6 +2832,13 @@ export interface components {
              * @description Develop this frame of the clip instead of the still
              */
             live_frame_ms?: number | null;
+            /** Lut */
+            lut?: string | null;
+            /**
+             * Lut Strength
+             * @default 100
+             */
+            lut_strength: number;
             /**
              * Live Effect
              * @description live: the clip as shot; loop / bounce: how it plays; long_exposure: all frames blended into one picture, which is developed
@@ -3028,6 +3135,88 @@ export interface components {
             total: number;
             /** Models */
             models: components["schemas"]["ModelInfo"][];
+        };
+        /** Lut */
+        Lut: {
+            /** Id */
+            id: string;
+            /**
+             * Ref
+             * @description What a recipe stores: <id>.<color_space>
+             */
+            ref: string;
+            /** Name */
+            name: string;
+            /** Pack */
+            pack: string | null;
+            /**
+             * Color Space
+             * @enum {string}
+             */
+            color_space: "rec709" | "p3";
+            /**
+             * Kind
+             * @description look: for finished photos and videos; log: needs log footage; transform: a colour-space conversion
+             * @enum {string}
+             */
+            kind: "look" | "log" | "transform";
+            /** Size */
+            size: number;
+            /** Hidden */
+            hidden: boolean;
+            /**
+             * Used
+             * @description Photos and videos whose current edit uses it
+             */
+            used: number;
+        };
+        /** LutImport */
+        LutImport: {
+            /**
+             * Paths
+             * @description .cube files or folders (searched deeply)
+             */
+            paths: string[];
+            /**
+             * Color Space
+             * @description What the LUTs expect
+             * @default rec709
+             * @enum {string}
+             */
+            color_space: "rec709" | "p3";
+        };
+        /** LutImportResult */
+        LutImportResult: {
+            /** Imported */
+            imported: number;
+            /**
+             * Already
+             * @description Same content as a LUT imported before
+             */
+            already: number;
+            /**
+             * Failed
+             * @description Files that are not usable 3D LUTs (with why)
+             */
+            failed: string[];
+            /** Items */
+            items: components["schemas"]["Lut"][];
+        };
+        /** LutList */
+        LutList: {
+            /** Items */
+            items: components["schemas"]["Lut"][];
+        };
+        /** LutUpdate */
+        LutUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Color Space */
+            color_space?: ("rec709" | "p3") | null;
+            /** Kind */
+            kind?: ("look" | "log" | "transform") | null;
+            /** Hidden */
+            hidden?: boolean | null;
         };
         /** MapPoint */
         MapPoint: {
@@ -3720,6 +3909,13 @@ export interface components {
              * @default false
              */
             mute: boolean;
+            /** Lut */
+            lut?: string | null;
+            /**
+             * Lut Strength
+             * @default 100
+             */
+            lut_strength: number;
         };
         /** VlmDescribeRequest */
         VlmDescribeRequest: {
@@ -5250,6 +5446,109 @@ export interface operations {
             };
         };
     };
+    getLutPreview: {
+        parameters: {
+            query: {
+                lut: string;
+                strength?: number;
+            };
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a photo, or its original is unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getVideoPreview: {
+        parameters: {
+            query?: {
+                time_ms?: number;
+            };
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a photo, or its original is unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listDuplicates: {
         parameters: {
             query?: {
@@ -5911,6 +6210,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listLuts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LutList"];
+                };
+            };
+        };
+    };
+    importLuts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LutImport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LutImportResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteLut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lut_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateLut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lut_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LutUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Lut"];
                 };
             };
             /** @description Validation Error */

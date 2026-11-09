@@ -21,6 +21,8 @@ export const DEFAULT_RECIPE: EditRecipe = {
   crop: null,
   live_frame_ms: null,
   live_effect: "live",
+  lut: null,
+  lut_strength: 100,
 };
 
 export type SliderKey =
@@ -37,7 +39,8 @@ export type SliderKey =
   | "clarity"
   | "sharpness"
   | "vignette"
-  | "straighten";
+  | "straighten"
+  | "lut_strength";
 
 export interface SliderSpec {
   key: SliderKey;
@@ -46,6 +49,8 @@ export interface SliderSpec {
   step: number;
   /** CSS background for the track (temperature and tint show their colours). */
   track?: string;
+  /** What double-clicking goes back to (0 when not given). */
+  reset?: number;
 }
 
 const percent = (key: SliderKey, track?: string): SliderSpec => ({
@@ -86,6 +91,7 @@ export const SLIDER_GROUPS: { id: "basic" | "color" | "detail" | "effects"; slid
   ];
 
 export const STRAIGHTEN: SliderSpec = { key: "straighten", min: -45, max: 45, step: 0.1 };
+export const LUT_STRENGTH: SliderSpec = { key: "lut_strength", min: 0, max: 100, step: 1, reset: 100 };
 
 /** Fills in defaults (older or partial recipes) so recipes compare reliably. */
 export function normalizeRecipe(recipe: Partial<EditRecipe>): EditRecipe {
@@ -96,6 +102,20 @@ export function recipeKey(recipe: EditRecipe): string {
   return JSON.stringify(normalizeRecipe(recipe));
 }
 
+/**
+ * A short key of everything but the LUT: the LUT grid's previews change only when the
+ * rest of the edit does, not when another LUT is picked.
+ */
+export function adjustmentsKey(recipe: EditRecipe): string {
+  const text = recipeKey({ ...normalizeRecipe(recipe), lut: null, lut_strength: 100 });
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16);
+}
+
 export function sameRecipe(a: EditRecipe, b: EditRecipe): boolean {
   return recipeKey(a) === recipeKey(b);
 }
@@ -103,6 +123,7 @@ export function sameRecipe(a: EditRecipe, b: EditRecipe): boolean {
 export function formatSlider(key: SliderKey, value: number): string {
   if (key === "exposure") return `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
   if (key === "straighten") return `${value > 0 ? "+" : ""}${value.toFixed(1)}°`;
+  if (key === "lut_strength") return `${Math.round(value)}%`;
   const rounded = Math.round(value);
   return `${rounded > 0 ? "+" : ""}${rounded}`;
 }

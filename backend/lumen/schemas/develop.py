@@ -32,7 +32,7 @@ class EditState(BaseModel):
 RecipeField = Literal[
     "exposure", "contrast", "highlights", "shadows", "whites", "blacks",
     "temperature", "tint", "vibrance", "saturation", "clarity", "sharpness", "vignette",
-    "rotate", "flip_horizontal", "straighten", "crop",
+    "rotate", "flip_horizontal", "straighten", "crop", "lut", "lut_strength",
 ]  # fmt: skip
 # Live Photo fields belong to one clip and are not copied to other photos.
 assert set(get_args(RecipeField)) == set(EditRecipe.model_fields) - {

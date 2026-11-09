@@ -21,7 +21,7 @@ import numpy as np
 import numpy.typing as npt
 from PIL import Image
 
-from lumen.develop import live
+from lumen.develop import live, lut
 from lumen.develop.recipe import EditRecipe
 from lumen.media import thumbnails
 from lumen.media.formats import MediaFormat
@@ -169,11 +169,20 @@ def _f32(values: object) -> Array:
 # --- Rendering ------------------------------------------------------------------------------
 
 
-def render(base: Array, recipe: EditRecipe) -> Array:
-    """Apply ``recipe`` to ``base`` (not modified); returns a new array in [0, 1]."""
+def render(base: Array, recipe: EditRecipe, gamut: lut.Gamut = "srgb") -> Array:
+    """Apply ``recipe`` to ``base`` (not modified); returns a new array in [0, 1].
+
+    ``gamut`` is the space ``base`` is in (Display P3 for iPhone pictures): a LUT made for
+    the other space is applied through a conversion (ADR-039).
+    """
     image = _geometry(base, recipe)
     image = _tone(image, recipe)
     image = _color(image, recipe)
+    if recipe.lut and recipe.lut_strength > 0:
+        try:
+            image = lut.grade(image, recipe.lut, recipe.lut_strength / 100, gamut)
+        except lut.LutError as exc:
+            raise DevelopError(str(exc)) from exc
     image = _detail(image, recipe)
     image = _vignette(image, recipe.vignette / 100)
     np.clip(image, 0, 1, out=image)
@@ -209,7 +218,16 @@ def develop(
     motion: live.Clip | None = None,
 ) -> Image.Image:
     base = load_picture(source, media_format, recipe, edge, motion=motion, cache=cache)
-    return to_image(render(base, recipe))
+    gamut = gamut_of(source, media_format, recipe, motion) if recipe.lut else "srgb"
+    return to_image(render(base, recipe, gamut))
+
+
+def gamut_of(
+    source: Path, media_format: MediaFormat, recipe: EditRecipe, motion: live.Clip | None
+) -> lut.Gamut:
+    """The space the developed picture is in: Display P3 when its profile says so."""
+    profile = icc_profile(source, media_format, recipe, motion)
+    return "p3" if profile is not None and b"P3" in profile else "srgb"
 
 
 def icc_profile(

@@ -714,3 +714,37 @@ storage_roots ──scan──▶ media_files (pending) ──ingest──▶ as
 - **接口**：`GET /vlm/status`、`POST /vlm/describe {asset_ids, fine}`、`POST /vlm/download {model}`；
   `AssetDetail.description`；设置 `vlm_enabled`、`vlm_scope`（priority / all）、`vlm_folder`。
 
+## 42. 3D LUT（ADR-039）
+
+需求（2026-11-08）：在照片和视频上套用 .cube LUT（用户的第三方调色包，以及从 Blackmagic Camera 导出的 LUT），可调强度。
+Blackmagic 的 LUT 不随程序发布，由用户从 iPhone 上的 App 导出后导入（照片用 P3 D65 版本，视频用 Rec.709 版本）。
+
+- **LUT 库**（迁移 0015，`services/luts.py`）：导入文件或整个文件夹（递归，跳过 `__MACOSX` 和 `._` 文件），按内容 SHA-256 前 16 位
+  去重并复制为 `<数据目录>/luts/<id>.cube`，原文件可以移走。表 `luts` 记名称（文件名）、来源包（导入文件夹下的第一级目录）、
+  色彩空间（rec709 / p3；文件名含 P3 时为 p3）、类型、网格大小、是否隐藏。
+  **类型按路径名判断**（`lut.kind_of`）：Log-C、S-Log、Sl2sg3、Apple Log、AlogIN、F-Log、V-Log、“LOG”、“to Rec709”、CineStyle、
+  Cinelike、Pre-LUT 为 `log`（需要 Log 素材，显影里默认不显示）；Rec2020→Rec709 为 `transform`；其余为 `look`。
+  只看灰阶曲线分不开（不少电影风格 LUT 对比度也很高），所以以名字为准，可手动改。
+  用户的 `D:\LUT`：217 个文件 → 215 个（2 个重复），117 个风格、95 个需要 Log、3 个转换，导入 15 s。
+  被任何编辑步骤（含历史）用到的 LUT 删除时只隐藏，文件保留，撤销和历史仍能渲染。
+- **配方**：`EditRecipe` 与 `VideoRecipe` 增加 `lut`（`<id>.<rec709|p3>`）和 `lut_strength`（0–100）。色彩空间写在引用里，
+  以后改 LUT 的色彩空间不会改变已编辑的照片（新引用是另一个值）。默认值不进 `canonical_json`，已有编辑哈希不变。
+  它们在“拷贝/粘贴设置”的字段里（`COPY_FIELDS`），预设和批量粘贴可以带上 LUT。
+- **渲染**（`develop/lut.py`，`engine.render`）：顺序为几何 → 色调 → 色彩 → **LUT** → 细节 → 暗角（先校正、再上风格）。
+  照片的色域由其 ICC 判断（含 “P3” 为 Display P3；实况片段按 `wide_gamut`）。LUT 与照片色域不同时先转换原色（2.2 幂律 + 3×3 矩阵，
+  不裁剪），**超出 LUT 输入范围的部分不进 LUT、原样加回**（`graded = LUT(clamp(x)) + (x − clamp(x))`），
+  所以恒等 LUT 不改变 P3 照片里的鲜艳颜色；再转回照片色域，导出的 ICC 不变。强度为与套用前的线性混合。
+  **三线性插值用 torch 的 `grid_sample`**：GPU 上 1600 px 预览含色彩转换 7–10 ms，CPU 127 ms；没有 torch 时用 numpy（约 0.6 s）。
+  大图分 400 万像素一块，GPU 出错（如显存不足）时退回 numpy。
+- **实况照片**：选定的帧、长曝光、循环 / 来回片段都经过 `engine.render`，自动带上 LUT。
+- **视频**：导出时 ffmpeg `lut3d=file='<路径>'`（盘符冒号转义为 `\:`）；强度 < 100% 时
+  `split[a][b];[b]lut3d[g];[g][a]blend=all_mode=normal:all_opacity=<强度>`——**分级后的画面必须是 blend 的第一路输入**（opacity 属于第一路，
+  反过来就成了 80% 原画面）。有 LUT 时总是重新编码为 H.264（“保持原画质”无法改像素）。导出当前帧、编辑后视频的缩略图也套用 LUT。
+  播放器放的是原片，剪辑面板用 `GET /assets/{id}/video-preview?time_ms=` 显示套用后的当前帧。实测 4K 5.5 s 视频导出约 14 s，
+  ffmpeg 结果与 numpy 计算的同一帧平均相差 2.75/255（压缩误差）。
+- **显影面板**：“LUT”组是这张照片经各 LUT 的小图网格（`GET /assets/{id}/lut-preview?lut=&v=`，256 px，浏览器缓存；
+  `v` 为原图版本 + 除 LUT 外的编辑的哈希，所以换 LUT 不会让上百张小图重新请求），可按名称搜索、按来源包筛选、勾选显示 Log LUT
+  （选中时提示）；强度滑块双击回到 100%。实测 117 个小图中位数 0.4 s/张，主预览 67 ms。
+- **接口**：`GET /luts`、`POST /luts/import {paths, color_space}`、`PATCH /luts/{id}`、`DELETE /luts/{id}`；
+  `lut-preview` 与 `video-preview` 接受 `?token=`。
+

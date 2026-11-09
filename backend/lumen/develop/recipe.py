@@ -56,6 +56,7 @@ class _Recipe(BaseModel):
 
 
 LiveEffect = Literal["live", "loop", "bounce", "long_exposure"]
+LUT_PATTERN = r"^[0-9a-f]{16}\.(rec709|p3)$"
 
 
 class EditRecipe(_Recipe):
@@ -88,6 +89,9 @@ class EditRecipe(_Recipe):
     live_frame_ms: int | None = Field(
         default=None, ge=0, description="Develop this frame of the clip instead of the still"
     )
+    # A 3D LUT ("<content id>.<rec709|p3>", ADR-039), applied after the colour settings.
+    lut: str | None = Field(default=None, pattern=LUT_PATTERN)
+    lut_strength: float = Field(default=100, ge=0, le=100)
     live_effect: LiveEffect = Field(
         default="live",
         description="live: the clip as shot; loop / bounce: how it plays; "
@@ -99,12 +103,17 @@ class EditRecipe(_Recipe):
         return self.live_effect == "long_exposure" or self.live_frame_ms is not None
 
     def without_live(self) -> EditRecipe:
-        """The adjustments alone (what is applied to every frame of a clip)."""
+        """The adjustments alone (what is applied to every frame of a clip, LUT included)."""
         return self.model_copy(update={"live_frame_ms": None, "live_effect": "live"})
 
 
 # Defaults of fields that older stored recipes do not have (see ``canonical_json``).
-_LATER_FIELDS: dict[str, object] = {"live_frame_ms": None, "live_effect": "live"}
+_LATER_FIELDS: dict[str, object] = {
+    "live_frame_ms": None,
+    "live_effect": "live",
+    "lut": None,
+    "lut_strength": 100,
+}
 
 MIN_CLIP_MS = 100
 
@@ -118,6 +127,8 @@ class VideoRecipe(_Recipe):
     trim_end_ms: int | None = Field(default=None, gt=0, description="null: to the end")
     rotate: int = Field(default=0, ge=0, le=3, description="quarter turns clockwise")
     mute: bool = False
+    lut: str | None = Field(default=None, pattern=LUT_PATTERN)
+    lut_strength: float = Field(default=100, ge=0, le=100)
 
     @model_validator(mode="after")
     def _valid_range(self) -> VideoRecipe:

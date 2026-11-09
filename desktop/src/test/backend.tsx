@@ -4,6 +4,7 @@ import { vi } from "vitest";
 
 import { StaticBackendProvider } from "@/api/backend-context";
 import type {
+  Lut,
   AssetDetail,
   AssetSummary,
   EditRecipe,
@@ -149,6 +150,8 @@ export interface StubOptions {
   cache?: { folder?: string; missing?: boolean; noSpace?: boolean };
   /** Trip suggestions: date ranges over asset ids. */
   trips?: { start: string; end: string; assetIds: number[]; cities?: string[] }[];
+  /** Imported LUTs. */
+  luts?: Lut[];
   /** Local vision model: files present, enabled, and what each asset was read as. */
   vlm?: {
     enabled?: boolean;
@@ -161,6 +164,7 @@ export function stubBackend(options: StubOptions = {}) {
   let roots = [...(options.roots ?? [])];
   const assets = options.assets ?? [];
   const requests: Request[] = [];
+  const luts = [...(options.luts ?? [])];
   const json = (body: unknown, status = 200) => Promise.resolve(Response.json(body, { status }));
   let exportRequest: unknown = null;
   // Duplicate groups by kind, as the backend reports them (merged ones go away).
@@ -333,6 +337,23 @@ export function stubBackend(options: StubOptions = {}) {
         vlm_folder: null,
         ...((body as object | undefined) ?? {}),
       });
+    }
+    if (path === "/api/v1/luts") return json({ items: luts });
+    if (path === "/api/v1/luts/import") {
+      return json({ imported: 2, already: 1, failed: ["broken.cube: 3 entries, expected 8"],
+        items: [] }); // prettier-ignore
+    }
+    const lutMatch = /^\/api\/v1\/luts\/([0-9a-f]{16})$/.exec(path);
+    if (lutMatch) {
+      const index = luts.findIndex((item) => item.id === lutMatch[1]);
+      if (method === "DELETE") {
+        luts.splice(index, 1);
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      const next = { ...luts[index]!, ...(body as object) };
+      next.ref = `${next.id}.${next.color_space}`;
+      luts[index] = next;
+      return json(next);
     }
     if (path === "/api/v1/vlm/status") {
       const installed = options.vlm?.installed ?? false;
@@ -757,4 +778,13 @@ export function Providers({
 export function fakeViewport() {
   vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(1000);
   vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(800);
+}
+
+export function makeLut(id: number, overrides: Partial<Lut> = {}): Lut {
+  const hex = id.toString(16).padStart(16, "0");
+  return {
+    id: hex, ref: `${hex}.rec709`, name: `Look ${id}`, pack: "Pack A", color_space: "rec709",
+    kind: "look", size: 33, hidden: false, used: 0,
+    ...overrides,
+  }; // prettier-ignore
 }

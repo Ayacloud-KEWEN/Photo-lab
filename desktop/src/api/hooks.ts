@@ -22,6 +22,8 @@ import type {
   EditRecipe,
   EditState,
   ExportRequest,
+  LutSpace,
+  LutUpdate,
   DuplicateKind,
   DuplicateReport,
   MapWebSendRequest,
@@ -57,6 +59,7 @@ export const queryKeys = {
   live: (id: number) => ["library", "live", id] as const,
   longExposure: () => ["library", "long-exposure"] as const,
   vlm: ["vlm"] as const,
+  luts: ["luts"] as const,
   export: (taskId: number) => ["export", taskId] as const,
   videoEdit: (id: number) => ["library", "video-edit", id] as const,
   collections: ["library", "collections"] as const,
@@ -765,6 +768,38 @@ export function useLiveInfo(id: number | null, enabled = true) {
     staleTime: Infinity, // the clip does not change
     retry: false,
   });
+}
+
+/** The imported LUTs. */
+export function useLuts() {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.luts,
+    queryFn: () => api.listLuts(requireConnection(conn)),
+    enabled: conn !== null,
+    select: (data) => data.items,
+  });
+}
+
+export function useLutActions() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  const settle = () => void queryClient.invalidateQueries({ queryKey: queryKeys.luts });
+  const importLuts = useMutation({
+    mutationFn: ({ paths, colorSpace }: { paths: string[]; colorSpace: LutSpace }) =>
+      api.importLuts(requireConnection(conn), paths, colorSpace),
+    onSuccess: settle,
+  });
+  const update = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: LutUpdate }) =>
+      api.updateLut(requireConnection(conn), id, body),
+    onSuccess: settle,
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.deleteLut(requireConnection(conn), id),
+    onSuccess: settle,
+  });
+  return { importLuts, update, remove };
 }
 
 /** The local vision model's state (refreshed while it is reading or downloading). */

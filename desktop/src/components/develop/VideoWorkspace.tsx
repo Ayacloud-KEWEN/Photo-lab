@@ -2,9 +2,10 @@ import { Camera, RotateCcw, RotateCw, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ApiError, api, originalUrl } from "@/api/client";
+import { ApiError, api, originalUrl, videoPreviewUrl } from "@/api/client";
 import {
   useConnection,
+  useLuts,
   useRefreshLibraryLists,
   useSaveVideoEdit,
   useVideoEdit,
@@ -17,6 +18,8 @@ import { pickDirectory } from "@/lib/dialogs";
 import { formatClock } from "@/lib/format";
 
 import type { DevelopKeyHandler } from "./DevelopWorkspace";
+import { LUT_STRENGTH } from "./recipe";
+import { Slider } from "./Slider";
 import { TrimmedVideo } from "./TrimmedVideo";
 
 const SAVE_DELAY_MS = 600;
@@ -28,6 +31,8 @@ export const DEFAULT_VIDEO_RECIPE: VideoRecipe = {
   trim_end_ms: null,
   rotate: 0,
   mute: false,
+  lut: null,
+  lut_strength: 100,
 };
 
 /**
@@ -235,6 +240,17 @@ export function VideoWorkspace({
               </div>
             </section>
 
+            <VideoLut
+              assetId={detail.id}
+              recipe={recipe}
+              version={edit.data?.rendition_version ?? ""}
+              onChange={change}
+              onPreview={async () => {
+                await save();
+                return now();
+              }}
+            />
+
             <section aria-label={t("video.frame")} className="space-y-2">
               <Button size="sm" variant="outline" onClick={() => void exportFrame()}>
                 <Camera /> {t("video.exportFrame")}
@@ -302,5 +318,77 @@ function TrimPoint({
         {useCurrentLabel}
       </button>
     </div>
+  );
+}
+
+/**
+ * A LUT for the video: chosen from the library, at a strength. The player cannot show it
+ * (it plays the original), so a frame graded by the backend shows the result.
+ */
+function VideoLut({
+  assetId,
+  recipe,
+  version,
+  onChange,
+  onPreview,
+}: {
+  assetId: number;
+  recipe: VideoRecipe;
+  version: string;
+  onChange: (patch: Partial<VideoRecipe>) => void;
+  /** Saves pending changes; resolves with the player's position. */
+  onPreview: () => Promise<number>;
+}) {
+  const { t } = useTranslation();
+  const conn = useConnection();
+  const luts = useLuts();
+  const [previewAt, setPreviewAt] = useState<number | null>(null);
+  const current = recipe.lut ?? null;
+  const offered = (luts.data ?? []).filter(
+    (lut) => lut.ref === current || (!lut.hidden && lut.kind === "look"),
+  );
+  if (!luts.data?.length) return null;
+  const preview = () => void onPreview().then(setPreviewAt);
+
+  return (
+    <section aria-label={t("lut.title")} className="space-y-1.5">
+      <h3 className="text-[11px] font-medium uppercase tracking-wider text-subtle-foreground">
+        {t("lut.title")}
+      </h3>
+      <select
+        aria-label={t("lut.title")}
+        value={current ?? ""}
+        onChange={(event) => onChange({ lut: event.target.value || null })}
+        className="h-8 w-full rounded-md border border-input bg-background/60 px-2 text-[12px]"
+      >
+        <option value="">{t("lut.none")}</option>
+        {offered.map((lut) => (
+          <option key={lut.id} value={lut.ref}>
+            {lut.pack ? `${lut.name} · ${lut.pack}` : lut.name}
+          </option>
+        ))}
+      </select>
+      {current && (
+        <>
+          <Slider
+            spec={LUT_STRENGTH}
+            value={recipe.lut_strength ?? 100}
+            onChange={(value) => onChange({ lut_strength: value })}
+            onCommit={() => undefined}
+          />
+          <p className="text-[11px] leading-relaxed text-subtle-foreground">{t("lut.videoNote")}</p>
+          <Button size="sm" variant="outline" onClick={preview}>
+            {t("lut.previewFrame")}
+          </Button>
+          {conn && previewAt !== null && (
+            <img
+              src={videoPreviewUrl(conn, assetId, version, previewAt)}
+              alt={t("lut.previewFrame")}
+              className="w-full rounded"
+            />
+          )}
+        </>
+      )}
+    </section>
   );
 }

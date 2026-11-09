@@ -23,7 +23,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ApiError, motionUrl } from "@/api/client";
+import { ApiError, contentVersion, motionUrl } from "@/api/client";
 import {
   useAsset,
   useConnection,
@@ -41,6 +41,7 @@ import { cn } from "@/lib/utils";
 import { CropOverlay } from "./CropOverlay";
 import { Histogram } from "./Histogram";
 import { LivePanel } from "./LivePanel";
+import { LutPanel } from "./LutPanel";
 import { COPY_FIELDS, PRESETS, pick } from "./presets";
 import {
   ASPECTS,
@@ -48,6 +49,7 @@ import {
   FULL_FRAME,
   SLIDER_GROUPS,
   STRAIGHTEN,
+  adjustmentsKey,
   aspectRatio,
   clampCrop,
   fitAspect,
@@ -457,6 +459,17 @@ export function DevelopWorkspace({
                 ))}
               </section>
             ))}
+
+            {conn && detail?.rendition_version && state && (
+              <LutPanel
+                conn={conn}
+                assetId={assetId}
+                version={`${contentVersion(detail.rendition_version)}-${adjustmentsKey(state.recipe)}`}
+                recipe={recipe}
+                onChange={change}
+                onCommit={() => saveLater(COMMIT_DELAY_MS)}
+              />
+            )}
 
             <section aria-label={t("develop.groups.presets")}>
               <GroupTitle>{t("develop.groups.presets")}</GroupTitle>

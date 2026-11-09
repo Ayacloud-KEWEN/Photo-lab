@@ -25,6 +25,7 @@ from lumen.core.logging import request_id_var
 from lumen.core.security import TokenAuthMiddleware
 from lumen.db.connection import Database
 from lumen.db.migrator import migrate
+from lumen.develop import lut as lut_store
 from lumen.geo.tasks import GEO_TASK, needs_locating
 from lumen.library.drives import DriveWatcher
 from lumen.library.handlers import HANDLERS
@@ -96,6 +97,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         app.state.started_at = time.monotonic()
         with db.session() as conn:
             apply_cache_folder(conn, settings)  # thumbnails on the drive chosen in Settings
+        lut_store.configure(settings.data_dir / "luts")  # imported LUTs (ADR-039)
         runner: TaskRunner | None = None
         watcher: DriveWatcher | None = None
         if settings.run_tasks:

@@ -16,6 +16,7 @@ from lumen.core.errors import LumenError, NotFoundError
 from lumen.db.connection import GenerationCache
 from lumen.develop import live
 from lumen.develop.engine import DevelopError
+from lumen.develop.lut import LutError
 from lumen.develop.recipe import IDENTITY, EditRecipe, LiveEffect, VideoRecipe, parse_recipe
 from lumen.develop.renditions import (
     edited_rendition_paths,
@@ -25,6 +26,7 @@ from lumen.develop.renditions import (
     render_full,
     touch,
 )
+from lumen.develop.video import grade_frame
 from lumen.library.live import CLIP_EXTENSION, CLIP_EXTENSIONS
 from lumen.library.search import like_pattern, search_terms
 from lumen.media import thumbnails
@@ -712,7 +714,7 @@ def rendition_path(
         recipe = parse_recipe(edited["recipe"])
         if isinstance(recipe, VideoRecipe):
             original = _original_rendition_path(conn, cache_dir, asset_id, variant, ffmpeg=ffmpeg)
-            return _turned_rendition(original, recipe.rotate, edited["recipe_hash"])
+            return _video_rendition(original, recipe, edited["recipe_hash"])
         return _edited_rendition_path(
             conn, live.Tools(ffmpeg, ffprobe, cache_dir), asset_id, variant, recipe,
             edited["recipe_hash"],
@@ -756,14 +758,20 @@ def _original_rendition_path(
     return path
 
 
-def _turned_rendition(original: Path, quarter_turns: int, recipe_hash: str) -> Path:
-    """``original`` turned clockwise, cached beside it (unturned: ``original`` itself)."""
-    if quarter_turns == 0:
+def _video_rendition(original: Path, recipe: VideoRecipe, recipe_hash: str) -> Path:
+    """A video's poster turned and graded like its edit, cached beside the original one
+    (``original`` itself when the edit changes neither)."""
+    if recipe.rotate == 0 and not (recipe.lut and recipe.lut_strength > 0):
         return original
     path = original.with_name(f"{original.stem}_e{recipe_hash}.jpg")
     if not path.exists():
         with Image.open(original) as image:
-            thumbnails.save_jpeg(image.rotate(-90 * quarter_turns, expand=True), path)
+            turned = image.rotate(-90 * recipe.rotate, expand=True) if recipe.rotate else image
+            try:
+                graded = grade_frame(turned, recipe)
+            except LutError as exc:
+                raise RenditionUnavailableError(f"Cannot grade the poster: {exc}") from exc
+            thumbnails.save_jpeg(graded, path)
     return path
 
 

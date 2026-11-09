@@ -17,6 +17,7 @@ EXPECTED_TABLES = {
     "media_quality",
     "media_descriptions",
     "vlm_requests",
+    "luts",
     "storage_roots",
     "tasks",
     "app_settings",

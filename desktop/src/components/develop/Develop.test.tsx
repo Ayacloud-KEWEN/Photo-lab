@@ -220,6 +220,7 @@ describe("Develop", () => {
     await waitFor(() =>
       expect(videoSaves().at(-1)?.body).toEqual({
         version: 1, kind: "video", trim_start_ms: 1000, trim_end_ms: null, rotate: 1, mute: true,
+        lut: null, lut_strength: 100,
       }), // prettier-ignore
     );
     expect(videoSaves()).toHaveLength(1); // the changes were saved together

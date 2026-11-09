@@ -591,7 +591,8 @@ def render_motion(
             if should_stop is not None and should_stop():
                 raise LiveStopped()
             if not identity:
-                frame = to_uint8(engine.render(to_float(frame), adjustments))
+                gamut: Literal["srgb", "p3"] = "p3" if info.wide_gamut else "srgb"
+                frame = to_uint8(engine.render(to_float(frame), adjustments, gamut))
             yield p3_to_srgb(frame) if info.wide_gamut else frame
 
     sequence = _sequence(developed(), effect, fps)

@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+from functools import partial
 from typing import Any
 
-from fastapi import APIRouter, Path, Request
+from fastapi import APIRouter, Path, Query, Request
 from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
 
 from lumen.api.deps import Connection
 from lumen.core.config import Settings
 from lumen.develop import live
-from lumen.develop.recipe import EditRecipe, VideoRecipe
+from lumen.develop.recipe import LUT_PATTERN, EditRecipe, VideoRecipe
 from lumen.schemas.common import ErrorResponse
 from lumen.schemas.develop import (
     DevelopPreviewRequest,
@@ -169,6 +170,52 @@ async def get_live_strip(
     """JPEG of the clip's frames side by side, evenly spaced in time. Accepts ``?token=``."""
     settings: Settings = request.app.state.settings
     data = await run_in_threadpool(service.live_strip, conn, asset_id, live.Tools.of(settings))
+    return Response(
+        data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"}
+    )
+
+
+@router.get(
+    "/assets/{asset_id}/lut-preview",
+    operation_id="getLutPreview",
+    response_class=Response,
+    responses={200: {"content": {"image/jpeg": {}}}, **ERRORS},
+)
+async def get_lut_preview(
+    conn: Connection,
+    request: Request,
+    asset_id: int = Path(ge=1),
+    lut: str = Query(pattern=LUT_PATTERN),
+    strength: float = Query(default=100, ge=0, le=100),
+) -> Response:
+    """A small picture of the photo graded by a LUT (the develop panel's LUT grid).
+    Accepts ``?token=``; the URL carries a version, so it is cached."""
+    settings: Settings = request.app.state.settings
+    data = await run_in_threadpool(
+        service.lut_preview, conn, asset_id, lut, strength, live.Tools.of(settings)
+    )
+    return Response(
+        data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=31536000"}
+    )
+
+
+@router.get(
+    "/assets/{asset_id}/video-preview",
+    operation_id="getVideoPreview",
+    response_class=Response,
+    responses={200: {"content": {"image/jpeg": {}}}, **ERRORS},
+)
+async def get_video_preview(
+    conn: Connection,
+    request: Request,
+    asset_id: int = Path(ge=1),
+    time_ms: int = Query(default=0, ge=0),
+) -> Response:
+    """A frame of a video as its saved edit shows it (turned, LUT applied). Accepts
+    ``?token=``."""
+    settings: Settings = request.app.state.settings
+    preview = partial(service.video_preview, ffmpeg=settings.tool("ffmpeg"))
+    data = await run_in_threadpool(preview, conn, asset_id, time_ms)
     return Response(
         data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"}
     )

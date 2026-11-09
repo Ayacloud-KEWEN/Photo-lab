@@ -39,6 +39,10 @@ import type {
   FrameExportResult,
   LiveInfo,
   VlmStatus,
+  Lut,
+  LutImportResult,
+  LutSpace,
+  LutUpdate,
   MotionEffect,
   VideoEditState,
   VideoRecipe,
@@ -461,6 +465,23 @@ export const api = {
   longExposureCandidates: (conn: BackendConnection, limit = 120) =>
     request<SemanticPage>(conn, "GET", `/api/v1/ai/long-exposure${toSearchParams({ limit })}`),
 
+  listLuts: (conn: BackendConnection) =>
+    request<{ items: Lut[] }>(conn, "GET", "/api/v1/luts"),
+
+  /** Copy .cube files (or every .cube in folders) into the LUT library. */
+  importLuts: (conn: BackendConnection, paths: string[], colorSpace: LutSpace) =>
+    request<LutImportResult>(conn, "POST", "/api/v1/luts/import", {
+      paths,
+      color_space: colorSpace,
+    }),
+
+  updateLut: (conn: BackendConnection, id: string, body: LutUpdate) =>
+    request<Lut>(conn, "PATCH", `/api/v1/luts/${id}`, body),
+
+  /** Deleted, or hidden when an edit uses it. */
+  deleteLut: (conn: BackendConnection, id: string) =>
+    request<void>(conn, "DELETE", `/api/v1/luts/${id}`),
+
   /** The local vision-language model: files present, photos read and still to read. */
   getVlmStatus: (conn: BackendConnection) =>
     request<VlmStatus>(conn, "GET", "/api/v1/vlm/status"),
@@ -552,6 +573,34 @@ export function motionUrl(
 /** How a Live Photo's clip plays, from its effect. */
 export function motionEffectOf(effect: string | null | undefined): MotionEffect {
   return effect === "loop" || effect === "bounce" ? effect : "live";
+}
+
+/** A small picture of the photo (with its saved edit) graded by a LUT. */
+export function lutPreviewUrl(
+  conn: BackendConnection,
+  assetId: number,
+  version: string,
+  lutRef: string,
+): string {
+  return `${conn.baseUrl}/api/v1/assets/${assetId}/lut-preview${toSearchParams({
+    lut: lutRef,
+    v: version,
+    token: conn.token,
+  })}`;
+}
+
+/** A frame of a video as its saved edit shows it (turned, LUT applied). */
+export function videoPreviewUrl(
+  conn: BackendConnection,
+  assetId: number,
+  version: string,
+  timeMs: number,
+): string {
+  return `${conn.baseUrl}/api/v1/assets/${assetId}/video-preview${toSearchParams({
+    time_ms: Math.max(0, Math.round(timeMs)),
+    v: version,
+    token: conn.token,
+  })}`;
 }
 
 /** The Live Photo's frames side by side (the frame picker's background). */

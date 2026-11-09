@@ -229,6 +229,8 @@ cd backend
 | GET | `/api/v1/ai/search?text=&…` | 语义搜索（可叠加筛选条件），返回相似度和明显相关的数量 |
 | GET | `/api/v1/assets/{id}/similar` | 相似照片 |
 | GET | `/api/v1/ai/long-exposure` | 适合做长曝光的实况照片（流水、车流、烟花等，本地 AI） |
+| GET/POST/PATCH/DELETE | `/api/v1/luts` · `/luts/import` · `/luts/{id}` | LUT 库：列表、导入 .cube 文件或文件夹（去重）、改名称/色彩空间/类型/隐藏、删除（有编辑在用时只隐藏） |
+| GET | `/api/v1/assets/{id}/lut-preview?lut=` · `/video-preview?time_ms=` | 照片经某个 LUT 的小图（显影 LUT 网格）· 视频某一帧按编辑（旋转、LUT）显示 |
 | GET | `/api/v1/vlm/status` | 本地视觉模型：文件是否齐全、已识别和待识别的照片数 |
 | POST | `/api/v1/vlm/describe` · `/vlm/download` | 优先识别这些照片（`fine` 用 27B 精细识别）· 下载 llama.cpp 和模型（后台任务，可续传） |
 | PUT/DELETE | `/api/v1/ai/cloud/key` | 保存 / 删除 DeepSeek API 密钥（Windows 凭据管理器） |

@@ -346,3 +346,57 @@ def live_playback(
         raise DevelopUnavailableError(f"Cannot render the clip: {exc}") from exc
     prune_full_renditions(tools.cache_dir, keep=path)
     return path
+
+
+# --- LUT previews (ADR-039) ---------------------------------------------------------------------
+
+LUT_PREVIEW_EDGE = 256
+
+
+def lut_preview(
+    conn: sqlite3.Connection, asset_id: int, ref: str, strength: float, tools: live.Tools
+) -> bytes:
+    """A small JPEG of the photo (with its saved edit) graded by the LUT ``ref``."""
+    source = develop_source(conn, asset_id)
+    recipe = current_recipe(conn, asset_id).model_copy(
+        update={"lut": ref, "lut_strength": strength}
+    )
+    try:
+        image = engine.develop(
+            source.path, source.format, recipe, LUT_PREVIEW_EDGE, motion=source.clip(tools)
+        )
+    except engine.DevelopError as exc:
+        raise DevelopUnavailableError(f"Cannot preview the LUT: {exc}") from exc
+    out = io.BytesIO()
+    image.save(out, "JPEG", quality=PREVIEW_QUALITY)
+    return out.getvalue()
+
+
+VIDEO_PREVIEW_EDGE = 1280
+
+
+def video_preview(
+    conn: sqlite3.Connection, asset_id: int, time_ms: int, *, ffmpeg: str | None
+) -> bytes:
+    """The video frame at ``time_ms``, turned and graded like the saved edit."""
+    from PIL import Image
+
+    from lumen.develop.lut import LutError
+    from lumen.develop.video import grade_frame
+    from lumen.media.thumbnails import video_frame_at
+
+    source = video_source(conn, asset_id)
+    if ffmpeg is None:
+        raise DevelopUnavailableError("ffmpeg is not available")
+    recipe = current_video_recipe(conn, asset_id)
+    try:
+        image = video_frame_at(source.path, ffmpeg, time_ms / 1000)
+        if recipe.rotate:
+            image = image.rotate(-90 * recipe.rotate, expand=True)
+        image = grade_frame(image, recipe)
+    except (RenderError, LutError, OSError) as exc:
+        raise DevelopUnavailableError(f"Cannot show the frame: {exc}") from exc
+    image.thumbnail((VIDEO_PREVIEW_EDGE, VIDEO_PREVIEW_EDGE), Image.Resampling.LANCZOS)
+    out = io.BytesIO()
+    image.save(out, "JPEG", quality=PREVIEW_QUALITY)
+    return out.getvalue()
