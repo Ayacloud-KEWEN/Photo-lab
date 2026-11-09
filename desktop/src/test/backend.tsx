@@ -278,16 +278,30 @@ export function stubBackend(options: StubOptions = {}) {
       }); // prettier-ignore
     }
     if (rest === "/story" && method === "POST") {
+      const request = body as { writer: string; notes_from?: number | null };
+      const notes = request.writer === "deepseek";
       stories.unshift({
         id: 900 + stories.length, kind: "story", provider: "local", model: "qwen3.6-35b-a3b",
-        language: "zh-CN", vision: false, cached: true, data: { collection_id: state.id },
-        result: `# 故事 ${stories.length + 1}
-
-雪山和湖。`,
+        language: "zh-CN", vision: false, cached: true,
+        data: {
+          collection_id: state.id, stage: notes ? "notes" : "story", writer: request.writer,
+          days: [{ number: 1, date: "2024-06-09", places: ["采尔马特"], text: "看了雪山。", asset_ids: [1] }],
+        },
+        result: notes ? "### 第 1 天\n\n看了雪山。" : `# 故事 ${stories.length + 1}\n\n雪山和湖。`,
         asset_ids: state.items.map((item) => item.id), input_tokens: 100, output_tokens: 50,
         created_at: "2026-11-09T10:00:00.000Z",
       }); // prettier-ignore
       return json({ task_id: 500 + stories.length }, 202);
+    }
+    const cloudStory = /^\/stories\/(\d+)\/cloud$/.exec(rest);
+    if (cloudStory && method === "POST") {
+      const story = {
+        ...stories[0]!, id: 900 + stories.length, provider: "deepseek", model: "deepseek-pro",
+        data: { ...(stories[0]!.data as object), stage: "story", writer: "deepseek" },
+        result: "# 云端的故事\n\n雪山。",
+      }; // prettier-ignore
+      stories.unshift(story);
+      return json(story);
     }
     if (rest === "/stories") return json(stories);
     if (rest === "/order") {

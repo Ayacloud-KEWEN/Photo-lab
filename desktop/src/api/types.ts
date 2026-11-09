@@ -58,6 +58,7 @@ export type CloudTestResult = Schemas["CloudTestResult"];
 export type CloudRequest = Schemas["CloudRequest"];
 export type CloudPreview = Schemas["CloudPreview"];
 export type AnalysisResult = Schemas["AnalysisResult"];
+export type StoryWriter = NonNullable<Schemas["StoryRequest"]["writer"]>;
 export type AnalysisKind = CloudRequest["kind"];
 export type EditRecipe = Schemas["EditRecipe"];
 export type Crop = Schemas["Crop"];

@@ -7,7 +7,7 @@ import io
 import json
 from collections.abc import Iterator
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pytest
 from fastapi.testclient import TestClient
@@ -132,7 +132,7 @@ class FakeReader:
     def __init__(self, folder: Path, reserve_mib: int | None) -> None:
         self.model = ""
 
-    def start(self, model_id: str) -> None:
+    def start(self, model_id: str, context: int | None = None) -> None:
         FakeReader.started.append(model_id)
         self.model = model_id
 
@@ -150,9 +150,11 @@ class FakeReader:
 
     prompts: ClassVar[list[str]] = []
 
-    def write(self, prompt: str) -> tuple[str, int, int]:
+    def write(self, prompt: str, max_tokens: int) -> tuple[str, int, int]:
         FakeReader.prompts.append(prompt)
-        return "# 海边的两天\n\n先是日落，然后是古城。", 1200, 300
+        if "旅行笔记" in prompt:  # a day's notes
+            return ("看了日落。" if "日落" in prompt else "逛了古城。"), 400, 60
+        return f"# 海边的两天（{self.model}）\n\n先是日落，然后是古城。", 1200, 300
 
     def stop(self) -> None:
         pass
@@ -297,13 +299,17 @@ def test_a_request_made_while_reading_is_read_next(vlm_app: tuple[TestClient, Pa
     assert client.get("/api/v1/vlm/status").json()["described"] == 3
 
 
-def test_local_travel_story(vlm_app: tuple[TestClient, Path]) -> None:
+def test_local_travel_story(
+    vlm_app: tuple[TestClient, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from lumen.ai import cloud
+
     client, folder = vlm_app
     db = client.app.state.db  # type: ignore[attr-defined]
     ids = {item["file_name"]: item["id"] for item in client.get("/api/v1/assets").json()["items"]}
     collection = client.post(
         "/api/v1/collections",
-        json={"name": "Kotor", "kind": "trip", "asset_ids": [ids["blue.jpg"], ids["red.jpg"]]},
+        json={"name": "Kotor", "kind": "trip", "asset_ids": list(ids.values())},
     ).json()["id"]
     client.patch(
         f"/api/v1/collections/{collection}/items/{ids['red.jpg']}", json={"caption": "第一晚"}
@@ -314,19 +320,88 @@ def test_local_travel_story(vlm_app: tuple[TestClient, Path]) -> None:
     assert client.post(f"{url}/story", json={}).status_code == 400
 
     client.patch("/api/v1/settings", json={"vlm_folder": str(folder)})
-    FakeReader.prompts = []
-    started = client.post(f"{url}/story", json={"language": "zh-CN"})
+    FakeReader.prompts, FakeReader.started = [], []
+    started = client.post(f"{url}/story", json={"writer": FINE_MODEL})
     assert started.status_code == 202
     wait_idle(db)
     task = client.get(f"/api/v1/tasks/{started.json()['task_id']}").json()
     assert task["status"] == "succeeded", task
-    assert task["result"]["read"] == 2  # the photos were read first
+    assert task["result"]["read"] == 3 and task["result"]["days"] == 3
 
-    # The model got what it saw in the photos, in capture order, with the captions.
-    prompt = FakeReader.prompts[-1]
-    assert prompt.index("红色的日落") < prompt.index("蓝色的海湾")
-    assert "说明：第一晚" in prompt and "Stari Grad Kotor" in prompt
+    # Notes for each day (from what the model saw, with the captions), then the story from
+    # the notes, by the chosen writer.
+    notes = [p for p in FakeReader.prompts if "旅行笔记" in p]
+    assert len(notes) == 2  # the dark photo could not be read: nothing to say that day
+    assert "第 1 天（2020-01-01）" in notes[0] and "说明：第一晚" in notes[0]
+    assert "Stari Grad Kotor" in notes[1]
+    final = FakeReader.prompts[-1]
+    assert "看了日落。" in final and "逛了古城。" in final and "红色" not in final
+    assert FakeReader.started == [DEFAULT_MODEL, FINE_MODEL]
     stories = client.get(f"{url}/stories").json()
     assert len(stories) == 1
-    assert stories[0]["provider"] == "local" and stories[0]["result"].startswith("# 海边的两天")
-    assert stories[0]["asset_ids"] == [ids["red.jpg"], ids["blue.jpg"]]
+    story = stories[0]
+    assert story["provider"] == "local" and story["result"].startswith("# 海边的两天（qwen3.8")
+    assert story["data"]["stage"] == "story" and story["data"]["writer"] == FINE_MODEL
+    assert [day["text"] for day in story["data"]["days"]] == ["看了日落。", "逛了古城。", ""]
+
+    # Written again from the same notes: no photo is read, no note written.
+    FakeReader.prompts = []
+    again = client.post(f"{url}/story", json={"notes_from": story["id"]})
+    wait_idle(db)
+    assert client.get(f"/api/v1/tasks/{again.json()['task_id']}").json()["status"] == "succeeded"
+    assert len(FakeReader.prompts) == 1 and "旅行笔记" not in FakeReader.prompts[0]
+    assert len(client.get(f"{url}/stories").json()) == 2
+
+    # DeepSeek: the local model writes the notes, kept for the user to see; then only
+    # the notes are sent.
+    sent: list[Any] = []
+
+    class FakeCloud:
+        model = "deepseek-pro"
+
+        def chat(self, messages: list[dict[str, Any]], max_tokens: int) -> Any:
+            sent.append(messages)
+            return cloud.ChatResponse("# 云端写的游记", 900, 700)
+
+    monkeypatch.setattr(cloud, "client", lambda settings: FakeCloud())
+    pending = client.post(f"{url}/story", json={"writer": "deepseek"})
+    wait_idle(db)
+    assert client.get(f"/api/v1/tasks/{pending.json()['task_id']}").json()["status"] == "succeeded"
+    notes_only = client.get(f"{url}/stories").json()[0]
+    assert notes_only["data"]["stage"] == "notes" and "看了日落。" in notes_only["result"]
+    assert not sent
+    unconfirmed = client.post(f"{url}/stories/{notes_only['id']}/cloud", json={})
+    assert unconfirmed.status_code == 422
+    written = client.post(f"{url}/stories/{notes_only['id']}/cloud", json={"confirmed": True})
+    assert written.status_code == 200, written.text
+    assert written.json()["provider"] == "deepseek"
+    assert written.json()["result"] == "# 云端写的游记"
+    prompt = sent[0][-1]["content"]
+    assert "看了日落。" in prompt and "Stari Grad" not in prompt  # the notes, nothing else
+
+
+def test_story_picks_the_photos_that_tell_each_day() -> None:
+    from lumen.vlm.story import pick_days, story_length
+
+    def row(i: int, time: str | None, **extra: object) -> dict[str, object]:
+        base = {"id": i, "capture_time": time, "rating": 0, "is_favorite": 0,
+                "cull_flag": "none", "caption": None, "quality": 0.5, "has_text": 0}  # fmt: skip
+        return {**base, **extra}
+
+    rows = [
+        # A burst: only its favourite is kept.
+        row(1, "2024-05-01T09:00:00"),
+        row(2, "2024-05-01T09:00:20", is_favorite=1),
+        row(3, "2024-05-01T09:00:40"),
+        row(4, "2024-05-01T12:00:00", has_text=1),
+        row(5, "2024-05-01T15:00:00"),
+        row(6, "2024-05-02T10:00:00", caption="山顶"),
+        row(7, None),
+    ]
+    days = pick_days(rows, per_day=2)  # type: ignore[arg-type]
+    assert [(d.number, d.date, d.asset_ids) for d in days] == [
+        (1, "2024-05-01", [2, 4]),  # best two, in capture order
+        (2, "2024-05-02", [6]),
+        (3, "", [7]),  # undated last
+    ]
+    assert story_length(1) == 400 and story_length(10) == 1500 and story_length(40) == 2000

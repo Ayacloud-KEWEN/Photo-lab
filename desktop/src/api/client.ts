@@ -2,6 +2,7 @@ import { toSearchParams, type AssetQuery, type QueryValue } from "./query";
 import type {
   AIStatus,
   AnalysisResult,
+  StoryWriter,
   AppSettings,
   AppSettingsUpdate,
   AssetBatchUpdate,
@@ -255,8 +256,19 @@ export const api = {
   getCollection: (conn: BackendConnection, id: number) =>
     request<CollectionDetail>(conn, "GET", `/api/v1/collections/${id}`),
 
-  writeCollectionStory: (conn: BackendConnection, id: number, language: string) =>
-    request<{ task_id: number }>(conn, "POST", `/api/v1/collections/${id}/story`, { language }),
+  writeCollectionStory: (
+    conn: BackendConnection,
+    id: number,
+    body: { language: string; writer: StoryWriter; notes_from?: number | null },
+  ) => request<{ task_id: number }>(conn, "POST", `/api/v1/collections/${id}/story`, body),
+
+  writeCollectionStoryInCloud: (conn: BackendConnection, id: number, analysisId: number) =>
+    request<AnalysisResult>(
+      conn,
+      "POST",
+      `/api/v1/collections/${id}/stories/${analysisId}/cloud`,
+      { confirmed: true },
+    ),
 
   listCollectionStories: (conn: BackendConnection, id: number) =>
     request<AnalysisResult[]>(conn, "GET", `/api/v1/collections/${id}/stories`),

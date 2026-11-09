@@ -69,9 +69,9 @@ def vlm_folder(conn: sqlite3.Connection, settings: Settings) -> Path:
 
 
 class Reader(Protocol):
-    def start(self, model_id: str) -> None: ...
+    def start(self, model_id: str, context: int | None = None) -> None: ...
     def read(self, image: Image.Image) -> describing.Description: ...
-    def write(self, prompt: str) -> tuple[str, int, int]: ...
+    def write(self, prompt: str, max_tokens: int) -> tuple[str, int, int]: ...
     def stop(self) -> None: ...
 
 
@@ -81,9 +81,11 @@ class LlamaReader:
         self.reserve_mib = reserve_mib
         self.server: LlamaServer | None = None
 
-    def start(self, model_id: str) -> None:
+    def start(self, model_id: str, context: int | None = None) -> None:
         spec = MODELS[model_id]
         files = spec.files(models_dir(self.folder))
+        if context:
+            files = dataclasses.replace(files, context=context)
         if self.reserve_mib:
             files = dataclasses.replace(
                 files, args=(*files.args, "--fit-target", str(self.reserve_mib))
@@ -97,12 +99,12 @@ class LlamaReader:
         assert self.server is not None
         return describing.describe(self.server.url, image)
 
-    def write(self, prompt: str) -> tuple[str, int, int]:
+    def write(self, prompt: str, max_tokens: int) -> tuple[str, int, int]:
         """A text answer (story.py): (text, prompt tokens, output tokens)."""
         from lumen.vlm.story import chat
 
         assert self.server is not None
-        return chat(self.server.url, prompt)
+        return chat(self.server.url, prompt, max_tokens)
 
     def stop(self) -> None:
         if self.server is not None:

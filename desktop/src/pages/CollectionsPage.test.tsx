@@ -414,7 +414,7 @@ describe("CollectionsPage", () => {
     );
   });
 
-  it("writes a travel story with the local model", async () => {
+  it("writes a travel story with the local model, or with DeepSeek from the notes", async () => {
     const { requests } = stubBackend({
       assets,
       collections: [{ name: "Alps", kind: "trip", assetIds: [1, 2] }],
@@ -422,57 +422,56 @@ describe("CollectionsPage", () => {
     });
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: /Alps/ }));
-    await userEvent.click(
-      await screen.findByRole("button", { name: "生成旅行故事" }),
-    );
+    await userEvent.click(await screen.findByRole("button", { name: "生成旅行故事" }));
     const dialog = await screen.findByRole("dialog", { name: "旅行故事" });
+    expect(within(dialog).getByRole("radio", { name: /Qwen3\.6 统稿/ })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    // Qwen3.8 is not downloaded.
     await waitFor(() =>
-      expect(
-        within(dialog).getByRole("radio", { name: /本地模型/ }),
-      ).toHaveAttribute("aria-checked", "true"),
+      expect(within(dialog).getByRole("radio", { name: /Qwen3\.8 统稿/ })).toBeDisabled(),
     );
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "开始写" }),
-    );
-    expect(
-      await within(dialog).findByRole("heading", { name: "故事 1" }),
-    ).toBeInTheDocument();
-    expect(
-      calls(requests, "POST", "/api/v1/collections/1/story")[0]?.body,
-    ).toEqual({
+    const posted = () => calls(requests, "POST", "/api/v1/collections/1/story");
+
+    await userEvent.click(await within(dialog).findByRole("button", { name: "开始写" }));
+    expect(await within(dialog).findByRole("heading", { name: "故事 1" })).toBeInTheDocument();
+    expect(posted()[0]?.body).toEqual({
       language: "zh-CN",
+      writer: "qwen3.6-35b-a3b",
+      notes_from: null,
     });
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "重新写一篇" }),
-    );
-    expect(
-      await within(dialog).findByRole("heading", { name: "故事 2" }),
-    ).toBeInTheDocument();
-    expect(within(dialog).getByRole("combobox", { name: "版本" })).toHaveValue(
-      "0",
-    );
+    expect(within(dialog).getByText("按天笔记（1 天）")).toBeInTheDocument();
+
+    // Only the story again, from the same notes.
+    await userEvent.click(within(dialog).getByRole("button", { name: "用这些笔记重新统稿" }));
+    expect(await within(dialog).findByRole("heading", { name: "故事 2" })).toBeInTheDocument();
+    expect(posted()[1]?.body).toMatchObject({ notes_from: 900 });
+
+    // DeepSeek: notes first, shown before anything is sent.
+    await userEvent.click(within(dialog).getByRole("radio", { name: /DeepSeek 统稿/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "重新写一篇" }));
+    const review = await within(dialog).findByRole("region", { name: "要发送的笔记" });
+    expect(within(review).getByText("看了雪山。")).toBeInTheDocument();
+    expect(posted()[2]?.body).toMatchObject({ writer: "deepseek" });
+    await userEvent.click(within(review).getByRole("button", { name: "发送到 DeepSeek 写成故事" }));
+    expect(await within(dialog).findByRole("heading", { name: "云端的故事" })).toBeInTheDocument();
+    expect(calls(requests, "POST", "/api/v1/collections/1/stories/902/cloud")[0]?.body).toEqual({
+      confirmed: true,
+    });
   });
 
-  it("asks to install the local model, or writes in the cloud", async () => {
+  it("asks to install the local model first", async () => {
     stubBackend({ assets, collections: [{ name: "Alps", assetIds: [1, 2] }] });
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: /Alps/ }));
-    await userEvent.click(
-      await screen.findByRole("button", { name: "生成旅行故事" }),
-    );
+    await userEvent.click(await screen.findByRole("button", { name: "生成旅行故事" }));
     const dialog = await screen.findByRole("dialog", { name: "旅行故事" });
-    await waitFor(() =>
-      expect(
-        within(dialog).getByRole("radio", { name: /云端/ }),
-      ).toHaveAttribute("aria-checked", "true"),
-    );
-    await userEvent.click(
-      within(dialog).getByRole("radio", { name: /本地模型/ }),
-    );
-    expect(within(dialog).getByText(/还没有安装本地模型/)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/还没有安装本地模型/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "开始写" })).toBeDisabled();
     expect(
-      within(dialog).getByRole("button", { name: "开始写" }),
-    ).toBeDisabled();
+      within(dialog).getByRole("button", { name: "让云端直接看图（最多 30 张）…" }),
+    ).toBeEnabled();
   });
 
   it("deletes a portfolio after confirmation", async () => {

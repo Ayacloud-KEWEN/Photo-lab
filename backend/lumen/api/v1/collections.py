@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Path, Request, Response, status
+from starlette.concurrency import run_in_threadpool
 
 from lumen.api.deps import Connection, wake_task_runner
 from lumen.schemas.ai import AnalysisResult
@@ -15,6 +16,7 @@ from lumen.schemas.collections import (
     CollectionList,
     CollectionRoute,
     CollectionUpdate,
+    StoryCloudRequest,
     StoryRequest,
     StoryStarted,
     TripSuggestions,
@@ -141,7 +143,10 @@ def write_story(
     conn: Connection, request: Request, body: StoryRequest, collection_id: int = Path(ge=1)
 ) -> StoryStarted:
     """Write a travel story with the local model (a task; nothing leaves this computer)."""
-    task_id = story.start(conn, request.app.state.settings, collection_id, body.language)
+    task_id = story.start(
+        conn, request.app.state.settings, collection_id, body.language, body.writer,
+        body.notes_from,
+    )  # fmt: skip
     wake_task_runner(request)
     return StoryStarted(task_id=task_id)
 
@@ -153,3 +158,20 @@ def write_story(
 def list_stories(conn: Connection, collection_id: int = Path(ge=1)) -> list[AnalysisResult]:
     """Travel stories written for this portfolio by the local model, newest first."""
     return service.stories(conn, collection_id)
+
+
+@router.post(
+    "/collections/{collection_id}/stories/{analysis_id}/cloud", response_model=AnalysisResult,
+    operation_id="writeCollectionStoryInCloud", responses=NOT_FOUND,
+)  # fmt: skip
+async def write_story_in_cloud(
+    conn: Connection,
+    body: StoryCloudRequest,
+    collection_id: int = Path(ge=1),
+    analysis_id: int = Path(ge=1),
+) -> AnalysisResult:
+    """Write the story with DeepSeek from the day notes the local model kept (the notes are
+    the only thing sent: no photo, no coordinates). Requires ``confirmed: true``."""
+    del body
+    story_id = await run_in_threadpool(story.write_with_cloud, conn, collection_id, analysis_id)
+    return next(s for s in service.stories(conn, collection_id) if s.id == story_id)

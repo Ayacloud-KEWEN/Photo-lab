@@ -911,6 +911,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/collections/{collection_id}/stories/{analysis_id}/cloud": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write Story In Cloud
+         * @description Write the story with DeepSeek from the day notes the local model kept (the notes are
+         *     the only thing sent: no photo, no coordinates). Requires ``confirmed: true``.
+         */
+        post: operations["writeCollectionStoryInCloud"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vlm/status": {
         parameters: {
             query?: never;
@@ -3764,6 +3785,15 @@ export interface components {
              */
             missing_count: number;
         };
+        /** StoryCloudRequest */
+        StoryCloudRequest: {
+            /**
+             * Confirmed
+             * @description Must be true: the user reviewed the day notes that will be sent
+             * @constant
+             */
+            confirmed: true;
+        };
         /** StoryRequest */
         StoryRequest: {
             /**
@@ -3772,6 +3802,18 @@ export interface components {
              * @enum {string}
              */
             language: "zh-CN" | "en" | "fr";
+            /**
+             * Writer
+             * @description Who writes the story from the day notes (DeepSeek: after the user saw them)
+             * @default qwen3.6-35b-a3b
+             * @enum {string}
+             */
+            writer: "qwen3.6-35b-a3b" | "qwen3.8-27b" | "deepseek";
+            /**
+             * Notes From
+             * @description Reuse the day notes of this story: only write it again
+             */
+            notes_from?: number | null;
         };
         /** StoryStarted */
         StoryStarted: {
@@ -6278,6 +6320,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalysisResult"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    writeCollectionStoryInCloud: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+                analysis_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoryCloudRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisResult"];
                 };
             };
             /** @description Not Found */

@@ -136,6 +136,19 @@ class CollectionRoute(BaseModel):
 
 class StoryRequest(BaseModel):
     language: Literal["zh-CN", "en", "fr"] = "zh-CN"
+    writer: Literal["qwen3.6-35b-a3b", "qwen3.8-27b", "deepseek"] = Field(
+        default="qwen3.6-35b-a3b",
+        description="Who writes the story from the day notes (DeepSeek: after the user saw them)",
+    )
+    notes_from: int | None = Field(
+        default=None, description="Reuse the day notes of this story: only write it again"
+    )
+
+
+class StoryCloudRequest(BaseModel):
+    confirmed: Literal[True] = Field(
+        description="Must be true: the user reviewed the day notes that will be sent"
+    )
 
 
 class StoryStarted(BaseModel):
