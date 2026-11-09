@@ -2433,6 +2433,11 @@ export interface components {
             cover_asset_id: number | null;
             /** @description The chosen cover, else the first item */
             cover: components["schemas"]["AssetSummary"] | null;
+            /**
+             * Samples
+             * @description Up to 2 more items (besides the cover), in order
+             */
+            samples?: components["schemas"]["AssetSummary"][];
             /** First Capture */
             first_capture: string | null;
             /** Last Capture */
@@ -2503,6 +2508,11 @@ export interface components {
             cover_asset_id: number | null;
             /** @description The chosen cover, else the first item */
             cover: components["schemas"]["AssetSummary"] | null;
+            /**
+             * Samples
+             * @description Up to 2 more items (besides the cover), in order
+             */
+            samples?: components["schemas"]["AssetSummary"][];
             /** First Capture */
             first_capture: string | null;
             /** Last Capture */

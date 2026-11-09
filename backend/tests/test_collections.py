@@ -176,6 +176,11 @@ def test_collection_lifecycle(library: tuple[TestClient, list[int]]) -> None:
     client.post("/api/v1/collections", json={"name": "Best of"})
     listed = client.get("/api/v1/collections").json()["items"]
     assert [(c["name"], c["item_count"]) for c in listed] == [("Alps", 2), ("Best of", 0)]
+    # A collage for the list: the items besides the cover.
+    assert [s["id"] for s in listed[0]["samples"]] == [
+        i["asset"]["id"] for i in after["items"] if i["asset"]["id"] != after["cover"]["id"]
+    ]
+    assert listed[1]["samples"] == []
 
     assert client.delete(f"/api/v1/collections/{collection}").status_code == 204
     assert client.get(f"/api/v1/collections/{collection}").status_code == 404

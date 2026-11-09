@@ -193,7 +193,9 @@ export function stubBackend(options: StubOptions = {}) {
       start_date: state.start_date, end_date: state.end_date,
       item_count: state.items.length, cover_asset_id: state.cover,
       cover: items.find((i) => i.asset!.id === state.cover)?.asset ?? items[0]?.asset ?? null,
-      first_capture: null, last_capture: null,
+      samples: items.filter((i) => i.asset!.id !== (state.cover ?? items[0]?.asset!.id)).slice(0, 2).map((i) => i.asset),
+      first_capture: items.map((i) => i.asset!.capture_time).sort()[0] ?? null,
+      last_capture: items.map((i) => i.asset!.capture_time).sort().at(-1) ?? null,
       created_at: "2026-11-03T08:00:00.000Z", updated_at: `2026-11-03T08:00:0${state.items.length % 10}.000Z`,
       items,
     }; // prettier-ignore

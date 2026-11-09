@@ -49,19 +49,41 @@ def _chunks(ids: list[int]) -> Iterable[list[int]]:
         yield ids[start : start + _CHUNK]
 
 
-def _to_model(row: sqlite3.Row, covers: dict[int, object]) -> Collection:
+def _to_model(
+    row: sqlite3.Row, covers: dict[int, object], samples: dict[int, list[int]] | None = None
+) -> Collection:
     cover = covers.get(row["cover_id"]) if row["cover_id"] is not None else None
+    sample_ids = (samples or {}).get(int(row["id"]), [])
     return Collection.model_validate(
         {
             **{key: row[key] for key in row.keys() if key in Collection.model_fields},  # noqa: SIM118 - sqlite3.Row
             "cover": cover,
+            "samples": [covers[i] for i in sample_ids if i in covers],
         }
     )
 
 
-def _covers(conn: sqlite3.Connection, rows: list[sqlite3.Row]) -> dict[int, object]:
+def _samples(conn: sqlite3.Connection, rows: list[sqlite3.Row]) -> dict[int, list[int]]:
+    """Per collection: its first items besides the cover (for the list's collage)."""
+    found: dict[int, list[int]] = {}
+    for row in rows:
+        found[int(row["id"])] = [
+            int(r[0])
+            for r in conn.execute(
+                "SELECT asset_id FROM collection_items WHERE collection_id = ? AND asset_id != ? "
+                "ORDER BY position, added_at LIMIT 2",
+                (row["id"], row["cover_id"] or 0),
+            )
+        ]
+    return found
+
+
+def _covers(
+    conn: sqlite3.Connection, rows: list[sqlite3.Row], samples: dict[int, list[int]] | None = None
+) -> dict[int, object]:
     ids = [int(row["cover_id"]) for row in rows if row["cover_id"] is not None]
-    return {summary.id: summary for summary in summaries_by_ids(conn, ids)}
+    ids += [i for values in (samples or {}).values() for i in values]
+    return {summary.id: summary for summary in summaries_by_ids(conn, list(dict.fromkeys(ids)))}
 
 
 def list_collections(conn: sqlite3.Connection) -> list[Collection]:
@@ -69,8 +91,9 @@ def list_collections(conn: sqlite3.Connection) -> list[Collection]:
     rows = conn.execute(
         f"{_SELECT} ORDER BY c.kind = 'album', COALESCE(c.start_date, '') DESC, c.name"
     ).fetchall()
-    covers = _covers(conn, rows)
-    return [_to_model(row, covers) for row in rows]
+    samples = _samples(conn, rows)
+    covers = _covers(conn, rows, samples)
+    return [_to_model(row, covers, samples) for row in rows]
 
 
 def _row(conn: sqlite3.Connection, collection_id: int) -> sqlite3.Row:
@@ -284,9 +307,7 @@ def collection_route(conn: sqlite3.Connection, collection_id: int) -> Collection
         except ValueError:
             continue
         points.append(
-            RoutePoint(
-                int(row["id"]), taken, row["latitude"], row["longitude"], row["place_id"]
-            )
+            RoutePoint(int(row["id"]), taken, row["latitude"], row["longitude"], row["place_id"])
         )
 
     def point(row: sqlite3.Row) -> MapPoint:

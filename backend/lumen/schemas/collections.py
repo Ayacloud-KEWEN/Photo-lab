@@ -55,6 +55,9 @@ class Collection(BaseModel):
     item_count: int
     cover_asset_id: int | None = Field(description="The chosen cover; null: the first item")
     cover: AssetSummary | None = Field(description="The chosen cover, else the first item")
+    samples: list[AssetSummary] = Field(
+        default_factory=list, description="Up to 2 more items (besides the cover), in order"
+    )
     first_capture: str | None
     last_capture: str | None
     created_at: str
