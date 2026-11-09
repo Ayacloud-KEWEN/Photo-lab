@@ -12,6 +12,7 @@ from lumen.core.errors import LumenError, NotFoundError
 from lumen.db.connection import GenerationCache, transaction, utc_now
 from lumen.library.route import RoutePoint, find_stops, route_km
 from lumen.library.trips import Shot, find_trips, spread
+from lumen.schemas.ai import AnalysisResult
 from lumen.schemas.assets import MapPoint, NamedPlace, PlaceName
 from lumen.schemas.collections import (
     Collection,
@@ -59,22 +60,29 @@ def _to_model(
             **{key: row[key] for key in row.keys() if key in Collection.model_fields},  # noqa: SIM118 - sqlite3.Row
             "cover": cover,
             "samples": [covers[i] for i in sample_ids if i in covers],
+            "collage_asset_ids": [row["collage1_asset_id"], row["collage2_asset_id"]],
         }
     )
 
 
 def _samples(conn: sqlite3.Connection, rows: list[sqlite3.Row]) -> dict[int, list[int]]:
-    """Per collection: its first items besides the cover (for the list's collage)."""
+    """Per collection: the two small photos of its collage, the chosen ones in their slot
+    and the first items besides the cover (and the chosen ones) in the others."""
     found: dict[int, list[int]] = {}
     for row in rows:
-        found[int(row["id"])] = [
+        chosen = [row["collage1_asset_id"], row["collage2_asset_id"]]
+        taken = {row["cover_id"], *chosen} - {None}
+        defaults = iter(
             int(r[0])
             for r in conn.execute(
-                "SELECT asset_id FROM collection_items WHERE collection_id = ? AND asset_id != ? "
-                "ORDER BY position, added_at LIMIT 2",
-                (row["id"], row["cover_id"] or 0),
+                "SELECT asset_id FROM collection_items WHERE collection_id = ? "
+                "ORDER BY position, added_at LIMIT ?",
+                (row["id"], len(taken) + 2),
             )
-        ]
+            if int(r[0]) not in taken
+        )
+        picked = [int(slot) if slot is not None else next(defaults, None) for slot in chosen]
+        found[int(row["id"])] = [asset_id for asset_id in picked if asset_id is not None]
     return found
 
 
@@ -111,7 +119,8 @@ def get_collection(conn: sqlite3.Connection, collection_id: int) -> CollectionDe
         (collection_id,),
     ).fetchall()
     summaries = {s.id: s for s in summaries_by_ids(conn, [int(i["asset_id"]) for i in items])}
-    collection = _to_model(row, _covers(conn, [row]))
+    samples = _samples(conn, [row])
+    collection = _to_model(row, _covers(conn, [row], samples), samples)
     return CollectionDetail(
         **collection.model_dump(),
         items=[
@@ -156,6 +165,16 @@ def update_collection(
         cover = changes.get("cover_asset_id")
         if cover is not None and not _contains(conn, collection_id, cover):
             raise LumenError("The cover must be in the collection", details={"asset_id": cover})
+        if "collage_asset_ids" in changes:
+            slots = list(changes.pop("collage_asset_ids") or [])
+            slots += [None] * (2 - len(slots))
+            for asset_id in slots:
+                if asset_id is not None and not _contains(conn, collection_id, asset_id):
+                    raise LumenError(
+                        "The collage photos must be in the collection",
+                        details={"asset_id": asset_id},
+                    )
+            changes["collage1_asset_id"], changes["collage2_asset_id"] = slots
         for key in ("start_date", "end_date"):
             if key in changes:
                 changes[key] = _date(changes[key])
@@ -233,12 +252,13 @@ def remove_items(conn: sqlite3.Connection, collection_id: int, asset_ids: list[i
                 f"AND asset_id IN ({','.join('?' * len(chunk))})",
                 (collection_id, *chunk),
             ).rowcount
-        conn.execute(
-            "UPDATE collections SET cover_asset_id = NULL, updated_at = ? WHERE id = ? "
-            "AND cover_asset_id IS NOT NULL AND cover_asset_id NOT IN "
-            "(SELECT asset_id FROM collection_items WHERE collection_id = ?)",
-            (utc_now(), collection_id, collection_id),
-        )
+        for column in ("cover_asset_id", "collage1_asset_id", "collage2_asset_id"):
+            conn.execute(
+                f"UPDATE collections SET {column} = NULL, updated_at = ? WHERE id = ? "
+                f"AND {column} IS NOT NULL AND {column} NOT IN "
+                "(SELECT asset_id FROM collection_items WHERE collection_id = ?)",
+                (utc_now(), collection_id, collection_id),
+            )
     return removed
 
 
@@ -450,3 +470,15 @@ def _trip_places(
         )
     countries = [names[code] for code in sorted(totals, key=lambda code: -totals[code])]
     return cities, countries
+
+
+def stories(conn: sqlite3.Connection, collection_id: int) -> list[AnalysisResult]:
+    from lumen.ai.cloud import _row_to_result
+
+    _row(conn, collection_id)
+    rows = conn.execute(
+        "SELECT * FROM ai_analysis WHERE kind = 'story' AND data IS NOT NULL "
+        "AND json_extract(data, '$.collection_id') = ? ORDER BY id DESC",
+        (collection_id,),
+    ).fetchall()
+    return [_row_to_result(conn, row, cached=True) for row in rows]

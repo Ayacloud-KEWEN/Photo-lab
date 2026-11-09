@@ -14,6 +14,7 @@ from lumen.services.mapweb import SEND_TASK as MAPWEB_SEND_TASK
 from lumen.services.mapweb import send_task as mapweb_send
 from lumen.tasks.runner import Handler
 from lumen.vlm.pipeline import VLM_DOWNLOAD_TASK, VLM_TASK, describe_assets, download
+from lumen.vlm.story import STORY_TASK, write_story
 
 HANDLERS: dict[str, Handler] = {
     SCAN_TASK: scan_storage_root,
@@ -30,4 +31,5 @@ HANDLERS: dict[str, Handler] = {
     LIVE_REPAIR_TASK: pair_live_photos,
     VLM_TASK: describe_assets,
     VLM_DOWNLOAD_TASK: download,
+    STORY_TASK: write_story,
 }

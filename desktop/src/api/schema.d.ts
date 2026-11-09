@@ -871,6 +871,46 @@ export interface paths {
         patch: operations["updateCollectionItem"];
         trace?: never;
     };
+    "/api/v1/collections/{collection_id}/story": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write Story
+         * @description Write a travel story with the local model (a task; nothing leaves this computer).
+         */
+        post: operations["writeCollectionStory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{collection_id}/stories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Stories
+         * @description Travel stories written for this portfolio by the local model, newest first.
+         */
+        get: operations["listCollectionStories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vlm/status": {
         parameters: {
             query?: never;
@@ -2435,9 +2475,14 @@ export interface components {
             cover: components["schemas"]["AssetSummary"] | null;
             /**
              * Samples
-             * @description Up to 2 more items (besides the cover), in order
+             * @description The collage's 2 small photos: chosen ones, else the first other items
              */
             samples?: components["schemas"]["AssetSummary"][];
+            /**
+             * Collage Asset Ids
+             * @description Chosen small photos (null: automatic)
+             */
+            collage_asset_ids?: (number | null)[];
             /** First Capture */
             first_capture: string | null;
             /** Last Capture */
@@ -2510,9 +2555,14 @@ export interface components {
             cover: components["schemas"]["AssetSummary"] | null;
             /**
              * Samples
-             * @description Up to 2 more items (besides the cover), in order
+             * @description The collage's 2 small photos: chosen ones, else the first other items
              */
             samples?: components["schemas"]["AssetSummary"][];
+            /**
+             * Collage Asset Ids
+             * @description Chosen small photos (null: automatic)
+             */
+            collage_asset_ids?: (number | null)[];
             /** First Capture */
             first_capture: string | null;
             /** Last Capture */
@@ -2595,6 +2645,11 @@ export interface components {
             end_date?: string | null;
             /** Cover Asset Id */
             cover_asset_id?: number | null;
+            /**
+             * Collage Asset Ids
+             * @description The two small photos; null slots: automatic
+             */
+            collage_asset_ids?: (number | null)[] | null;
         };
         /** CountryFacet */
         CountryFacet: {
@@ -3708,6 +3763,20 @@ export interface components {
              * @default 0
              */
             missing_count: number;
+        };
+        /** StoryRequest */
+        StoryRequest: {
+            /**
+             * Language
+             * @default zh-CN
+             * @enum {string}
+             */
+            language: "zh-CN" | "en" | "fr";
+        };
+        /** StoryStarted */
+        StoryStarted: {
+            /** Task Id */
+            task_id: number;
         };
         /** Suspects */
         Suspects: {
@@ -6126,6 +6195,90 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    writeCollectionStory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoryStarted"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listCollectionStories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisResult"][];
+                };
             };
             /** @description Not Found */
             404: {

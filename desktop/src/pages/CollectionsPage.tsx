@@ -15,7 +15,6 @@ import {
   Map as MapIcon,
   Plane,
   Plus,
-  Route,
   Search,
   Star,
   Trash2,
@@ -52,10 +51,8 @@ import type {
   RenditionVariant,
   TripSuggestion,
 } from "@/api/types";
-import {
-  CollectionMap,
-  type MapView,
-} from "@/components/collections/CollectionMap";
+import { CollectionMap } from "@/components/collections/CollectionMap";
+import { StoryDialog } from "@/components/collections/StoryDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLibraryState } from "@/library/state";
@@ -547,11 +544,12 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
   const { t, i18n } = useTranslation();
   const collection = useCollection(id);
   const actions = useCollectionActions();
-  const { openViewer, openExport, openCloud, openMapSend } = useLibraryState();
+  const { openViewer, openExport, openMapSend } = useLibraryState();
   const [order, setOrder] = useState<CollectionItem[]>([]);
   const [dragged, setDragged] = useState<number | null>(null);
-  const [view, setView] = useState<"photos" | MapView>("photos");
+  const [view, setView] = useState<"photos" | "map">("photos");
   const [choosingCover, setChoosingCover] = useState(false);
+  const [writingStory, setWritingStory] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [layout, setLayout] = usePref<Layout>(
     "lumen.collections.layout",
@@ -724,8 +722,8 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={ids.length < 2}
-                onClick={() => openCloud("story", ids.slice(0, 30))}
+                disabled={ids.length === 0}
+                onClick={() => setWritingStory(true)}
               >
                 <BookOpen /> {t("collections.story")}
               </Button>
@@ -752,21 +750,33 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
           </div>
         </div>
       </header>
+      {writingStory && (
+        <StoryDialog
+          collectionId={id}
+          assetIds={ids}
+          onClose={() => setWritingStory(false)}
+        />
+      )}
       {choosingCover && (
         <CoverPicker
           collection={data}
           items={order}
-          onPick={(cover) => {
-            setChoosingCover(false);
-            if (cover !== data.cover_asset_id)
-              update({ cover_asset_id: cover });
+          onPick={(slot, assetId) => {
+            if (slot === "cover") {
+              if (assetId !== data.cover_asset_id)
+                update({ cover_asset_id: assetId });
+              return;
+            }
+            const collage = [...(data.collage_asset_ids ?? [null, null])];
+            collage[slot] = assetId;
+            update({ collage_asset_ids: collage });
           }}
           onClose={() => setChoosingCover(false)}
         />
       )}
 
       {view !== "photos" ? (
-        <CollectionMap id={id} view={view} />
+        <CollectionMap id={id} />
       ) : (
         <>
           {order.length > 0 && (
@@ -1057,14 +1067,13 @@ function ViewSwitch({
   value,
   onChange,
 }: {
-  value: "photos" | MapView;
-  onChange: (view: "photos" | MapView) => void;
+  value: "photos" | "map";
+  onChange: (view: "photos" | "map") => void;
 }) {
   const { t } = useTranslation();
   const views = [
     { id: "photos", icon: Grid3x3, label: t("collections.viewPhotos") },
     { id: "map", icon: MapIcon, label: t("collections.viewMap") },
-    { id: "route", icon: Route, label: t("collections.viewRoute") },
   ] as const;
   return (
     <div
@@ -1092,7 +1101,12 @@ function ViewSwitch({
   );
 }
 
-/** Pick the collection's cover among its items (or go back to the first item). */
+type CoverSlot = "cover" | 0 | 1;
+
+/**
+ * Pick the collection's cover and the two small photos of its collage among its items;
+ * each slot can go back to automatic (the first items).
+ */
 function CoverPicker({
   collection,
   items,
@@ -1101,13 +1115,34 @@ function CoverPicker({
 }: {
   collection: CollectionDetail;
   items: CollectionItem[];
-  onPick: (assetId: number | null) => void;
+  onPick: (slot: CoverSlot, assetId: number | null) => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => rootRef.current?.focus(), []);
-  const current = collection.cover?.id;
+  const [slot, setSlot] = useState<CoverSlot>("cover");
+  const chosen = collection.collage_asset_ids ?? [null, null];
+  const samples = collection.samples ?? [];
+  // What each slot shows now (chosen, else automatic).
+  const shown: Record<string, AssetSummary | undefined> = {
+    cover: collection.cover ?? undefined,
+    0: samples[0],
+    1: samples[1],
+  };
+  const slots: { id: CoverSlot; label: string }[] = [
+    { id: "cover", label: t("collections.slotCover") },
+    { id: 0, label: t("collections.slotSmall", { n: 1 }) },
+    { id: 1, label: t("collections.slotSmall", { n: 2 }) },
+  ];
+  const isChosen =
+    slot === "cover"
+      ? collection.cover_asset_id !== null
+      : chosen[slot] !== null;
+  const badge = (assetId: number) =>
+    slots
+      .filter((s) => shown[String(s.id)]?.id === assetId)
+      .map((s) => s.label);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
@@ -1143,38 +1178,81 @@ function CoverPicker({
             <X />
           </Button>
         </div>
+        <div
+          role="group"
+          aria-label={t("collections.coverSlots")}
+          className="flex shrink-0 items-end gap-3 border-b px-5 py-3"
+        >
+          {slots.map((option) => {
+            const asset = shown[String(option.id)];
+            const active = slot === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setSlot(option.id)}
+                className={cn(
+                  "flex flex-col items-center gap-1 rounded-md p-1 text-[11.5px] text-muted-foreground hover:text-foreground",
+                  active && "bg-white/10 text-foreground",
+                )}
+              >
+                <span
+                  className={cn(
+                    "block overflow-hidden rounded border-2 border-transparent bg-black/40",
+                    option.id === "cover" ? "h-16 w-24" : "h-12 w-16",
+                    active && "border-highlight",
+                  )}
+                >
+                  {asset && <Thumb asset={asset} decorative />}
+                </span>
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
         {/* The grid scrolls inside its own box: as the scroll box itself its rows would shrink. */}
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-2">
-            {items.map((item) => (
-              <button
-                key={item.asset.id}
-                type="button"
-                aria-label={item.asset.file_name}
-                aria-pressed={current === item.asset.id}
-                onClick={() => onPick(item.asset.id)}
-                className={cn(
-                  "relative aspect-[4/3] overflow-hidden rounded-md border-2 border-transparent bg-black/40 hover:border-white/40",
-                  current === item.asset.id &&
-                    "border-highlight hover:border-highlight",
-                )}
-              >
-                <Thumb asset={item.asset} />
-                {current === item.asset.id && (
-                  <Star className="absolute right-1.5 top-1.5 size-4 fill-highlight text-highlight drop-shadow" />
-                )}
-              </button>
-            ))}
+            {items.map((item) => {
+              const current = shown[String(slot)]?.id === item.asset.id;
+              const labels = badge(item.asset.id);
+              return (
+                <button
+                  key={item.asset.id}
+                  type="button"
+                  aria-label={item.asset.file_name}
+                  aria-pressed={current}
+                  onClick={() => onPick(slot, item.asset.id)}
+                  className={cn(
+                    "relative aspect-[4/3] overflow-hidden rounded-md border-2 border-transparent bg-black/40 hover:border-white/40",
+                    current && "border-highlight hover:border-highlight",
+                  )}
+                >
+                  <Thumb asset={item.asset} />
+                  {labels.length > 0 && (
+                    <span className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded bg-black/65 px-1.5 text-[10.5px] text-white">
+                      {current && (
+                        <Star className="size-3 fill-highlight text-highlight" />
+                      )}
+                      {labels.join(" · ")}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2 border-t px-5 py-3">
           <Button
             variant="ghost"
             size="sm"
-            disabled={collection.cover_asset_id === null}
-            onClick={() => onPick(null)}
+            disabled={!isChosen}
+            onClick={() => onPick(slot, null)}
           >
-            {t("collections.coverDefault")}
+            {slot === "cover"
+              ? t("collections.coverDefault")
+              : t("collections.collageDefault")}
           </Button>
           <Button
             variant="secondary"

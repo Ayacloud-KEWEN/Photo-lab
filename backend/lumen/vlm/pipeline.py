@@ -71,6 +71,7 @@ def vlm_folder(conn: sqlite3.Connection, settings: Settings) -> Path:
 class Reader(Protocol):
     def start(self, model_id: str) -> None: ...
     def read(self, image: Image.Image) -> describing.Description: ...
+    def write(self, prompt: str) -> tuple[str, int, int]: ...
     def stop(self) -> None: ...
 
 
@@ -95,6 +96,13 @@ class LlamaReader:
     def read(self, image: Image.Image) -> describing.Description:
         assert self.server is not None
         return describing.describe(self.server.url, image)
+
+    def write(self, prompt: str) -> tuple[str, int, int]:
+        """A text answer (story.py): (text, prompt tokens, output tokens)."""
+        from lumen.vlm.story import chat
+
+        assert self.server is not None
+        return chat(self.server.url, prompt)
 
     def stop(self) -> None:
         if self.server is not None:

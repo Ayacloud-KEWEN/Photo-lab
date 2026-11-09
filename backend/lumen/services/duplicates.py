@@ -588,9 +588,8 @@ def _merge(conn: sqlite3.Connection, keep: int, drops: list[int], now: str) -> N
             """,
             (keep, drop),
         )
-        conn.execute(
-            "UPDATE collections SET cover_asset_id = ? WHERE cover_asset_id = ?", (keep, drop)
-        )
+        for column in ("cover_asset_id", "collage1_asset_id", "collage2_asset_id"):
+            conn.execute(f"UPDATE collections SET {column} = ? WHERE {column} = ?", (keep, drop))
         conn.execute(
             "UPDATE media_files SET asset_id = ?, updated_at = ? WHERE asset_id = ?",
             (keep, now, drop),

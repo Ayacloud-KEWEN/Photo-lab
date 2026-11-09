@@ -41,6 +41,9 @@ class CollectionUpdate(_Dates):
     start_date: date | None = None
     end_date: date | None = None
     cover_asset_id: int | None = None
+    collage_asset_ids: list[int | None] | None = Field(
+        default=None, max_length=2, description="The two small photos; null slots: automatic"
+    )
 
 
 class Collection(BaseModel):
@@ -56,7 +59,12 @@ class Collection(BaseModel):
     cover_asset_id: int | None = Field(description="The chosen cover; null: the first item")
     cover: AssetSummary | None = Field(description="The chosen cover, else the first item")
     samples: list[AssetSummary] = Field(
-        default_factory=list, description="Up to 2 more items (besides the cover), in order"
+        default_factory=list,
+        description="The collage's 2 small photos: chosen ones, else the first other items",
+    )
+    collage_asset_ids: list[int | None] = Field(
+        default_factory=lambda: list[int | None]([None, None]),
+        description="Chosen small photos (null: automatic)",
     )
     first_capture: str | None
     last_capture: str | None
@@ -124,3 +132,11 @@ class CollectionRoute(BaseModel):
     distance_km: float = Field(description="Straight lines from stop to stop")
     days: int = Field(description="Calendar days from the first to the last located photo")
     unlocated: int = Field(description="Photos of the collection without a location")
+
+
+class StoryRequest(BaseModel):
+    language: Literal["zh-CN", "en", "fr"] = "zh-CN"
+
+
+class StoryStarted(BaseModel):
+    task_id: int

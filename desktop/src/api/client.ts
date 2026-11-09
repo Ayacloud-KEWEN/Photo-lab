@@ -195,6 +195,9 @@ export const api = {
   listTasks: (conn: BackendConnection, options: { active?: boolean; limit?: number } = {}) =>
     request<TaskList>(conn, "GET", `/api/v1/tasks${toSearchParams({ ...options })}`),
 
+  getTask: (conn: BackendConnection, id: number) =>
+    request<Task>(conn, "GET", `/api/v1/tasks/${id}`),
+
   cancelTask: (conn: BackendConnection, id: number) =>
     request<Task>(conn, "POST", `/api/v1/tasks/${id}/cancel`),
 
@@ -251,6 +254,12 @@ export const api = {
 
   getCollection: (conn: BackendConnection, id: number) =>
     request<CollectionDetail>(conn, "GET", `/api/v1/collections/${id}`),
+
+  writeCollectionStory: (conn: BackendConnection, id: number, language: string) =>
+    request<{ task_id: number }>(conn, "POST", `/api/v1/collections/${id}/story`, { language }),
+
+  listCollectionStories: (conn: BackendConnection, id: number) =>
+    request<AnalysisResult[]>(conn, "GET", `/api/v1/collections/${id}/stories`),
 
   getCollectionRoute: (conn: BackendConnection, id: number) =>
     request<CollectionRoute>(conn, "GET", `/api/v1/collections/${id}/route`),

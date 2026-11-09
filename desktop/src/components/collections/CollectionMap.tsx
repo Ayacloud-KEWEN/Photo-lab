@@ -1,4 +1,4 @@
-import { Loader2, MapPinOff } from "lucide-react";
+import { Loader2, MapPinOff, PanelLeft, Route } from "lucide-react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -14,14 +14,39 @@ import { cn } from "@/lib/utils";
 // MapLibre is large: load it with the first map.
 const PhotoMap = lazy(() => import("@/components/map/PhotoMap"));
 
-export type MapView = "map" | "route";
+const PREF = "lumen.collections.mapRoute";
 
-/** A collection's photos on the map, or its route from stop to stop with a list of days. */
-export function CollectionMap({ id, view }: { id: number; view: MapView }) {
+function readFlag(key: string, fallback: boolean) {
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : value === "1";
+  } catch {
+    return fallback;
+  }
+}
+function writeFlag(key: string, value: boolean) {
+  try {
+    localStorage.setItem(key, value ? "1" : "0");
+  } catch {
+    // Not remembered: fine.
+  }
+}
+
+/**
+ * A collection's photos on the map. With two stops or more it also draws the route from
+ * stop to stop and lists them by day; both can be hidden (remembered).
+ */
+export function CollectionMap({ id }: { id: number }) {
   const { t } = useTranslation();
   const route = useCollectionRoute(id);
   const [focus, setFocus] = useState<MapFocus | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
+  const [showRoute, setShowRoute] = useState(() =>
+    readFlag(`${PREF}.line`, true),
+  );
+  const [showList, setShowList] = useState(() =>
+    readFlag(`${PREF}.list`, true),
+  );
   const data = route.data;
 
   if (!data) {
@@ -32,6 +57,7 @@ export function CollectionMap({ id, view }: { id: number; view: MapView }) {
     );
   }
   const empty = data.points.length === 0;
+  const hasRoute = data.stops.length >= 2;
   const pick = (stop: RouteStop, index: number) => {
     setSelected(index);
     setFocus({
@@ -41,10 +67,25 @@ export function CollectionMap({ id, view }: { id: number; view: MapView }) {
       nonce: Date.now(),
     });
   };
+  const toggle = (
+    value: boolean,
+    set: (next: boolean) => void,
+    key: string,
+  ) => {
+    set(!value);
+    writeFlag(`${PREF}.${key}`, !value);
+  };
+  const chip = (on: boolean) =>
+    cn(
+      "pointer-events-auto flex h-7 items-center gap-1.5 rounded-md border border-white/10 bg-background/85 px-2.5 text-[12px] text-muted-foreground shadow hover:text-foreground",
+      on && "text-foreground",
+    );
 
   return (
     <div className="flex min-h-0 flex-1">
-      {view === "route" && !empty && <RouteList route={data} selected={selected} onPick={pick} />}
+      {hasRoute && showList && (
+        <RouteList route={data} selected={selected} onPick={pick} />
+      )}
       <div className="relative min-h-0 min-w-0 flex-1">
         <Suspense
           fallback={
@@ -54,11 +95,11 @@ export function CollectionMap({ id, view }: { id: number; view: MapView }) {
           }
         >
           <PhotoMap
-            key={view}
+            key={hasRoute && showRoute ? "route" : "map"}
             points={data.points}
             places={data.places}
-            stops={view === "route" ? data.stops : undefined}
-            focus={view === "route" ? focus : null}
+            stops={hasRoute && showRoute ? data.stops : undefined}
+            focus={focus}
           >
             {(empty || data.unlocated > 0) && (
               <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
@@ -72,6 +113,28 @@ export function CollectionMap({ id, view }: { id: number; view: MapView }) {
             )}
           </PhotoMap>
         </Suspense>
+        {hasRoute && (
+          <div className="pointer-events-none absolute left-3 top-3 flex gap-1.5">
+            <button
+              type="button"
+              aria-pressed={showList}
+              onClick={() => toggle(showList, setShowList, "list")}
+              className={chip(showList)}
+            >
+              <PanelLeft className="size-3.5" />
+              {t("collections.showStops")}
+            </button>
+            <button
+              type="button"
+              aria-pressed={showRoute}
+              onClick={() => toggle(showRoute, setShowRoute, "line")}
+              className={chip(showRoute)}
+            >
+              <Route className="size-3.5" />
+              {t("collections.showRoute")}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -123,7 +186,10 @@ function RouteList({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto py-2">
         {days.map((day) => (
-          <section key={day.day} aria-label={t("collections.routeDay", { day: day.day })}>
+          <section
+            key={day.day}
+            aria-label={t("collections.routeDay", { day: day.day })}
+          >
             <h3 className="flex items-center gap-2 px-4 pb-1 pt-3 text-[11.5px] text-muted-foreground">
               <span
                 className="size-2 rounded-full"
@@ -138,7 +204,10 @@ function RouteList({
               {day.stops.map(({ stop, index }) => {
                 const start = time(stop.start);
                 // A stop over several days (a stay) shows the date it ends on.
-                const end = time(stop.end, stop.end.slice(0, 10) !== stop.start.slice(0, 10));
+                const end = time(
+                  stop.end,
+                  stop.end.slice(0, 10) !== stop.start.slice(0, 10),
+                );
                 return (
                   <li key={index}>
                     <button

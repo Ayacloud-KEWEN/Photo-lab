@@ -201,6 +201,38 @@ describe("CollectionsPage", () => {
         cover_asset_id: 3,
       }),
     );
+    // The small photos of the collage: a slot, then a photo; then back to automatic.
+    await userEvent.click(
+      within(picker).getByRole("button", { name: /小图 2/ }),
+    );
+    await userEvent.click(
+      within(picker).getByRole("button", { name: "IMG_1.JPG" }),
+    );
+    await waitFor(() =>
+      expect(
+        calls(requests, "PATCH", "/api/v1/collections/1").at(-1)?.body,
+      ).toEqual({
+        collage_asset_ids: [null, 1],
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        within(picker).getByRole("button", { name: "IMG_1.JPG" }),
+      ).toHaveAttribute("aria-pressed", "true"),
+    );
+    await userEvent.click(
+      within(picker).getByRole("button", { name: "恢复自动" }),
+    );
+    await waitFor(() =>
+      expect(
+        calls(requests, "PATCH", "/api/v1/collections/1").at(-1)?.body,
+      ).toEqual({
+        collage_asset_ids: [null, null],
+      }),
+    );
+    await userEvent.click(
+      within(picker).getAllByRole("button", { name: "关闭" })[0]!,
+    );
     expect(
       screen.queryByRole("dialog", { name: "选择封面" }),
     ).not.toBeInTheDocument();
@@ -236,14 +268,16 @@ describe("CollectionsPage", () => {
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: /Alps/ }));
     const views = await screen.findByRole("tablist", { name: "视图" });
+    expect(
+      within(views).queryByRole("tab", { name: "路线" }),
+    ).not.toBeInTheDocument();
 
+    // One map: the photos, the route between the stops and the stops by day.
     await userEvent.click(within(views).getByRole("tab", { name: "地图" }));
-    const map = await screen.findByTestId("photo-map");
+    const map = await screen.findByTestId("route-map");
     expect(map).toHaveTextContent("points:1,3");
+    expect(map).toHaveTextContent("stops:2");
     expect(map).toHaveTextContent("1 张没有位置信息，未显示在地图上");
-
-    await userEvent.click(within(views).getByRole("tab", { name: "路线" }));
-    expect(await screen.findByTestId("route-map")).toHaveTextContent("stops:2");
     const list = screen.getByRole("complementary", { name: "路线" });
     expect(
       within(list).getByText("2 个地点 · 2 天 · 约 1,234 公里"),
@@ -256,6 +290,18 @@ describe("CollectionsPage", () => {
     expect(
       within(list).getByRole("region", { name: "第 2 天" }),
     ).toHaveTextContent("未命名地点");
+
+    // The route and the list can be hidden.
+    await userEvent.click(screen.getByRole("button", { name: "显示路线" }));
+    expect(await screen.findByTestId("photo-map")).toHaveTextContent(
+      "points:1,3",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "地点列表" }));
+    expect(
+      screen.queryByRole("complementary", { name: "路线" }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "显示路线" }));
+    await userEvent.click(screen.getByRole("button", { name: "地点列表" }));
 
     await userEvent.click(within(views).getByRole("tab", { name: "照片" }));
     expect(await screen.findByRole("list")).toBeInTheDocument();
@@ -366,6 +412,67 @@ describe("CollectionsPage", () => {
         within(screen.getByRole("list")).getAllByRole("listitem"),
       ).toHaveLength(1),
     );
+  });
+
+  it("writes a travel story with the local model", async () => {
+    const { requests } = stubBackend({
+      assets,
+      collections: [{ name: "Alps", kind: "trip", assetIds: [1, 2] }],
+      vlm: { installed: true },
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /Alps/ }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "生成旅行故事" }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "旅行故事" });
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole("radio", { name: /本地模型/ }),
+      ).toHaveAttribute("aria-checked", "true"),
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "开始写" }),
+    );
+    expect(
+      await within(dialog).findByRole("heading", { name: "故事 1" }),
+    ).toBeInTheDocument();
+    expect(
+      calls(requests, "POST", "/api/v1/collections/1/story")[0]?.body,
+    ).toEqual({
+      language: "zh-CN",
+    });
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "重新写一篇" }),
+    );
+    expect(
+      await within(dialog).findByRole("heading", { name: "故事 2" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("combobox", { name: "版本" })).toHaveValue(
+      "0",
+    );
+  });
+
+  it("asks to install the local model, or writes in the cloud", async () => {
+    stubBackend({ assets, collections: [{ name: "Alps", assetIds: [1, 2] }] });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /Alps/ }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "生成旅行故事" }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "旅行故事" });
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole("radio", { name: /云端/ }),
+      ).toHaveAttribute("aria-checked", "true"),
+    );
+    await userEvent.click(
+      within(dialog).getByRole("radio", { name: /本地模型/ }),
+    );
+    expect(within(dialog).getByText(/还没有安装本地模型/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "开始写" }),
+    ).toBeDisabled();
   });
 
   it("deletes a portfolio after confirmation", async () => {

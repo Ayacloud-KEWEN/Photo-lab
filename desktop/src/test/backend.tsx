@@ -183,6 +183,7 @@ export function stubBackend(options: StubOptions = {}) {
       },
     ]),
   ); // prettier-ignore
+  const stories: Record<string, unknown>[] = [];
   const collectionJson = (state: CollectionState) => {
     const items = state.items
       .map((item) => ({ asset: assets.find((a) => a.id === item.id), caption: item.caption }))
@@ -193,7 +194,15 @@ export function stubBackend(options: StubOptions = {}) {
       start_date: state.start_date, end_date: state.end_date,
       item_count: state.items.length, cover_asset_id: state.cover,
       cover: items.find((i) => i.asset!.id === state.cover)?.asset ?? items[0]?.asset ?? null,
-      samples: items.filter((i) => i.asset!.id !== (state.cover ?? items[0]?.asset!.id)).slice(0, 2).map((i) => i.asset),
+      collage_asset_ids: state.collage ?? [null, null],
+      samples: (() => {
+        const chosen = state.collage ?? [null, null];
+        const taken = [state.cover ?? items[0]?.asset!.id, ...chosen];
+        const auto = items.map((i) => i.asset!).filter((a) => !taken.includes(a.id));
+        return chosen
+          .map((id) => (id === null ? auto.shift() : assets.find((a) => a.id === id)))
+          .filter(Boolean);
+      })(),
       first_capture: items.map((i) => i.asset!.capture_time).sort()[0] ?? null,
       last_capture: items.map((i) => i.asset!.capture_time).sort().at(-1) ?? null,
       created_at: "2026-11-03T08:00:00.000Z", updated_at: `2026-11-03T08:00:0${state.items.length % 10}.000Z`,
@@ -236,6 +245,8 @@ export function stubBackend(options: StubOptions = {}) {
       const changes = body as Partial<CollectionState> & { cover_asset_id?: number };
       Object.assign(state, changes);
       if (changes.cover_asset_id !== undefined) state.cover = changes.cover_asset_id;
+      const collage = (body as { collage_asset_ids?: (number | null)[] }).collage_asset_ids;
+      if (collage) state.collage = collage;
       return json(collectionJson(state));
     }
     if (rest === "" && method === "DELETE") {
@@ -266,6 +277,19 @@ export function stubBackend(options: StubOptions = {}) {
         })),
       }); // prettier-ignore
     }
+    if (rest === "/story" && method === "POST") {
+      stories.unshift({
+        id: 900 + stories.length, kind: "story", provider: "local", model: "qwen3.6-35b-a3b",
+        language: "zh-CN", vision: false, cached: true, data: { collection_id: state.id },
+        result: `# 故事 ${stories.length + 1}
+
+雪山和湖。`,
+        asset_ids: state.items.map((item) => item.id), input_tokens: 100, output_tokens: 50,
+        created_at: "2026-11-09T10:00:00.000Z",
+      }); // prettier-ignore
+      return json({ task_id: 500 + stories.length }, 202);
+    }
+    if (rest === "/stories") return json(stories);
     if (rest === "/order") {
       state.items = ids.map((id) => state.items.find((item) => item.id === id)!);
       return json({ changed: ids.length });
@@ -318,6 +342,14 @@ export function stubBackend(options: StubOptions = {}) {
     requests.push({ method, url, body });
     const path = url.pathname;
 
+    if (/^\/api\/v1\/tasks\/5\d\d$/.test(path)) {
+      return json({
+        id: Number(path.split("/").at(-1)), kind: "vlm_collection_story", status: "succeeded", storage_root_id: null,
+        progress_current: 3, progress_total: 3, attempts: 1, max_attempts: 1,
+        cancel_requested: false, error: null, result: {}, created_at: "", updated_at: "",
+        started_at: null, finished_at: null,
+      }); // prettier-ignore
+    }
     if (path.startsWith("/api/v1/tasks")) return json({ items: options.tasks ?? [] });
     if (path === "/api/v1/settings") {
       return json({
@@ -754,6 +786,7 @@ interface CollectionState {
   start_date: string | null;
   end_date: string | null;
   cover: number | null;
+  collage?: (number | null)[];
   items: { id: number; caption: string | null }[];
 }
 

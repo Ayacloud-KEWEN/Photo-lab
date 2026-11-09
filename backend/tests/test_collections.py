@@ -277,3 +277,29 @@ def test_collection_route(library: tuple[TestClient, list[int]], settings: Setti
         "points": [], "places": [], "stops": [], "distance_km": 0, "days": 0, "unlocated": 0,
     }  # fmt: skip
     assert client.get("/api/v1/collections/999/route").status_code == 404
+
+
+def test_collage_photos_can_be_chosen(library: tuple[TestClient, list[int]]) -> None:
+    client, ids = library
+    created = client.post(
+        "/api/v1/collections", json={"name": "Picks", "asset_ids": ids[:-1]}
+    ).json()
+    url = f"/api/v1/collections/{created['id']}"
+    assert [s["id"] for s in created["samples"]] == [ids[1], ids[2]]
+    assert created["collage_asset_ids"] == [None, None]
+
+    # The second slot chosen; the first stays automatic (and skips the chosen one).
+    picked = client.patch(url, json={"collage_asset_ids": [None, ids[1]]}).json()
+    assert picked["collage_asset_ids"] == [None, ids[1]]
+    assert [s["id"] for s in picked["samples"]] == [ids[2], ids[1]]
+    listed = client.get("/api/v1/collections").json()["items"][0]
+    assert [s["id"] for s in listed["samples"]] == [ids[2], ids[1]]
+
+    outside = client.patch(url, json={"collage_asset_ids": [ids[-1], None]})
+    assert outside.status_code == 400
+
+    # A chosen photo that leaves the collection goes back to automatic.
+    client.post(f"{url}/items/remove", json={"asset_ids": [ids[1]]})
+    after = client.get(url).json()
+    assert after["collage_asset_ids"] == [None, None]
+    assert [s["id"] for s in after["samples"]] == [ids[2], ids[3]]

@@ -65,6 +65,8 @@ export const queryKeys = {
   collections: ["library", "collections"] as const,
   collection: (id: number) => ["library", "collections", id] as const,
   collectionRoute: (id: number) => ["library", "collections", id, "route"] as const,
+  collectionStories: (id: number) => ["library", "collections", id, "stories"] as const,
+  task: (id: number) => ["tasks", id] as const,
   tripSuggestions: ["library", "collections", "suggestions"] as const,
   // Under "library": flag changes (batch / asset updates) refresh them.
   similarGroups: (params: SimilarParams) => ["library", "cull", "similar", params] as const,
@@ -472,6 +474,32 @@ export function useMapWebActions() {
       onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.tasks }),
     }),
   };
+}
+
+/** Travel stories the local model wrote for a collection, newest first. */
+export function useCollectionStories(id: number) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.collectionStories(id),
+    queryFn: () => api.listCollectionStories(requireConnection(conn), id),
+    enabled: conn !== null,
+  });
+}
+
+/** One task, polled until it has finished. */
+export function useTask(id: number | null) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.task(id ?? 0),
+    queryFn: () => api.getTask(requireConnection(conn), id!),
+    enabled: conn !== null && id !== null,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "succeeded" || status === "failed" || status === "cancelled"
+        ? false
+        : 1000;
+    },
+  });
 }
 
 /** Where a collection's photos were taken, in capture order, grouped into stops. */

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Path, Response, status
+from fastapi import APIRouter, Path, Request, Response, status
 
-from lumen.api.deps import Connection
+from lumen.api.deps import Connection, wake_task_runner
+from lumen.schemas.ai import AnalysisResult
 from lumen.schemas.collections import (
     CollectionAssets,
     CollectionChange,
@@ -14,10 +15,13 @@ from lumen.schemas.collections import (
     CollectionList,
     CollectionRoute,
     CollectionUpdate,
+    StoryRequest,
+    StoryStarted,
     TripSuggestions,
 )
 from lumen.schemas.common import ErrorResponse
 from lumen.services import collections as service
+from lumen.vlm import story
 
 router = APIRouter(tags=["collections"])
 
@@ -126,3 +130,26 @@ def update_item(
     """Set (or clear) an item's caption."""
     service.set_caption(conn, collection_id, asset_id, body.caption)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/collections/{collection_id}/story", response_model=StoryStarted,
+    status_code=status.HTTP_202_ACCEPTED, operation_id="writeCollectionStory",
+    responses=NOT_FOUND,
+)  # fmt: skip
+def write_story(
+    conn: Connection, request: Request, body: StoryRequest, collection_id: int = Path(ge=1)
+) -> StoryStarted:
+    """Write a travel story with the local model (a task; nothing leaves this computer)."""
+    task_id = story.start(conn, request.app.state.settings, collection_id, body.language)
+    wake_task_runner(request)
+    return StoryStarted(task_id=task_id)
+
+
+@router.get(
+    "/collections/{collection_id}/stories", response_model=list[AnalysisResult],
+    operation_id="listCollectionStories", responses=NOT_FOUND,
+)  # fmt: skip
+def list_stories(conn: Connection, collection_id: int = Path(ge=1)) -> list[AnalysisResult]:
+    """Travel stories written for this portfolio by the local model, newest first."""
+    return service.stories(conn, collection_id)

@@ -148,6 +148,12 @@ class FakeReader:
             "蓝色的海湾和古城", "Stari Grad Kotor", ("海湾", "古城"), 900, 30, 2.0
         )
 
+    prompts: ClassVar[list[str]] = []
+
+    def write(self, prompt: str) -> tuple[str, int, int]:
+        FakeReader.prompts.append(prompt)
+        return "# 海边的两天\n\n先是日落，然后是古城。", 1200, 300
+
     def stop(self) -> None:
         pass
 
@@ -289,3 +295,38 @@ def test_a_request_made_while_reading_is_read_next(vlm_app: tuple[TestClient, Pa
     red = client.get(f"/api/v1/assets/{ids['red.jpg']}").json()["description"]
     assert red["fine"] is True
     assert client.get("/api/v1/vlm/status").json()["described"] == 3
+
+
+def test_local_travel_story(vlm_app: tuple[TestClient, Path]) -> None:
+    client, folder = vlm_app
+    db = client.app.state.db  # type: ignore[attr-defined]
+    ids = {item["file_name"]: item["id"] for item in client.get("/api/v1/assets").json()["items"]}
+    collection = client.post(
+        "/api/v1/collections",
+        json={"name": "Kotor", "kind": "trip", "asset_ids": [ids["blue.jpg"], ids["red.jpg"]]},
+    ).json()["id"]
+    client.patch(
+        f"/api/v1/collections/{collection}/items/{ids['red.jpg']}", json={"caption": "第一晚"}
+    )
+    url = f"/api/v1/collections/{collection}"
+
+    # No model in the default folder: refused before anything is queued.
+    assert client.post(f"{url}/story", json={}).status_code == 400
+
+    client.patch("/api/v1/settings", json={"vlm_folder": str(folder)})
+    FakeReader.prompts = []
+    started = client.post(f"{url}/story", json={"language": "zh-CN"})
+    assert started.status_code == 202
+    wait_idle(db)
+    task = client.get(f"/api/v1/tasks/{started.json()['task_id']}").json()
+    assert task["status"] == "succeeded", task
+    assert task["result"]["read"] == 2  # the photos were read first
+
+    # The model got what it saw in the photos, in capture order, with the captions.
+    prompt = FakeReader.prompts[-1]
+    assert prompt.index("红色的日落") < prompt.index("蓝色的海湾")
+    assert "说明：第一晚" in prompt and "Stari Grad Kotor" in prompt
+    stories = client.get(f"{url}/stories").json()
+    assert len(stories) == 1
+    assert stories[0]["provider"] == "local" and stories[0]["result"].startswith("# 海边的两天")
+    assert stories[0]["asset_ids"] == [ids["red.jpg"], ids["blue.jpg"]]
