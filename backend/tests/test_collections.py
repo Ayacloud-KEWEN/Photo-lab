@@ -303,3 +303,66 @@ def test_collage_photos_can_be_chosen(library: tuple[TestClient, list[int]]) -> 
     after = client.get(url).json()
     assert after["collage_asset_ids"] == [None, None]
     assert [s["id"] for s in after["samples"]] == [ids[2], ids[3]]
+
+
+def test_travel_diary(library: tuple[TestClient, list[int]]) -> None:
+    client, ids = library
+    created = client.post(
+        "/api/v1/collections", json={"name": "Diary", "asset_ids": [ids[3], ids[1], ids[2]]}
+    ).json()
+    url = f"/api/v1/collections/{created['id']}/diary"
+    days = client.get(url).json()["days"]
+    # By capture day (a day apart), whatever the portfolio's order.
+    assert [d["asset_ids"] for d in days] == [[ids[1]], [ids[2]], [ids[3]]]
+    assert [d["number"] for d in days] == [1, 2, 3]
+    first, second = days[0]["date"], days[1]["date"]
+    assert first < second and days[0]["intro"] is None and days[0]["notes"] == []
+
+    assert client.put(url, json={"day": first, "text": " 出发 "}).status_code == 204
+    client.put(url, json={"day": second, "after_asset_id": ids[2], "text": "傍晚下雨"})
+    outside = client.put(url, json={"day": first, "after_asset_id": ids[0], "text": "x"})
+    assert outside.status_code == 400
+    days = client.get(url).json()["days"]
+    assert days[0]["intro"] == "出发"
+    assert days[1]["notes"] == [{"after_asset_id": ids[2], "text": "傍晚下雨"}]
+
+    # Rewritten, then emptied: gone.
+    client.put(url, json={"day": first, "text": "清晨出发"})
+    assert client.get(url).json()["days"][0]["intro"] == "清晨出发"
+    client.put(url, json={"day": first, "text": ""})
+    assert client.get(url).json()["days"][0]["intro"] is None
+
+    # A photo leaving the portfolio takes its text along.
+    client.post(f"/api/v1/collections/{created['id']}/items/remove", json={"asset_ids": [ids[2]]})
+    assert all(d["notes"] == [] for d in client.get(url).json()["days"])
+
+
+def test_diary_imports_story_notes(library: tuple[TestClient, list[int]]) -> None:
+    import json
+
+    client, ids = library
+    created = client.post(
+        "/api/v1/collections", json={"name": "Notes", "asset_ids": [ids[1], ids[2]]}
+    ).json()
+    url = f"/api/v1/collections/{created['id']}/diary"
+    first, second = (d["date"] for d in client.get(url).json()["days"])
+    client.put(url, json={"day": first, "text": "我自己写的"})
+    db = client.app.state.db  # type: ignore[attr-defined]
+    with db.session() as conn:
+        data = {
+            "collection_id": created["id"], "stage": "story", "writer": "qwen3.6-35b-a3b",
+            "days": [
+                {"number": 1, "date": first, "asset_ids": [], "places": [], "text": "笔记一"},
+                {"number": 2, "date": second, "asset_ids": [], "places": [], "text": "笔记二"},
+            ],
+        }  # fmt: skip
+        story = conn.execute(
+            "INSERT INTO ai_analysis (kind, provider, model, prompt_version, language, "
+            "cache_key, vision, result, data, created_at) VALUES "
+            "('story', 'local', 'm', 2, 'zh-CN', 'k', 0, '# 故事', ?, '2026')",
+            (json.dumps(data),),
+        ).lastrowid
+        conn.commit()
+    imported = client.post(f"{url}/import-notes", json={"analysis_id": story})
+    assert imported.json() == {"changed": 1}  # the day the user wrote stays theirs
+    assert [d["intro"] for d in client.get(url).json()["days"]] == ["我自己写的", "笔记二"]

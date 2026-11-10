@@ -257,6 +257,13 @@ def remove_items(conn: sqlite3.Connection, collection_id: int, asset_ids: list[i
                 f"AND asset_id IN ({','.join('?' * len(chunk))})",
                 (collection_id, *chunk),
             ).rowcount
+        # Diary texts after a photo that left go with it.
+        conn.execute(
+            "DELETE FROM collection_diary WHERE collection_id = ? AND after_asset_id IS NOT NULL "
+            "AND after_asset_id NOT IN "
+            "(SELECT asset_id FROM collection_items WHERE collection_id = ?)",
+            (collection_id, collection_id),
+        )
         for column in ("cover_asset_id", "collage1_asset_id", "collage2_asset_id"):
             conn.execute(
                 f"UPDATE collections SET {column} = NULL, updated_at = ? WHERE id = ? "

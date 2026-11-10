@@ -30,6 +30,7 @@ EXPECTED_TABLES = {
     "ai_analysis_assets",
     "edit_history",
     "collections",
+    "collection_diary",
     "collection_items",
     "schema_migrations",
 }

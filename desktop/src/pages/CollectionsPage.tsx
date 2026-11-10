@@ -3,6 +3,7 @@ import {
   ArrowDownUp,
   ArrowLeft,
   BookOpen,
+  NotebookPen,
   CalendarDays,
   Check,
   ClockArrowDown,
@@ -54,6 +55,7 @@ import type {
 } from "@/api/types";
 import { DraftBar, DraftLine, useCaptionDrafts } from "@/components/collections/CaptionDrafts";
 import { CollectionMap } from "@/components/collections/CollectionMap";
+import { DiaryView } from "@/components/collections/DiaryView";
 import { StoryDialog } from "@/components/collections/StoryDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -522,6 +524,8 @@ function CollectionCard({
   );
 }
 
+type CollectionView = "photos" | "map" | "diary";
+
 // --- One collection -----------------------------------------------------------------------
 
 const LAYOUTS = ["grid", "justified"] as const;
@@ -549,7 +553,7 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
   const { openViewer, openExport, openMapSend } = useLibraryState();
   const [order, setOrder] = useState<CollectionItem[]>([]);
   const [dragged, setDragged] = useState<number | null>(null);
-  const [view, setView] = useState<"photos" | "map">("photos");
+  const [view, setView] = useState<CollectionView>("photos");
   const [choosingCover, setChoosingCover] = useState(false);
   const [writingStory, setWritingStory] = useState(false);
   const drafts = useCaptionDrafts(id, () => collection.refetch());
@@ -778,8 +782,15 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
         />
       )}
 
-      {view !== "photos" ? (
+      {view === "map" ? (
         <CollectionMap id={id} />
+      ) : view === "diary" ? (
+        <DiaryView
+          collectionId={id}
+          name={data.name}
+          items={order}
+          onOpen={(assetId) => openViewer(ids, assetId)}
+        />
       ) : (
         <>
           {order.length > 0 && (
@@ -1091,13 +1102,14 @@ function ViewSwitch({
   value,
   onChange,
 }: {
-  value: "photos" | "map";
-  onChange: (view: "photos" | "map") => void;
+  value: CollectionView;
+  onChange: (view: CollectionView) => void;
 }) {
   const { t } = useTranslation();
   const views = [
     { id: "photos", icon: Grid3x3, label: t("collections.viewPhotos") },
     { id: "map", icon: MapIcon, label: t("collections.viewMap") },
+    { id: "diary", icon: NotebookPen, label: t("collections.viewDiary") },
   ] as const;
   return (
     <div

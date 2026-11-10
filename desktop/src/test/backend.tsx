@@ -185,6 +185,7 @@ export function stubBackend(options: StubOptions = {}) {
   ); // prettier-ignore
   const stories: Record<string, unknown>[] = [];
   let draftRuns = 0;
+  const diary = new Map<string, string>();
   const collectionJson = (state: CollectionState) => {
     const items = state.items
       .map((item) => ({
@@ -306,6 +307,35 @@ export function stubBackend(options: StubOptions = {}) {
       }; // prettier-ignore
       stories.unshift(story);
       return json(story);
+    }
+    if (rest === "/diary" && method === "GET") {
+      const days = new Map<string, { number: number; date: string; places: unknown[]; asset_ids: number[]; intro: string | null; notes: unknown[] }>();
+      const ordered = state.items
+        .map((item) => assets.find((a) => a.id === item.id)!)
+        .filter(Boolean)
+        .sort((a, b) => (a.capture_time ?? "").localeCompare(b.capture_time ?? ""));
+      for (const asset of ordered) {
+        const date = (asset.capture_time ?? "").slice(0, 10);
+        if (!days.has(date)) {
+          days.set(date, { number: days.size + 1, date, places: [], asset_ids: [], intro: diary.get(`${state.id}|${date}|`) ?? null, notes: [] });
+        }
+        const day = days.get(date)!;
+        day.asset_ids.push(asset.id);
+        const note = diary.get(`${state.id}|${date}|${asset.id}`);
+        if (note) day.notes.push({ after_asset_id: asset.id, text: note });
+      }
+      return json({ days: [...days.values()] });
+    } // prettier-ignore
+    if (rest === "/diary" && method === "PUT") {
+      const write = body as { day: string; after_asset_id: number | null; text: string };
+      const key = `${state.id}|${write.day}|${write.after_asset_id ?? ""}`;
+      if (write.text.trim()) diary.set(key, write.text.trim());
+      else diary.delete(key);
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    if (rest === "/diary/import-notes") {
+      diary.set(`${state.id}|2024-06-09|`, "看了雪山。");
+      return json({ changed: 1 });
     }
     if (rest === "/stories") return json(stories);
     if (rest === "/caption-drafts" && method === "POST") {

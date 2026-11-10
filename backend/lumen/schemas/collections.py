@@ -171,3 +171,31 @@ class DraftSettle(BaseModel):
     asset_ids: list[int] | None = Field(
         default=None, max_length=900, description="null: every suggested caption"
     )
+
+
+class DiaryNote(BaseModel):
+    after_asset_id: int | None = Field(description="The photo it follows; null: opens the day")
+    text: str
+
+
+class DiaryDay(BaseModel):
+    number: int = Field(description="1 for the first day with photos")
+    date: str = Field(description="YYYY-MM-DD; empty for undated photos")
+    places: list[PlaceName] = Field(description="Towns of the day, in the order visited")
+    asset_ids: list[int] = Field(description="Its photos and videos, in capture order")
+    intro: str | None = Field(description="The day's opening text")
+    notes: list[DiaryNote] = Field(description="Texts after its photos, in photo order")
+
+
+class Diary(BaseModel):
+    days: list[DiaryDay]
+
+
+class DiaryWrite(BaseModel):
+    day: str = Field(pattern=r"^(\d{4}-\d{2}-\d{2})?$")
+    after_asset_id: int | None = None
+    text: str = Field(max_length=20_000, description="Empty: removes the text")
+
+
+class DiaryImport(BaseModel):
+    analysis_id: int = Field(description="A travel story whose day notes become day texts")

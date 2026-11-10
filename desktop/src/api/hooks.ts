@@ -66,6 +66,7 @@ export const queryKeys = {
   collection: (id: number) => ["library", "collections", id] as const,
   collectionRoute: (id: number) => ["library", "collections", id, "route"] as const,
   collectionStories: (id: number) => ["library", "collections", id, "stories"] as const,
+  collectionDiary: (id: number) => ["library", "collections", id, "diary"] as const,
   task: (id: number) => ["tasks", id] as const,
   tripSuggestions: ["library", "collections", "suggestions"] as const,
   // Under "library": flag changes (batch / asset updates) refresh them.
@@ -482,6 +483,16 @@ export function useCollectionStories(id: number) {
   return useQuery({
     queryKey: queryKeys.collectionStories(id),
     queryFn: () => api.listCollectionStories(requireConnection(conn), id),
+    enabled: conn !== null,
+  });
+}
+
+/** A collection by capture day, with the user's diary texts. */
+export function useCollectionDiary(id: number) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.collectionDiary(id),
+    queryFn: () => api.getCollectionDiary(requireConnection(conn), id),
     enabled: conn !== null,
   });
 }

@@ -519,6 +519,50 @@ describe("CollectionsPage", () => {
     );
   });
 
+  it("keeps a travel diary by day, between the photos", async () => {
+    const { requests } = stubBackend({
+      assets,
+      collections: [{ name: "Alps", kind: "trip", assetIds: [1, 2, 3] }],
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /Alps/ }));
+    const views = await screen.findByRole("tablist", { name: "视图" });
+    await userEvent.click(within(views).getByRole("tab", { name: "日记" }));
+
+    // One section per capture day, the oldest first (IMG_3 was taken first).
+    const days = await screen.findAllByRole("region", { name: /^第 \d 天/ });
+    expect(days).toHaveLength(3);
+    expect(within(days[0]!).getByRole("button", { name: "IMG_3.JPG" })).toBeInTheDocument();
+
+    const intro = within(days[0]!).getByRole("textbox", { name: "第 1 天的日记" });
+    await userEvent.type(intro, "清晨出发");
+    fireEvent.blur(intro);
+    await waitFor(() =>
+      expect(calls(requests, "PUT", "/api/v1/collections/1/diary")[0]?.body).toEqual({
+        day: "2024-06-07",
+        after_asset_id: null,
+        text: "清晨出发",
+      }),
+    );
+
+    // A text after a photo.
+    await userEvent.click(within(days[1]!).getByRole("button", { name: "在 IMG_2.JPG 之后写一段" }));
+    const note = await within(days[1]!).findByRole("textbox", { name: "在 IMG_2.JPG 之后写一段" });
+    await userEvent.type(note, "午后下雨");
+    fireEvent.blur(note);
+    expect(
+      await within(screen.getAllByRole("region", { name: /^第 2 天/ })[0]!).findByRole("textbox", {
+        name: "IMG_2.JPG 之后的文字",
+      }),
+    ).toHaveValue("午后下雨");
+    expect(calls(requests, "PUT", "/api/v1/collections/1/diary").at(-1)?.body).toEqual({
+      day: "2024-06-08",
+      after_asset_id: 2,
+      text: "午后下雨",
+    });
+    expect(screen.getByRole("textbox", { name: "第 1 天的日记" })).toHaveValue("清晨出发");
+  });
+
   it("deletes a portfolio after confirmation", async () => {
     const { requests } = stubBackend({
       assets,

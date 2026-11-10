@@ -2,6 +2,7 @@ import { toSearchParams, type AssetQuery, type QueryValue } from "./query";
 import type {
   AIStatus,
   AnalysisResult,
+  Diary,
   StoryWriter,
   AppSettings,
   AppSettingsUpdate,
@@ -289,6 +290,20 @@ export const api = {
       `/api/v1/collections/${id}/caption-drafts/${accept ? "accept" : "discard"}`,
       { asset_ids: assetIds },
     ),
+
+  getCollectionDiary: (conn: BackendConnection, id: number) =>
+    request<Diary>(conn, "GET", `/api/v1/collections/${id}/diary`),
+
+  writeCollectionDiary: (
+    conn: BackendConnection,
+    id: number,
+    body: { day: string; after_asset_id: number | null; text: string },
+  ) => request<void>(conn, "PUT", `/api/v1/collections/${id}/diary`, body),
+
+  importDiaryNotes: (conn: BackendConnection, id: number, analysisId: number) =>
+    request<{ changed: number }>(conn, "POST", `/api/v1/collections/${id}/diary/import-notes`, {
+      analysis_id: analysisId,
+    }),
 
   listCollectionStories: (conn: BackendConnection, id: number) =>
     request<AnalysisResult[]>(conn, "GET", `/api/v1/collections/${id}/stories`),

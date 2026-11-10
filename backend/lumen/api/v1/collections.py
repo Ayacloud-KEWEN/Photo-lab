@@ -17,6 +17,9 @@ from lumen.schemas.collections import (
     CollectionList,
     CollectionRoute,
     CollectionUpdate,
+    Diary,
+    DiaryImport,
+    DiaryWrite,
     DraftSettle,
     StoryCloudRequest,
     StoryRequest,
@@ -25,6 +28,7 @@ from lumen.schemas.collections import (
 )
 from lumen.schemas.common import ErrorResponse
 from lumen.services import collections as service
+from lumen.services import diary
 from lumen.vlm import captions, story
 
 router = APIRouter(tags=["collections"])
@@ -218,3 +222,33 @@ def discard_drafts(
     return CollectionChange(
         changed=service.settle_drafts(conn, collection_id, body.asset_ids, accept=False)
     )
+
+
+@router.get(
+    "/collections/{collection_id}/diary", response_model=Diary, operation_id="getCollectionDiary",
+    responses=NOT_FOUND,
+)  # fmt: skip
+def get_diary(conn: Connection, collection_id: int = Path(ge=1)) -> Diary:
+    """The portfolio by capture day, with the user's texts: opening each day and after photos."""
+    return diary.get_diary(conn, collection_id)
+
+
+@router.put(
+    "/collections/{collection_id}/diary", status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response, operation_id="writeCollectionDiary", responses=NOT_FOUND,
+)  # fmt: skip
+def write_diary(conn: Connection, body: DiaryWrite, collection_id: int = Path(ge=1)) -> Response:
+    """Set a day's opening text or the text after a photo (empty text: remove it)."""
+    diary.write(conn, collection_id, body)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/collections/{collection_id}/diary/import-notes", response_model=CollectionChange,
+    operation_id="importDiaryNotes", responses=NOT_FOUND,
+)  # fmt: skip
+def import_notes(
+    conn: Connection, body: DiaryImport, collection_id: int = Path(ge=1)
+) -> CollectionChange:
+    """A travel story's day notes open the days that have no text yet."""
+    return CollectionChange(changed=diary.import_story_notes(conn, collection_id, body.analysis_id))

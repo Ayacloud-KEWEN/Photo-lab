@@ -989,6 +989,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/collections/{collection_id}/diary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Diary
+         * @description The portfolio by capture day, with the user's texts: opening each day and after photos.
+         */
+        get: operations["getCollectionDiary"];
+        /**
+         * Write Diary
+         * @description Set a day's opening text or the text after a photo (empty text: remove it).
+         */
+        put: operations["writeCollectionDiary"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{collection_id}/diary/import-notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Notes
+         * @description A travel story's day notes open the days that have no text yet.
+         */
+        post: operations["importDiaryNotes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vlm/status": {
         parameters: {
             query?: never;
@@ -2800,6 +2844,74 @@ export interface components {
              * @default 1600
              */
             edge: number;
+        };
+        /** Diary */
+        Diary: {
+            /** Days */
+            days: components["schemas"]["DiaryDay"][];
+        };
+        /** DiaryDay */
+        DiaryDay: {
+            /**
+             * Number
+             * @description 1 for the first day with photos
+             */
+            number: number;
+            /**
+             * Date
+             * @description YYYY-MM-DD; empty for undated photos
+             */
+            date: string;
+            /**
+             * Places
+             * @description Towns of the day, in the order visited
+             */
+            places: components["schemas"]["PlaceName"][];
+            /**
+             * Asset Ids
+             * @description Its photos and videos, in capture order
+             */
+            asset_ids: number[];
+            /**
+             * Intro
+             * @description The day's opening text
+             */
+            intro: string | null;
+            /**
+             * Notes
+             * @description Texts after its photos, in photo order
+             */
+            notes: components["schemas"]["DiaryNote"][];
+        };
+        /** DiaryImport */
+        DiaryImport: {
+            /**
+             * Analysis Id
+             * @description A travel story whose day notes become day texts
+             */
+            analysis_id: number;
+        };
+        /** DiaryNote */
+        DiaryNote: {
+            /**
+             * After Asset Id
+             * @description The photo it follows; null: opens the day
+             */
+            after_asset_id: number | null;
+            /** Text */
+            text: string;
+        };
+        /** DiaryWrite */
+        DiaryWrite: {
+            /** Day */
+            day: string;
+            /** After Asset Id */
+            after_asset_id?: number | null;
+            /**
+             * Text
+             * @description Empty: removes the text
+             */
+            text: string;
         };
         /** DraftSettle */
         DraftSettle: {
@@ -6571,6 +6683,132 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DraftSettle"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionChange"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getCollectionDiary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Diary"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    writeCollectionDiary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiaryWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    importDiaryNotes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiaryImport"];
             };
         };
         responses: {
