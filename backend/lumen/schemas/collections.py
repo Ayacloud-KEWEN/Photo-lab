@@ -79,6 +79,9 @@ class CollectionList(BaseModel):
 class CollectionItem(BaseModel):
     asset: AssetSummary
     caption: str | None
+    caption_draft: str | None = Field(
+        default=None, description="Caption suggested by the local model, until accepted"
+    )
 
 
 class CollectionDetail(Collection):
@@ -153,3 +156,18 @@ class StoryCloudRequest(BaseModel):
 
 class StoryStarted(BaseModel):
     task_id: int
+
+
+class CaptionDraftRequest(BaseModel):
+    asset_ids: list[int] | None = Field(
+        default=None,
+        max_length=MAX_ITEMS,
+        description="These items (even captioned ones); null: every item without a caption",
+    )
+    language: Literal["zh-CN", "en", "fr"] = "zh-CN"
+
+
+class DraftSettle(BaseModel):
+    asset_ids: list[int] | None = Field(
+        default=None, max_length=900, description="null: every suggested caption"
+    )

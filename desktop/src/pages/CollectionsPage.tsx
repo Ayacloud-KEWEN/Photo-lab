@@ -16,6 +16,7 @@ import {
   Plane,
   Plus,
   Search,
+  Sparkles,
   Star,
   Trash2,
   X,
@@ -51,6 +52,7 @@ import type {
   RenditionVariant,
   TripSuggestion,
 } from "@/api/types";
+import { DraftBar, DraftLine, useCaptionDrafts } from "@/components/collections/CaptionDrafts";
 import { CollectionMap } from "@/components/collections/CollectionMap";
 import { StoryDialog } from "@/components/collections/StoryDialog";
 import { Button } from "@/components/ui/button";
@@ -550,6 +552,7 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
   const [view, setView] = useState<"photos" | "map">("photos");
   const [choosingCover, setChoosingCover] = useState(false);
   const [writingStory, setWritingStory] = useState(false);
+  const drafts = useCaptionDrafts(id, () => collection.refetch());
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [layout, setLayout] = usePref<Layout>(
     "lumen.collections.layout",
@@ -796,6 +799,14 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
                   <Button
                     variant="ghost"
                     size="sm"
+                    disabled={drafts.running}
+                    onClick={() => drafts.start(ids.filter((asset) => selected.has(asset)))}
+                  >
+                    <Sparkles /> {t("collections.draftSelected")}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setSelected(new Set())}
                   >
                     {t("collections.clearSelection")}
@@ -820,6 +831,7 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
                   >
                     <ClockArrowDown /> {t("collections.sortTimeDesc")}
                   </Button>
+                  <DraftBar items={order} drafts={drafts} />
                 </>
               )}
               <div className="ml-auto flex items-center gap-2">
@@ -1042,9 +1054,21 @@ function CollectionView({ id, onBack }: { id: number; onBack: () => void }) {
                               name: item.asset.file_name,
                             })}
                             onSave={(caption) =>
-                              void actions.caption(id, assetId, caption)
+                              void actions
+                                .caption(id, assetId, caption)
+                                .then(() => {
+                                  if (item.caption_draft) void collection.refetch();
+                                })
                             }
                           />
+                          {item.caption_draft && (
+                            <DraftLine
+                              draft={item.caption_draft}
+                              name={item.asset.file_name}
+                              onAccept={() => drafts.settle([assetId], true)}
+                              onDiscard={() => drafts.settle([assetId], false)}
+                            />
+                          )}
                         </li>
                       </Fragment>
                     );

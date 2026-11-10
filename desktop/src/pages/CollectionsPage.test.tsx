@@ -474,6 +474,51 @@ describe("CollectionsPage", () => {
     ).toBeEnabled();
   });
 
+  it("drafts captions with the local model, then accepts or discards them", async () => {
+    const { requests } = stubBackend({
+      assets,
+      collections: [{ name: "Alps", assetIds: [1, 2, 3] }],
+      vlm: { installed: true },
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /Alps/ }));
+    const caption2 = await screen.findByRole("textbox", { name: "IMG_2.JPG 的说明" });
+    await userEvent.type(caption2, "我写的");
+    fireEvent.blur(caption2);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "为 2 张没有说明的照片写草稿" }),
+    );
+    await waitFor(() =>
+      expect(calls(requests, "POST", "/api/v1/collections/1/caption-drafts")[0]?.body).toEqual({
+        asset_ids: null,
+        language: "zh-CN",
+      }),
+    );
+    expect(await screen.findByText("草稿 1")).toBeInTheDocument();
+    expect(screen.getByText("草稿 3")).toBeInTheDocument();
+    // The captions are unchanged until a draft is accepted.
+    expect(screen.getByRole("textbox", { name: "IMG_1.JPG 的说明" })).toHaveValue("");
+
+    await userEvent.click(screen.getByRole("button", { name: "采用 IMG_1.JPG 的说明草稿" }));
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "IMG_1.JPG 的说明" })).toHaveValue("草稿 1"),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "丢弃 IMG_3.JPG 的说明草稿" }));
+    await waitFor(() => expect(screen.queryByText("草稿 3")).not.toBeInTheDocument());
+    expect(calls(requests, "POST", "/api/v1/collections/1/caption-drafts/discard")[0]?.body).toEqual(
+      { asset_ids: [3] },
+    );
+    expect(screen.getByRole("textbox", { name: "IMG_2.JPG 的说明" })).toHaveValue("我写的");
+
+    // Again for every photo without a caption, accepted all at once.
+    await userEvent.click(screen.getByRole("button", { name: "为 1 张没有说明的照片写草稿" }));
+    await userEvent.click(await screen.findByRole("button", { name: "全部采用（1）" }));
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "IMG_3.JPG 的说明" })).toHaveValue("草稿 3"),
+    );
+  });
+
   it("deletes a portfolio after confirmation", async () => {
     const { requests } = stubBackend({
       assets,

@@ -932,6 +932,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/collections/{collection_id}/caption-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Captions
+         * @description Have the local model suggest captions (a task); they wait for the user to accept them.
+         */
+        post: operations["draftCollectionCaptions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{collection_id}/caption-drafts/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Drafts
+         * @description Make the suggested captions the captions (replacing what was there).
+         */
+        post: operations["acceptCaptionDrafts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{collection_id}/caption-drafts/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discard Drafts */
+        post: operations["discardCaptionDrafts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vlm/status": {
         parameters: {
             query?: never;
@@ -2321,6 +2378,20 @@ export interface components {
             /** Bytes */
             bytes: number;
         };
+        /** CaptionDraftRequest */
+        CaptionDraftRequest: {
+            /**
+             * Asset Ids
+             * @description These items (even captioned ones); null: every item without a caption
+             */
+            asset_ids?: number[] | null;
+            /**
+             * Language
+             * @default zh-CN
+             * @enum {string}
+             */
+            language: "zh-CN" | "en" | "fr";
+        };
         /** ChangeCount */
         ChangeCount: {
             /** Changed */
@@ -2603,6 +2674,11 @@ export interface components {
             asset: components["schemas"]["AssetSummary"];
             /** Caption */
             caption: string | null;
+            /**
+             * Caption Draft
+             * @description Caption suggested by the local model, until accepted
+             */
+            caption_draft?: string | null;
         };
         /** CollectionItemUpdate */
         CollectionItemUpdate: {
@@ -2724,6 +2800,14 @@ export interface components {
              * @default 1600
              */
             edge: number;
+        };
+        /** DraftSettle */
+        DraftSettle: {
+            /**
+             * Asset Ids
+             * @description null: every suggested caption
+             */
+            asset_ids?: number[] | null;
         };
         /** DuplicateAsset */
         DuplicateAsset: {
@@ -6365,6 +6449,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalysisResult"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draftCollectionCaptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaptionDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoryStarted"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    acceptCaptionDrafts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftSettle"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionChange"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discardCaptionDrafts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftSettle"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionChange"];
                 };
             };
             /** @description Not Found */

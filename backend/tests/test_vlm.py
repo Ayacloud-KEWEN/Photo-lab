@@ -154,6 +154,14 @@ class FakeReader:
         FakeReader.prompts.append(prompt)
         if "旅行笔记" in prompt:  # a day's notes
             return ("看了日落。" if "日落" in prompt else "逛了古城。"), 400, 60
+        if "编号. 说明" in prompt:  # caption drafts: one numbered line per photo
+            photos = [line for line in prompt.splitlines() if line[:1].isdigit()]
+            lines = [
+                f"{n}. " + ("海边酒吧的日落" if "日落" in line else "科托尔古城的城门")
+                for n, line in enumerate(photos, start=1)
+                if "画面" in line  # the unreadable photo gets no caption
+            ]
+            return "好的：\n" + "\n".join(lines), 300, 40
         return f"# 海边的两天（{self.model}）\n\n先是日落，然后是古城。", 1200, 300
 
     def stop(self) -> None:
@@ -405,3 +413,59 @@ def test_story_picks_the_photos_that_tell_each_day() -> None:
         (3, "", [7]),  # undated last
     ]
     assert story_length(1) == 400 and story_length(10) == 1500 and story_length(40) == 2000
+
+
+def test_caption_drafts(vlm_app: tuple[TestClient, Path]) -> None:
+    from lumen.vlm.captions import parse
+
+    client, folder = vlm_app
+    db = client.app.state.db  # type: ignore[attr-defined]
+    ids = {item["file_name"]: item["id"] for item in client.get("/api/v1/assets").json()["items"]}
+    collection = client.post(
+        "/api/v1/collections",
+        json={"name": "Kotor", "asset_ids": [ids["red.jpg"], ids["blue.jpg"], ids["dark.jpg"]]},
+    ).json()["id"]
+    url = f"/api/v1/collections/{collection}"
+    client.patch(f"{url}/items/{ids['blue.jpg']}", json={"caption": "我写的"})
+    assert client.post(f"{url}/caption-drafts", json={}).status_code == 400  # no model yet
+
+    client.patch("/api/v1/settings", json={"vlm_folder": str(folder)})
+    FakeReader.prompts = []
+    started = client.post(f"{url}/caption-drafts", json={})
+    assert started.status_code == 202
+    wait_idle(db)
+    task = client.get(f"/api/v1/tasks/{started.json()['task_id']}").json()
+    assert task["status"] == "succeeded", task
+    assert task["result"] == {"drafted": 1, "read": 2}  # the captioned photo is skipped
+    # Only photos without a caption; the user's caption is shown for the tone.
+    prompt = FakeReader.prompts[-1]
+    assert "- 我写的" in prompt and "Stari Grad" not in prompt
+    items = {i["asset"]["id"]: i for i in client.get(url).json()["items"]}
+    assert items[ids["red.jpg"]]["caption_draft"] == "海边酒吧的日落"
+    assert items[ids["red.jpg"]]["caption"] is None
+    assert items[ids["blue.jpg"]]["caption_draft"] is None
+    assert items[ids["dark.jpg"]]["caption_draft"] is None  # nothing to say
+
+    # Asked for one photo even though it has a caption: the caption stays until accepted.
+    client.post(f"{url}/caption-drafts", json={"asset_ids": [ids["blue.jpg"]]})
+    wait_idle(db)
+    blue = next(i for i in client.get(url).json()["items"] if i["asset"]["id"] == ids["blue.jpg"])
+    assert (blue["caption"], blue["caption_draft"]) == ("我写的", "科托尔古城的城门")
+
+    discarded = client.post(f"{url}/caption-drafts/discard", json={"asset_ids": [ids["blue.jpg"]]})
+    assert discarded.json() == {"changed": 1}
+    accepted = client.post(f"{url}/caption-drafts/accept", json={})
+    assert accepted.json() == {"changed": 1}
+    items = {i["asset"]["id"]: i for i in client.get(url).json()["items"]}
+    assert items[ids["red.jpg"]]["caption"] == "海边酒吧的日落"
+    assert items[ids["blue.jpg"]]["caption"] == "我写的"
+    assert all(i["caption_draft"] is None for i in items.values())
+
+    # Writing a caption by hand settles a draft too.
+    client.post(f"{url}/caption-drafts", json={"asset_ids": [ids["red.jpg"]]})
+    wait_idle(db)
+    client.patch(f"{url}/items/{ids['red.jpg']}", json={"caption": "自己改的"})
+    red = next(i for i in client.get(url).json()["items"] if i["asset"]["id"] == ids["red.jpg"])
+    assert (red["caption"], red["caption_draft"]) == ("自己改的", None)
+
+    assert parse("好的\n1. 一\n2）二\n3、“三”\n9. 多余", 3) == {1: "一", 2: "二", 3: "三"}

@@ -184,9 +184,13 @@ export function stubBackend(options: StubOptions = {}) {
     ]),
   ); // prettier-ignore
   const stories: Record<string, unknown>[] = [];
+  let draftRuns = 0;
   const collectionJson = (state: CollectionState) => {
     const items = state.items
-      .map((item) => ({ asset: assets.find((a) => a.id === item.id), caption: item.caption }))
+      .map((item) => ({
+        asset: assets.find((a) => a.id === item.id), caption: item.caption,
+        caption_draft: item.draft ?? null,
+      })) // prettier-ignore
       .filter((item) => item.asset);
     return {
       id: state.id, uuid: `c${state.id}`, name: state.name, kind: state.kind,
@@ -304,6 +308,29 @@ export function stubBackend(options: StubOptions = {}) {
       return json(story);
     }
     if (rest === "/stories") return json(stories);
+    if (rest === "/caption-drafts" && method === "POST") {
+      const wanted = (body as { asset_ids: number[] | null }).asset_ids;
+      for (const item of state.items) {
+        if (wanted ? wanted.includes(item.id) : !item.caption && !item.draft) {
+          item.draft = `草稿 ${item.id}`;
+        }
+      }
+      draftRuns += 1;
+      return json({ task_id: 600 + draftRuns }, 202);
+    }
+    const settle = /^\/caption-drafts\/(accept|discard)$/.exec(rest);
+    if (settle) {
+      const wanted = (body as { asset_ids: number[] | null }).asset_ids;
+      let changed = 0;
+      for (const item of state.items) {
+        if (item.draft && (!wanted || wanted.includes(item.id))) {
+          if (settle[1] === "accept") item.caption = item.draft;
+          item.draft = null;
+          changed += 1;
+        }
+      }
+      return json({ changed });
+    }
     if (rest === "/order") {
       state.items = ids.map((id) => state.items.find((item) => item.id === id)!);
       return json({ changed: ids.length });
@@ -311,7 +338,10 @@ export function stubBackend(options: StubOptions = {}) {
     const caption = /^\/items\/(\d+)$/.exec(rest);
     if (caption) {
       const item = state.items.find((entry) => entry.id === Number(caption[1]));
-      if (item) item.caption = (body as { caption: string | null }).caption;
+      if (item) {
+        item.caption = (body as { caption: string | null }).caption;
+        item.draft = null;
+      }
       return Promise.resolve(new Response(null, { status: 204 }));
     }
     return json({ error: { code: "not_found", message: path } }, 404);
@@ -356,7 +386,7 @@ export function stubBackend(options: StubOptions = {}) {
     requests.push({ method, url, body });
     const path = url.pathname;
 
-    if (/^\/api\/v1\/tasks\/5\d\d$/.test(path)) {
+    if (/^\/api\/v1\/tasks\/[56]\d\d$/.test(path)) {
       return json({
         id: Number(path.split("/").at(-1)), kind: "vlm_collection_story", status: "succeeded", storage_root_id: null,
         progress_current: 3, progress_total: 3, attempts: 1, max_attempts: 1,
@@ -801,7 +831,7 @@ interface CollectionState {
   end_date: string | null;
   cover: number | null;
   collage?: (number | null)[];
-  items: { id: number; caption: string | null }[];
+  items: { id: number; caption: string | null; draft?: string | null }[];
 }
 
 export function Providers({

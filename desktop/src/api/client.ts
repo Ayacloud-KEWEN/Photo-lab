@@ -270,6 +270,26 @@ export const api = {
       { confirmed: true },
     ),
 
+  draftCollectionCaptions: (
+    conn: BackendConnection,
+    id: number,
+    body: { asset_ids: number[] | null; language: string },
+  ) =>
+    request<{ task_id: number }>(conn, "POST", `/api/v1/collections/${id}/caption-drafts`, body),
+
+  settleCaptionDrafts: (
+    conn: BackendConnection,
+    id: number,
+    assetIds: number[] | null,
+    accept: boolean,
+  ) =>
+    request<{ changed: number }>(
+      conn,
+      "POST",
+      `/api/v1/collections/${id}/caption-drafts/${accept ? "accept" : "discard"}`,
+      { asset_ids: assetIds },
+    ),
+
   listCollectionStories: (conn: BackendConnection, id: number) =>
     request<AnalysisResult[]>(conn, "GET", `/api/v1/collections/${id}/stories`),
 

@@ -8,6 +8,7 @@ from starlette.concurrency import run_in_threadpool
 from lumen.api.deps import Connection, wake_task_runner
 from lumen.schemas.ai import AnalysisResult
 from lumen.schemas.collections import (
+    CaptionDraftRequest,
     CollectionAssets,
     CollectionChange,
     CollectionCreate,
@@ -16,6 +17,7 @@ from lumen.schemas.collections import (
     CollectionList,
     CollectionRoute,
     CollectionUpdate,
+    DraftSettle,
     StoryCloudRequest,
     StoryRequest,
     StoryStarted,
@@ -23,7 +25,7 @@ from lumen.schemas.collections import (
 )
 from lumen.schemas.common import ErrorResponse
 from lumen.services import collections as service
-from lumen.vlm import story
+from lumen.vlm import captions, story
 
 router = APIRouter(tags=["collections"])
 
@@ -175,3 +177,44 @@ async def write_story_in_cloud(
     del body
     story_id = await run_in_threadpool(story.write_with_cloud, conn, collection_id, analysis_id)
     return next(s for s in service.stories(conn, collection_id) if s.id == story_id)
+
+
+@router.post(
+    "/collections/{collection_id}/caption-drafts", response_model=StoryStarted,
+    status_code=status.HTTP_202_ACCEPTED, operation_id="draftCollectionCaptions",
+    responses=NOT_FOUND,
+)  # fmt: skip
+def draft_captions(
+    conn: Connection, request: Request, body: CaptionDraftRequest, collection_id: int = Path(ge=1)
+) -> StoryStarted:
+    """Have the local model suggest captions (a task); they wait for the user to accept them."""
+    task_id = captions.start(
+        conn, request.app.state.settings, collection_id, body.asset_ids, body.language
+    )
+    wake_task_runner(request)
+    return StoryStarted(task_id=task_id)
+
+
+@router.post(
+    "/collections/{collection_id}/caption-drafts/accept", response_model=CollectionChange,
+    operation_id="acceptCaptionDrafts", responses=NOT_FOUND,
+)  # fmt: skip
+def accept_drafts(
+    conn: Connection, body: DraftSettle, collection_id: int = Path(ge=1)
+) -> CollectionChange:
+    """Make the suggested captions the captions (replacing what was there)."""
+    return CollectionChange(
+        changed=service.settle_drafts(conn, collection_id, body.asset_ids, accept=True)
+    )
+
+
+@router.post(
+    "/collections/{collection_id}/caption-drafts/discard", response_model=CollectionChange,
+    operation_id="discardCaptionDrafts", responses=NOT_FOUND,
+)  # fmt: skip
+def discard_drafts(
+    conn: Connection, body: DraftSettle, collection_id: int = Path(ge=1)
+) -> CollectionChange:
+    return CollectionChange(
+        changed=service.settle_drafts(conn, collection_id, body.asset_ids, accept=False)
+    )

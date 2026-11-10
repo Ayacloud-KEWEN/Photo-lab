@@ -28,6 +28,7 @@ from lumen.schemas.collections import (
 from lumen.services.assets import rendition_version, summaries_by_ids
 
 _CHUNK = 500
+MAX_ITEMS_SETTLED = 900  # SQLite variables in one statement
 MAX_SUGGESTIONS = 20
 SAMPLES = 4
 
@@ -114,7 +115,7 @@ def _row(conn: sqlite3.Connection, collection_id: int) -> sqlite3.Row:
 def get_collection(conn: sqlite3.Connection, collection_id: int) -> CollectionDetail:
     row = _row(conn, collection_id)
     items = conn.execute(
-        "SELECT asset_id, caption FROM collection_items WHERE collection_id = ? "
+        "SELECT asset_id, caption, caption_draft FROM collection_items WHERE collection_id = ? "
         "ORDER BY position, added_at",
         (collection_id,),
     ).fetchall()
@@ -124,7 +125,11 @@ def get_collection(conn: sqlite3.Connection, collection_id: int) -> CollectionDe
     return CollectionDetail(
         **collection.model_dump(),
         items=[
-            CollectionItem(asset=summaries[int(item["asset_id"])], caption=item["caption"])
+            CollectionItem(
+                asset=summaries[int(item["asset_id"])],
+                caption=item["caption"],
+                caption_draft=item["caption_draft"],
+            )
             for item in items
             if int(item["asset_id"]) in summaries  # not (yet) listable: e.g. missing file
         ],
@@ -290,7 +295,9 @@ def set_caption(
     text = caption.strip() if caption else None
     with transaction(conn):
         updated = conn.execute(
-            "UPDATE collection_items SET caption = ? WHERE collection_id = ? AND asset_id = ?",
+            # Writing a caption settles the suggestion.
+            "UPDATE collection_items SET caption = ?, caption_draft = NULL "
+            "WHERE collection_id = ? AND asset_id = ?",
             (text or None, collection_id, asset_id),
         ).rowcount
         if not updated:
@@ -482,3 +489,27 @@ def stories(conn: sqlite3.Connection, collection_id: int) -> list[AnalysisResult
         (collection_id,),
     ).fetchall()
     return [_row_to_result(conn, row, cached=True) for row in rows]
+
+
+def settle_drafts(
+    conn: sqlite3.Connection, collection_id: int, asset_ids: list[int] | None, *, accept: bool
+) -> int:
+    """Accept (as captions) or discard the suggested captions of these items (all: None)."""
+    with transaction(conn):
+        _row(conn, collection_id)
+        where = "collection_id = ? AND caption_draft IS NOT NULL"
+        params: list[object] = [collection_id]
+        if asset_ids is not None:
+            ids = list(dict.fromkeys(asset_ids))[:MAX_ITEMS_SETTLED]
+            where += f" AND asset_id IN ({','.join('?' * len(ids))})"
+            params += ids
+        assignment = "caption = caption_draft, " if accept else ""
+        changed = conn.execute(
+            f"UPDATE collection_items SET {assignment}caption_draft = NULL WHERE {where}",
+            params,
+        ).rowcount
+        if changed and accept:
+            conn.execute(
+                "UPDATE collections SET updated_at = ? WHERE id = ?", (utc_now(), collection_id)
+            )
+    return int(changed)
