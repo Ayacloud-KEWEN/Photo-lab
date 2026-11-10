@@ -27,7 +27,7 @@ import zipfile
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from PIL import Image
 
@@ -71,7 +71,9 @@ def vlm_folder(conn: sqlite3.Connection, settings: Settings) -> Path:
 class Reader(Protocol):
     def start(self, model_id: str, context: int | None = None) -> None: ...
     def read(self, image: Image.Image) -> describing.Description: ...
-    def write(self, prompt: str, max_tokens: int) -> tuple[str, int, int]: ...
+    def write(
+        self, prompt: str, max_tokens: int, schema: dict[str, Any] | None = None
+    ) -> tuple[str, int, int]: ...
     def stop(self) -> None: ...
 
 
@@ -99,12 +101,14 @@ class LlamaReader:
         assert self.server is not None
         return describing.describe(self.server.url, image)
 
-    def write(self, prompt: str, max_tokens: int) -> tuple[str, int, int]:
-        """A text answer (story.py): (text, prompt tokens, output tokens)."""
+    def write(
+        self, prompt: str, max_tokens: int, schema: dict[str, Any] | None = None
+    ) -> tuple[str, int, int]:
+        """A text answer (or JSON in ``schema``): (text, prompt tokens, output tokens)."""
         from lumen.vlm.story import chat
 
         assert self.server is not None
-        return chat(self.server.url, prompt, max_tokens)
+        return chat(self.server.url, prompt, max_tokens, schema=schema)
 
     def stop(self) -> None:
         if self.server is not None:
@@ -118,7 +122,10 @@ _reader_factory: ReaderFactory = LlamaReader
 
 def set_reader_factory(factory: ReaderFactory | None) -> None:
     """Tests: read photos with a fake model."""
+    from lumen.vlm.session import release_warm
+
     global _reader_factory
+    release_warm()
     _reader_factory = factory or LlamaReader
 
 
@@ -228,6 +235,9 @@ def describe_assets(ctx: TaskContext) -> dict[str, int]:
     ranked = _text_ranked(conn, ctx.settings) if app.vlm_enabled else []
     if app.ai_enabled:
         _unload_siglip(ctx.settings)
+    from lumen.vlm.session import release_warm
+
+    release_warm()  # one model at a time
     reader = _reader_factory(folder, GPU_RESERVE_MIB if app.ai_enabled else None)
     running: str | None = None
     described = failed = 0

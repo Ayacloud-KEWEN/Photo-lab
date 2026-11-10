@@ -186,6 +186,7 @@ export function stubBackend(options: StubOptions = {}) {
   const stories: Record<string, unknown>[] = [];
   let draftRuns = 0;
   const diary = new Map<string, string>();
+  const questions: (Record<string, unknown> & { id: number })[] = [];
   const collectionJson = (state: CollectionState) => {
     const items = state.items
       .map((item) => ({
@@ -462,6 +463,34 @@ export function stubBackend(options: StubOptions = {}) {
       next.ref = `${next.id}.${next.color_space}`;
       luts[index] = next;
       return json(next);
+    }
+    if (path === "/api/v1/ask" && method === "POST") {
+      const asked = body as { question: string };
+      const id = questions.length + 1;
+      const done = {
+        id, question: asked.question, language: "zh-CN", status: "done", task_id: 700 + id,
+        plan: { intent: "photos", date_from: "2025-01-01", date_to: "2026-01-01", country: "JP", city: "",
+          camera: "", lens: "", min_rating: 0, favorite: false, media_type: "", keywords: ["拉面"],
+          visual: "", group_by: "city" },
+        stats: { total: 2, described: 40, first: null, last: null, visual_used: false,
+          groups: [{ label: "东京", count: 2 }] },
+        answer: "去年在东京吃过两次拉面 [1] [2]。", items: assets.slice(0, 2),
+        asset_ids: assets.slice(0, 2).map((a) => a.id), error: null, created_at: "2026-11-10T09:00:00Z",
+      };
+      questions.unshift(done);
+      return json({ ...done, status: "pending", answer: null, items: [], plan: null, stats: null }, 202);
+    } // prettier-ignore
+    if (path === "/api/v1/ask" && method === "GET") {
+      return json({ items: questions.map((q) => ({ ...q, items: [] })) });
+    }
+    const question = /^\/api\/v1\/ask\/(\d+)$/.exec(path);
+    if (question) {
+      const index = questions.findIndex((q) => q.id === Number(question[1]));
+      if (method === "DELETE") {
+        questions.splice(index, 1);
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      return json(questions[index]);
     }
     if (path === "/api/v1/vlm/status") {
       const installed = options.vlm?.installed ?? false;

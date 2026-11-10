@@ -274,7 +274,12 @@ def story_tokens(days: int) -> int:
 
 
 def chat(
-    base_url: str, prompt: str, max_tokens: int, *, timeout: float = 1800
+    base_url: str,
+    prompt: str,
+    max_tokens: int,
+    *,
+    schema: dict[str, Any] | None = None,
+    timeout: float = 1800,
 ) -> tuple[str, int, int]:
     """Ask the local server (OpenAI-compatible) for a text answer."""
     body = {
@@ -286,6 +291,12 @@ def chat(
         "max_tokens": max_tokens,
         "chat_template_kwargs": {"enable_thinking": False},
     }
+    if schema is not None:  # an answer in this JSON shape
+        body["temperature"] = 0.1
+        body["response_format"] = {
+            "type": "json_schema",
+            "json_schema": {"name": "answer", "schema": schema},
+        }
     request = urllib.request.Request(
         f"{base_url}/v1/chat/completions",
         data=json.dumps(body).encode(),
@@ -349,6 +360,9 @@ def write_story(ctx: TaskContext) -> dict[str, int]:
     app = get_settings(conn)
     if app.ai_enabled:
         pipeline._unload_siglip(ctx.settings)
+    from lumen.vlm.session import release_warm
+
+    release_warm()  # one model at a time
     reader = pipeline._reader_factory(folder, pipeline.GPU_RESERVE_MIB if app.ai_enabled else None)
     running: str | None = None
 

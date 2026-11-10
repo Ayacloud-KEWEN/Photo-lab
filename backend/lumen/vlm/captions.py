@@ -167,7 +167,7 @@ def write_drafts(ctx: TaskContext) -> dict[str, int]:
             ctx.progress(step, total, force=True)
             lines = [_line(conn, collection_id, asset_id) for asset_id in batch]
             try:
-                answer, _, _ = reader.write(  # type: ignore[attr-defined]
+                answer, _, _ = reader.write(
                     prompt(collection, lines, examples, language), TOKENS_PER_CAPTION * len(batch)
                 )
             except StoryError as exc:

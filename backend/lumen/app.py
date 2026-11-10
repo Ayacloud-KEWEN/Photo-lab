@@ -135,6 +135,9 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         if runner is not None:
             # Running tasks are put back in the queue and resume on next start.
             await run_in_threadpool(runner.stop)
+        from lumen.vlm.session import release_warm
+
+        await run_in_threadpool(release_warm)  # a local model kept running after a question
         logger.info("backend stopped")
 
     app = FastAPI(

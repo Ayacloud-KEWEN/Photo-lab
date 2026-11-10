@@ -1505,6 +1505,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * History
+         * @description Questions asked before, newest first.
+         */
+        get: operations["listQuestions"];
+        put?: never;
+        /**
+         * Ask
+         * @description Ask the library in plain language; the local model answers in a task (follow
+         *     ``task_id``, then read the question again). Nothing leaves this computer.
+         */
+        post: operations["askLibrary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ask/{question_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get */
+        get: operations["getQuestion"];
+        put?: never;
+        post?: never;
+        /** Delete */
+        delete: operations["deleteQuestion"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/backups": {
         parameters: {
             query?: never;
@@ -1961,6 +2004,170 @@ export interface components {
              * @description An empty string goes back to the default
              */
             vlm_folder?: string | null;
+        };
+        /** AskAnswer */
+        AskAnswer: {
+            /** Id */
+            id: number;
+            /** Question */
+            question: string;
+            /** Language */
+            language: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "done" | "failed";
+            /** Task Id */
+            task_id: number | null;
+            plan: components["schemas"]["AskPlan"] | null;
+            stats: components["schemas"]["AskStats"] | null;
+            /**
+             * Answer
+             * @description Markdown; [n] cites the n-th of ``items``
+             */
+            answer: string | null;
+            /**
+             * Items
+             * @description Matching photos, best first (up to 60)
+             */
+            items: components["schemas"]["AssetSummary"][];
+            /**
+             * Asset Ids
+             * @description All matches kept (up to 500), best first
+             */
+            asset_ids: number[];
+            /** Error */
+            error: string | null;
+            /** Created At */
+            created_at: string;
+        };
+        /** AskCount */
+        AskCount: {
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+        };
+        /** AskList */
+        AskList: {
+            /**
+             * Items
+             * @description Newest first (without photos)
+             */
+            items: components["schemas"]["AskAnswer"][];
+        };
+        /**
+         * AskPlan
+         * @description How the question was understood: the filters actually applied.
+         */
+        AskPlan: {
+            /**
+             * Intent
+             * @default photos
+             * @enum {string}
+             */
+            intent: "photos" | "count" | "top";
+            /**
+             * Date From
+             * @default
+             */
+            date_from: string;
+            /**
+             * Date To
+             * @description Exclusive
+             * @default
+             */
+            date_to: string;
+            /**
+             * Country
+             * @description ISO code
+             * @default
+             */
+            country: string;
+            /**
+             * City
+             * @default
+             */
+            city: string;
+            /**
+             * Camera
+             * @default
+             */
+            camera: string;
+            /**
+             * Lens
+             * @default
+             */
+            lens: string;
+            /**
+             * Min Rating
+             * @default 0
+             */
+            min_rating: number;
+            /**
+             * Favorite
+             * @default false
+             */
+            favorite: boolean;
+            /**
+             * Media Type
+             * @default
+             * @enum {string}
+             */
+            media_type: "" | "photo" | "video";
+            /**
+             * Keywords
+             * @description Any of them, in what was read
+             */
+            keywords?: string[];
+            /**
+             * Visual
+             * @description Searched by image content (AI search)
+             * @default
+             */
+            visual: string;
+            /**
+             * Group By
+             * @default
+             * @enum {string}
+             */
+            group_by: "" | "city" | "country" | "year" | "month" | "camera" | "lens";
+        };
+        /** AskRequest */
+        AskRequest: {
+            /** Question */
+            question: string;
+            /**
+             * Language
+             * @default zh-CN
+             * @enum {string}
+             */
+            language: "zh-CN" | "en" | "fr";
+        };
+        /** AskStats */
+        AskStats: {
+            /**
+             * Total
+             * @description Matching photos and videos
+             */
+            total: number;
+            /**
+             * Described
+             * @description Of the candidates, how many the local model has read
+             */
+            described: number;
+            /** First */
+            first?: string | null;
+            /** Last */
+            last?: string | null;
+            /** Groups */
+            groups?: components["schemas"]["AskCount"][];
+            /**
+             * Visual Used
+             * @default false
+             */
+            visual_used: boolean;
         };
         /** AssetBatchUpdate */
         AssetBatchUpdate: {
@@ -7909,6 +8116,148 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalysisResult"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listQuestions: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    askLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskAnswer"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskAnswer"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Validation Error */

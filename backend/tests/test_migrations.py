@@ -31,6 +31,7 @@ EXPECTED_TABLES = {
     "edit_history",
     "collections",
     "collection_diary",
+    "library_questions",
     "collection_items",
     "schema_migrations",
 }

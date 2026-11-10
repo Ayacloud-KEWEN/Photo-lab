@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -20,6 +20,7 @@ function renderPage(options: StubOptions) {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  localStorage.clear();
 });
 
 describe("AISearchPage", () => {
@@ -86,5 +87,47 @@ describe("AISearchPage", () => {
         requests.some((r) => r.url.searchParams.get("text") === "城市夜景"),
       ).toBe(true),
     );
+  });
+});
+
+describe("Ask the library", () => {
+  it("answers a question with the local model, citing photos", async () => {
+    const assets = [1, 2, 3].map((id) => makeAsset(id));
+    const { requests } = renderPage({ assets, vlm: { installed: true } });
+    await userEvent.click(await screen.findByRole("tab", { name: "问图库" }));
+    const box = await screen.findByRole("textbox", { name: /用一句话问你的图库/ });
+    await userEvent.type(box, "去年在日本吃过哪些拉面？{Enter}");
+    await waitFor(() =>
+      expect(requests.find((r) => r.method === "POST" && r.url.pathname === "/api/v1/ask")?.body).toEqual({
+        question: "去年在日本吃过哪些拉面？",
+        language: "zh-CN",
+      }),
+    );
+    const answer = await screen.findByRole("article", { name: "去年在日本吃过哪些拉面？" });
+    expect(await within(answer).findByText(/去年在东京吃过两次拉面/)).toBeInTheDocument();
+    // How the question was understood, the counts and the cited photos.
+    expect(within(answer).getByText("2025-01-01 至 2026-01-01")).toBeInTheDocument();
+    expect(within(answer).getByText("内容含：拉面")).toBeInTheDocument();
+    expect(within(answer).getByText("共 2 张符合")).toBeInTheDocument();
+    expect(within(answer).getByText("依据 40 张已识别内容的照片")).toBeInTheDocument();
+    expect(within(answer).getByRole("list", { name: "统计" })).toHaveTextContent("东京");
+    expect(within(answer).getByRole("button", { name: "[1]" })).toBeInTheDocument();
+    expect(within(answer).getAllByRole("button", { name: /^\[\d\] IMG_/ })).toHaveLength(2);
+
+    // Kept in the history; deleted from there.
+    const history = screen.getByRole("complementary", { name: "提过的问题" });
+    await userEvent.click(
+      await within(history).findByRole("button", { name: "删除问题“去年在日本吃过哪些拉面？”" }),
+    );
+    await waitFor(() =>
+      expect(within(history).queryByText("去年在日本吃过哪些拉面？")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("needs the local model", async () => {
+    renderPage({ assets: [makeAsset(1)] });
+    await userEvent.click(await screen.findByRole("tab", { name: "问图库" }));
+    expect(await screen.findByText(/需要先在“设置 › 本地视觉模型”里下载本地模型/)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /用一句话问你的图库/ })).toBeDisabled();
   });
 });

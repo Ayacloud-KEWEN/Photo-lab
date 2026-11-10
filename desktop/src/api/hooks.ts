@@ -67,6 +67,8 @@ export const queryKeys = {
   collectionRoute: (id: number) => ["library", "collections", id, "route"] as const,
   collectionStories: (id: number) => ["library", "collections", id, "stories"] as const,
   collectionDiary: (id: number) => ["library", "collections", id, "diary"] as const,
+  questions: ["ask"] as const,
+  question: (id: number) => ["ask", id] as const,
   task: (id: number) => ["tasks", id] as const,
   tripSuggestions: ["library", "collections", "suggestions"] as const,
   // Under "library": flag changes (batch / asset updates) refresh them.
@@ -494,6 +496,27 @@ export function useCollectionDiary(id: number) {
     queryKey: queryKeys.collectionDiary(id),
     queryFn: () => api.getCollectionDiary(requireConnection(conn), id),
     enabled: conn !== null,
+  });
+}
+
+/** Questions asked to the library, newest first. */
+export function useQuestions() {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.questions,
+    queryFn: async () => (await api.listQuestions(requireConnection(conn))).items,
+    enabled: conn !== null,
+  });
+}
+
+/** One question, polled until it is answered. */
+export function useQuestion(id: number | null) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.question(id ?? 0),
+    queryFn: () => api.getQuestion(requireConnection(conn), id!),
+    enabled: conn !== null && id !== null,
+    refetchInterval: (query) => (query.state.data?.status === "pending" ? 1000 : false),
   });
 }
 

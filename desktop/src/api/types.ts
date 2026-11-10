@@ -59,6 +59,7 @@ export type CloudRequest = Schemas["CloudRequest"];
 export type CloudPreview = Schemas["CloudPreview"];
 export type AnalysisResult = Schemas["AnalysisResult"];
 export type Diary = Schemas["Diary"];
+export type AskAnswer = Schemas["AskAnswer"];
 export type DiaryDay = Schemas["DiaryDay"];
 export type StoryWriter = NonNullable<Schemas["StoryRequest"]["writer"]>;
 export type AnalysisKind = CloudRequest["kind"];

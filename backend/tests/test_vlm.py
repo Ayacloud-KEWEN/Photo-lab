@@ -150,8 +150,25 @@ class FakeReader:
 
     prompts: ClassVar[list[str]] = []
 
-    def write(self, prompt: str, max_tokens: int) -> tuple[str, int, int]:
+    def write(
+        self, prompt: str, max_tokens: int, schema: dict[str, Any] | None = None
+    ) -> tuple[str, int, int]:
         FakeReader.prompts.append(prompt)
+        if schema is not None:  # a question understood as filters
+            plan: dict[str, Any] = {
+                "intent": "photos",
+                "keywords": [],
+                "visual": "",
+                "group_by": "",
+            }
+            if "酒吧" in prompt:
+                plan["keywords"] = ["酒吧"]
+            if "哪年" in prompt:
+                plan.update(intent="top", group_by="year", city="不存在的城")
+            return json.dumps(plan, ensure_ascii=False), 500, 80
+        if "程序查到的结果" in prompt:  # the answer
+            total = prompt.split("符合条件的照片和视频：")[1].split(" ")[0]
+            return f"找到 {total} 张，比如 [1]。", 900, 30
         if "旅行笔记" in prompt:  # a day's notes
             return ("看了日落。" if "日落" in prompt else "逛了古城。"), 400, 60
         if "编号. 说明" in prompt:  # caption drafts: one numbered line per photo
@@ -469,3 +486,62 @@ def test_caption_drafts(vlm_app: tuple[TestClient, Path]) -> None:
     assert (red["caption"], red["caption_draft"]) == ("自己改的", None)
 
     assert parse("好的\n1. 一\n2）二\n3、“三”\n9. 多余", 3) == {1: "一", 2: "二", 3: "三"}
+
+
+def test_ask_the_library(vlm_app: tuple[TestClient, Path]) -> None:
+    from lumen.vlm import session
+
+    client, folder = vlm_app
+    db = client.app.state.db  # type: ignore[attr-defined]
+    assert client.post("/api/v1/ask", json={"question": "有哪些酒吧？"}).status_code == 400
+
+    settings = {"vlm_folder": str(folder), "vlm_enabled": True, "vlm_scope": "all"}
+    client.patch("/api/v1/settings", json=settings)
+    wait_idle(db)  # the photos are read
+    FakeReader.started, FakeReader.prompts = [], []
+    asked = client.post("/api/v1/ask", json={"question": "我拍过哪些酒吧？"})
+    assert asked.status_code == 202 and asked.json()["status"] == "pending"
+    wait_idle(db)
+    answer = client.get(f"/api/v1/ask/{asked.json()['id']}").json()
+    assert answer["status"] == "done", answer
+    # Understood as a keyword, looked up in what was read: the red photo's bar.
+    assert answer["plan"]["keywords"] == ["酒吧"]
+    assert [item["file_name"] for item in answer["items"]] == ["red.jpg"]
+    assert answer["stats"]["total"] == 1 and answer["stats"]["described"] == 2  # dark: unreadable
+    assert answer["answer"] == "找到 1 张，比如 [1]。"
+    # The model was given what it read in the matching photo, and what the library holds.
+    assert "海边的酒吧" in FakeReader.prompts[-1] and "今天是" in FakeReader.prompts[0]
+
+    # A follow-up: the model kept running is reused; counts by year; an unknown town is
+    # looked for as a word instead.
+    second = client.post("/api/v1/ask", json={"question": "哪年拍得最多？"}).json()
+    wait_idle(db)
+    answer = client.get(f"/api/v1/ask/{second['id']}").json()
+    assert FakeReader.started == [DEFAULT_MODEL]
+    assert answer["plan"]["city"] == "" and answer["plan"]["keywords"] == ["不存在的城"]
+    assert answer["stats"]["total"] == 0
+
+    history = client.get("/api/v1/ask").json()["items"]
+    assert [q["id"] for q in history] == [second["id"], asked.json()["id"]]
+    assert client.delete(f"/api/v1/ask/{second['id']}").status_code == 204
+    assert len(client.get("/api/v1/ask").json()["items"]) == 1
+    session.release_warm()
+
+
+def test_ask_counts_by_group(vlm_app: tuple[TestClient, Path]) -> None:
+    from lumen.schemas.ask import AskPlan
+    from lumen.vlm.ask import _groups, query_of
+
+    client, _ = vlm_app
+    db = client.app.state.db  # type: ignore[attr-defined]
+    with db.session() as conn:
+        ids = [int(r[0]) for r in conn.execute("SELECT id FROM media_assets")]
+        assert [g.model_dump() for g in _groups(conn, ids, "year")] == [
+            {"label": "2020", "count": 3}
+        ]
+        plan = AskPlan(date_from="2020-01-02", date_to="bad", camera="nope", country="zz")
+        query = query_of(conn, plan)
+        assert (query.date_from, query.date_to, query.camera, query.country) == (
+            "2020-01-02", None, None, None,
+        )  # fmt: skip
+        assert (plan.date_to, plan.camera, plan.country) == ("", "", "")

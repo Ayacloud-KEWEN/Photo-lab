@@ -2,6 +2,7 @@ import { toSearchParams, type AssetQuery, type QueryValue } from "./query";
 import type {
   AIStatus,
   AnalysisResult,
+  AskAnswer,
   Diary,
   StoryWriter,
   AppSettings,
@@ -304,6 +305,18 @@ export const api = {
     request<{ changed: number }>(conn, "POST", `/api/v1/collections/${id}/diary/import-notes`, {
       analysis_id: analysisId,
     }),
+
+  askLibrary: (conn: BackendConnection, question: string, language: string) =>
+    request<AskAnswer>(conn, "POST", "/api/v1/ask", { question, language }),
+
+  listQuestions: (conn: BackendConnection) =>
+    request<{ items: AskAnswer[] }>(conn, "GET", "/api/v1/ask"),
+
+  getQuestion: (conn: BackendConnection, id: number) =>
+    request<AskAnswer>(conn, "GET", `/api/v1/ask/${id}`),
+
+  deleteQuestion: (conn: BackendConnection, id: number) =>
+    request<void>(conn, "DELETE", `/api/v1/ask/${id}`),
 
   listCollectionStories: (conn: BackendConnection, id: number) =>
     request<AnalysisResult[]>(conn, "GET", `/api/v1/collections/${id}/stories`),

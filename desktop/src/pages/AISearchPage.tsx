@@ -15,6 +15,8 @@ import {
 import { FilterBar } from "@/components/library/FilterBar";
 import { PhotoWall } from "@/components/library/PhotoWall";
 import { Button } from "@/components/ui/button";
+import { AskView } from "@/components/ask/AskView";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { emptySelection, selectItem, type Modifiers, type SelectionState } from "@/library/selection";
 import { cleanQuery, useLibraryState } from "@/library/state";
@@ -38,15 +40,54 @@ export function AISearchPage({ onSelect }: AISearchPageProps) {
     api.warmUpAi(conn).catch(() => {});
   }, [ready, conn]);
 
+  const [mode, setModeState] = useState<"search" | "ask">(() => {
+    try {
+      return localStorage.getItem("lumen.aiSearch.mode") === "ask" ? "ask" : "search";
+    } catch {
+      return "search";
+    }
+  });
+  const setMode = (next: "search" | "ask") => {
+    setModeState(next);
+    try {
+      localStorage.setItem("lumen.aiSearch.mode", next);
+    } catch {
+      // Not remembered: fine.
+    }
+  };
+
   return (
     <div className="flex h-full flex-col">
-      <div className="shrink-0 px-6 pt-5">
+      <div className="flex shrink-0 flex-wrap items-center gap-3 px-6 pt-5">
         <h1 className="flex items-center gap-2 text-lg font-medium">
           <Sparkles className="size-4 text-highlight" />
           {t("aiSearch.title")}
         </h1>
+        <div
+          role="tablist"
+          aria-label={t("ask.modes")}
+          className="inline-flex rounded-md border border-white/10 bg-background/40 p-0.5"
+        >
+          {(["search", "ask"] as const).map((id) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={mode === id}
+              onClick={() => setMode(id)}
+              className={cn(
+                "h-7 rounded px-3 text-[12px] text-muted-foreground hover:text-foreground",
+                mode === id && "bg-white/10 text-foreground",
+              )}
+            >
+              {t(id === "search" ? "ask.modeSearch" : "ask.modeAsk")}
+            </button>
+          ))}
+        </div>
       </div>
-      {!status.data ? null : ready ? (
+      {mode === "ask" ? (
+        <AskView />
+      ) : !status.data ? null : ready ? (
         <SearchView onSelect={onSelect} />
       ) : (
         <Setup />
