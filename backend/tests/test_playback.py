@@ -69,7 +69,12 @@ def _play_avi(client: TestClient, tmp_path: Path) -> None:
     assert task["status"] == "succeeded", task
     assert client.get(f"{url}/state").json()["ready"] is True
 
-    played = client.get(url, headers={"Range": "bytes=0-99"})
+    # As the <video> element asks: the token in the address, no header.
+    played = client.get(
+        url,
+        params={"token": TOKEN},
+        headers={"Range": "bytes=0-99", "Authorization": ""},
+    )
     assert played.status_code == 206 and played.headers["content-type"] == "video/mp4"
     assert played.content[4:8] == b"ftyp"
     # The original is untouched.
