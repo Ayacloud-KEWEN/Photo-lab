@@ -5,6 +5,7 @@ import {
   ChevronDown,
   FolderOpen,
   FolderPlus,
+  FolderTree,
   HardDrive,
   Info,
   RefreshCw,
@@ -26,9 +27,11 @@ import {
   useStorageRoots,
   useTimeline,
 } from "@/api/hooks";
+import type { QueryPatch } from "@/api/query";
 import type { StorageRoot, Task } from "@/api/types";
 import { DateRail, fromMonth, groupByDay } from "@/components/library/DateRail";
 import { FilterBar } from "@/components/library/FilterBar";
+import { FolderCrumbs, FolderPanel } from "@/components/library/FolderPanel";
 import { PhotoWall } from "@/components/library/PhotoWall";
 import { SelectionBar } from "@/components/library/SelectionBar";
 import { Button } from "@/components/ui/button";
@@ -92,6 +95,23 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [mode, setMode] = useState<WallMode>(initialMode);
   const [showSources, setShowSources] = useState<boolean | null>(null);
+  const [foldersOpen, setFoldersOpenState] = useState(() => {
+    try {
+      return localStorage.getItem("lumen.library.folders") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setFoldersOpen = (open: boolean) => {
+    setFoldersOpenState(open);
+    try {
+      localStorage.setItem("lumen.library.folders", open ? "1" : "0");
+    } catch {
+      // Not remembered: fine.
+    }
+  };
+  const patchQuery = (patch: QueryPatch) =>
+    setQuery((current) => cleanQuery({ ...current, ...patch }));
   const [grouped, setGrouped] = useState(initialGrouped);
   // The month jumped to in the date bar (null: from the newest, or oldest, photo).
   const [anchor, setAnchor] = useState<string | null>(null);
@@ -243,6 +263,15 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
             <Button
               variant="ghost"
               size="sm"
+              aria-pressed={foldersOpen}
+              onClick={() => setFoldersOpen(!foldersOpen)}
+            >
+              <FolderTree className="size-3.5" />
+              {t("folders.title")}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               aria-expanded={sourcesOpen}
               onClick={() => setShowSources(!sourcesOpen)}
             >
@@ -286,6 +315,7 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
           grouped={grouped}
           onGroupedChange={changeGrouped}
         />
+        <FolderCrumbs query={query} onChange={patchQuery} />
         {wall.selection.selected.size > 1 && (
           <SelectionBar
             ids={wall.selectedIds}
@@ -296,6 +326,7 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
       </div>
 
       <div className="flex min-h-0 flex-1">
+        {foldersOpen && <FolderPanel query={query} onChange={patchQuery} />}
         <div className="min-h-0 min-w-0 flex-1">
           {wall.items.length > 0 ? (
             <PhotoWall

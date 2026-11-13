@@ -653,6 +653,16 @@ const fr: LocaleResource = {
     addAll_one: "Ajouter à un portfolio ({{count, number}})",
     addAll_other: "Ajouter à un portfolio ({{count, number}})",
   },
+  folders: {
+    title: "Dossiers",
+    search: "Rechercher un nom de dossier",
+    noMatch: "Aucun nom de dossier ne correspond.",
+    found: "Dossiers trouvés",
+    path: "Dossier actuel",
+    subfolders: "Inclure les sous-dossiers",
+    reveal: "Afficher dans l’Explorateur",
+    clear: "Ne plus filtrer par dossier",
+  },
   aiSearch: {
     loadingModel: "Chargement du modèle d’IA ; la première recherche prend environ 20 s…",
     title: "Recherche IA",

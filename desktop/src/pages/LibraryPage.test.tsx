@@ -25,6 +25,7 @@ function renderPage(status?: BackendStatus) {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  localStorage.clear();
 });
 
 describe("LibraryPage", () => {
@@ -278,5 +279,45 @@ describe("LibraryPage", () => {
   it("explains when the backend failed to start", () => {
     renderPage({ state: "failed", message: "boom" });
     expect(screen.getByText("无法连接后端服务：boom")).toBeInTheDocument();
+  });
+
+  it("browses the library by its folders, and finds folders by name", async () => {
+    const { requests } = stubBackend({
+      roots: [{ ...root, status: "ready" }],
+      assets: [makeAsset(1), makeAsset(2)],
+    });
+    fakeViewport();
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "文件夹" }));
+    const panel = screen.getByRole("complementary", { name: "文件夹" });
+    const tree = within(panel).getByRole("tree", { name: "文件夹" });
+    await userEvent.click(await within(tree).findByRole("button", { name: /^2024/ }));
+    await userEvent.click(await within(tree).findByRole("button", { name: /^Japan/ }));
+    const assetCalls = () => requests.filter((r) => r.url.pathname === "/api/v1/assets");
+    await waitFor(() => {
+      const params = assetCalls().at(-1)!.url.searchParams;
+      expect(params.get("storage_root_id")).toBe("7");
+      expect(params.get("folder")).toBe("2024/Japan");
+    });
+    const crumbs = screen.getByRole("navigation", { name: "当前文件夹" });
+    expect(crumbs).toHaveTextContent("Photos2024Japan");
+
+    // Only what is right in it, then back up a level, then shown in File Explorer.
+    await userEvent.click(within(crumbs).getByRole("checkbox", { name: "包含子文件夹" }));
+    await waitFor(() => expect(assetCalls().at(-1)!.url.searchParams.get("subfolders")).toBe("false"));
+    await userEvent.click(within(crumbs).getByRole("button", { name: "2024" }));
+    await waitFor(() => expect(assetCalls().at(-1)!.url.searchParams.get("folder")).toBe("2024"));
+    await userEvent.click(within(crumbs).getByRole("button", { name: "在资源管理器中显示" }));
+    expect(requests.at(-1)!.url.pathname).toBe("/api/v1/folders/reveal");
+
+    await userEvent.type(within(panel).getByRole("searchbox", { name: "搜索文件夹名" }), "jap");
+    const found = await within(panel).findByRole("list", { name: "找到的文件夹" });
+    expect(found).toHaveTextContent("Photos › 2024");
+    await userEvent.click(within(found).getByRole("button", { name: /Japan/ }));
+    await waitFor(() => expect(assetCalls().at(-1)!.url.searchParams.get("folder")).toBe("2024/Japan"));
+
+    await userEvent.click(screen.getByRole("button", { name: "不按文件夹筛选" }));
+    await waitFor(() => expect(assetCalls().at(-1)!.url.searchParams.get("folder")).toBeNull());
+    expect(screen.queryByRole("navigation", { name: "当前文件夹" })).not.toBeInTheDocument();
   });
 });

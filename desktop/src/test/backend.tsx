@@ -874,6 +874,29 @@ export function stubBackend(options: StubOptions = {}) {
       };
       return json(method === "PATCH" ? { ...detail, ...(body as object) } : detail);
     }
+    if (path === "/api/v1/folders") {
+      const at = (url.searchParams.get("path") ?? "").replace(/^\/+/, "");
+      const tree: Record<string, { name: string; count: number; kids: boolean }[]> = {
+        "": [{ name: "2024", count: 3, kids: true }],
+        "2024": [{ name: "Japan", count: 2, kids: false }],
+      };
+      return json({
+        items: (tree[at] ?? []).map((f) => ({
+          storage_root_id: Number(url.searchParams.get("storage_root_id")), name: f.name,
+          path: at ? `${at}/${f.name}` : f.name, count: f.count, direct: 1, has_children: f.kids,
+          cover: null,
+        })),
+      }); // prettier-ignore
+    }
+    if (path === "/api/v1/folders/search") {
+      const q = (url.searchParams.get("q") ?? "").toLowerCase();
+      return json({
+        items: "japan".includes(q)
+          ? [{ storage_root_id: 7, name: "Japan", path: "2024/Japan", count: 2, direct: 2, has_children: false, cover: null }]
+          : [],
+      }); // prettier-ignore
+    }
+    if (path === "/api/v1/folders/reveal") return Promise.resolve(new Response(null, { status: 204 }));
     if (path === "/api/v1/storage-roots") {
       if (method === "POST") {
         roots = [...roots, root];

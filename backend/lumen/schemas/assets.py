@@ -29,6 +29,12 @@ class AssetQuery(BaseModel):
     lens: str | None = Field(default=None, max_length=200)
     format: str | None = Field(default=None, max_length=10, description="File extension, e.g. CR3")
     storage_root_id: int | None = Field(default=None, ge=1)
+    folder: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="With storage_root_id: a folder in it (relative path, '' = the root)",
+    )
+    subfolders: bool = Field(default=True, description="With folder: its subfolders too")
     tag_id: list[int] = Field(default_factory=list, description="Assets having all these tags")
     date_from: str | None = Field(default=None, description="Inclusive, YYYY-MM-DD[THH:MM:SS]")
     date_to: str | None = Field(default=None, description="Exclusive, YYYY-MM-DD[THH:MM:SS]")
@@ -279,3 +285,17 @@ class AssetDetail(BaseModel):
         default=None, description="What the local vision model saw and read (ADR-038)"
     )
     files: list[AssetFile]
+
+
+class Folder(BaseModel):
+    storage_root_id: int
+    path: str = Field(description="Relative to the library folder ('' is the folder itself)")
+    name: str
+    count: int = Field(description="Photos and videos in it and its subfolders")
+    direct: int = Field(description="Photos and videos right in it")
+    has_children: bool
+    cover: AssetSummary | None = None
+
+
+class FolderList(BaseModel):
+    items: list[Folder]

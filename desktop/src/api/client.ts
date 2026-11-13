@@ -4,6 +4,7 @@ import type {
   AnalysisResult,
   AskAnswer,
   Diary,
+  FolderList,
   StoryWriter,
   AppSettings,
   AppSettingsUpdate,
@@ -197,6 +198,23 @@ export const api = {
 
   listTasks: (conn: BackendConnection, options: { active?: boolean; limit?: number } = {}) =>
     request<TaskList>(conn, "GET", `/api/v1/tasks${toSearchParams({ ...options })}`),
+
+  listFolders: (conn: BackendConnection, rootId: number, path: string) =>
+    request<FolderList>(
+      conn,
+      "GET",
+      `/api/v1/folders${toSearchParams({ storage_root_id: rootId, path })}`,
+    ),
+
+  searchFolders: (conn: BackendConnection, q: string) =>
+    request<FolderList>(conn, "GET", `/api/v1/folders/search${toSearchParams({ q })}`),
+
+  revealFolder: (conn: BackendConnection, rootId: number, path: string) =>
+    request<void>(
+      conn,
+      "POST",
+      `/api/v1/folders/reveal${toSearchParams({ storage_root_id: rootId, path })}`,
+    ),
 
   getPlaybackState: (conn: BackendConnection, assetId: number, start: boolean) =>
     request<{ needed: boolean; ready: boolean; task_id: number | null }>(

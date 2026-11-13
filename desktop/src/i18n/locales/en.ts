@@ -653,6 +653,16 @@ const en: LocaleResource = {
     addAll_one: "Add to a portfolio ({{count, number}})",
     addAll_other: "Add to a portfolio ({{count, number}})",
   },
+  folders: {
+    title: "Folders",
+    search: "Search folder names",
+    noMatch: "No folder name matches.",
+    found: "Folders found",
+    path: "Current folder",
+    subfolders: "Include subfolders",
+    reveal: "Show in File Explorer",
+    clear: "Stop filtering by folder",
+  },
   aiSearch: {
     loadingModel: "Loading the AI model; the first search takes about 20 s…",
     title: "AI Search",

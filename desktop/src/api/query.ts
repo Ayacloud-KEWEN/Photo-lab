@@ -8,6 +8,10 @@ export interface AssetQuery {
   lens?: string;
   format?: string;
   storage_root_id?: number;
+  /** With storage_root_id: a folder in it, relative ("" = the library folder itself). */
+  folder?: string;
+  /** With folder: false to show only what is right in it. */
+  subfolders?: boolean;
   tag_id?: number[];
   date_from?: string;
   date_to?: string;
@@ -39,7 +43,8 @@ export function toSearchParams(params: Record<string, QueryValue>): string {
 
 /** Number of active filters (search text and sort order excluded). */
 export function countFilters(query: AssetQuery): number {
-  const { q: _q, sort: _sort, tag_id, ...rest } = query;
+  // A folder narrows its library folder: counted once, with it.
+  const { q: _q, sort: _sort, tag_id, folder: _folder, subfolders: _subfolders, ...rest } = query;
   return (
     Object.values(rest).filter((value) => value !== undefined && value !== "").length +
     (tag_id?.length ?? 0)

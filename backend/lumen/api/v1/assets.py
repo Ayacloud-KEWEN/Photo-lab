@@ -9,7 +9,7 @@ from starlette.concurrency import run_in_threadpool
 from lumen.api.deps import Connection, wake_task_runner
 from lumen.core.config import Settings
 from lumen.core.errors import NotFoundError
-from lumen.core.reveal import open_in_browser
+from lumen.core.reveal import open_in_browser, reveal_in_explorer
 from lumen.develop import live
 from lumen.schemas.assets import (
     AssetBatchUpdate,
@@ -20,6 +20,7 @@ from lumen.schemas.assets import (
     AssetQuery,
     AssetUpdate,
     BatchResult,
+    FolderList,
     MapPoints,
     PlaybackState,
     RenditionVariant,
@@ -28,7 +29,7 @@ from lumen.schemas.assets import (
 from lumen.schemas.common import ErrorResponse
 from lumen.services import assets as service
 from lumen.services import develop as develop_service
-from lumen.services import edits, playback
+from lumen.services import edits, library_folders, playback
 
 router = APIRouter(tags=["assets"])
 
@@ -145,6 +146,32 @@ def get_asset_original(conn: Connection, asset_id: int = Path(ge=1)) -> FileResp
         filename=path.name,
         headers={"Cache-Control": "private, no-cache"},
     )
+
+
+@router.get("/folders", response_model=FolderList, operation_id="listFolders")
+def list_folders(
+    conn: Connection,
+    storage_root_id: int = Query(ge=1),
+    path: str = Query(default="", max_length=1000, description="'' = the library folder"),
+) -> FolderList:
+    """The subfolders of a folder, with how many photos and videos each holds."""
+    return library_folders.children(conn, storage_root_id, path)
+
+
+@router.post("/folders/reveal", status_code=204, operation_id="revealFolder", responses=NOT_FOUND)
+def reveal_folder(
+    conn: Connection,
+    storage_root_id: int = Query(ge=1),
+    path: str = Query(default="", max_length=1000),
+) -> None:
+    """Show a folder of the library in File Explorer."""
+    reveal_in_explorer(library_folders.folder_path(conn, storage_root_id, path))
+
+
+@router.get("/folders/search", response_model=FolderList, operation_id="searchFolders")
+def search_folders(conn: Connection, q: str = Query(min_length=1, max_length=200)) -> FolderList:
+    """Folders whose name contains ``q``, in every library folder, fullest first."""
+    return FolderList(items=library_folders.search(conn, q))
 
 
 @router.get(

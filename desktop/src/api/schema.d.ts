@@ -299,6 +299,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Folders
+         * @description The subfolders of a folder, with how many photos and videos each holds.
+         */
+        get: operations["listFolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/folders/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reveal Folder
+         * @description Show a folder of the library in File Explorer.
+         */
+        post: operations["revealFolder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/folders/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Folders
+         * @description Folders whose name contains ``q``, in every library folder, fullest first.
+         */
+        get: operations["searchFolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assets/{asset_id}/playback/state": {
         parameters: {
             query?: never;
@@ -3550,6 +3610,36 @@ export interface components {
             /** Count */
             count: number;
         };
+        /** Folder */
+        Folder: {
+            /** Storage Root Id */
+            storage_root_id: number;
+            /**
+             * Path
+             * @description Relative to the library folder ('' is the folder itself)
+             */
+            path: string;
+            /** Name */
+            name: string;
+            /**
+             * Count
+             * @description Photos and videos in it and its subfolders
+             */
+            count: number;
+            /**
+             * Direct
+             * @description Photos and videos right in it
+             */
+            direct: number;
+            /** Has Children */
+            has_children: boolean;
+            cover?: components["schemas"]["AssetSummary"] | null;
+        };
+        /** FolderList */
+        FolderList: {
+            /** Items */
+            items: components["schemas"]["Folder"][];
+        };
         /** FrameExport */
         FrameExport: {
             /**
@@ -4939,6 +5029,10 @@ export interface operations {
                 /** @description File extension, e.g. CR3 */
                 format?: string | null;
                 storage_root_id?: number | null;
+                /** @description With storage_root_id: a folder in it (relative path, '' = the root) */
+                folder?: string | null;
+                /** @description With folder: its subfolders too */
+                subfolders?: boolean;
                 /** @description Assets having all these tags */
                 tag_id?: number[];
                 /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
@@ -4996,6 +5090,10 @@ export interface operations {
                 /** @description File extension, e.g. CR3 */
                 format?: string | null;
                 storage_root_id?: number | null;
+                /** @description With storage_root_id: a folder in it (relative path, '' = the root) */
+                folder?: string | null;
+                /** @description With folder: its subfolders too */
+                subfolders?: boolean;
                 /** @description Assets having all these tags */
                 tag_id?: number[];
                 /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
@@ -5293,6 +5391,109 @@ export interface operations {
             };
         };
     };
+    listFolders: {
+        parameters: {
+            query: {
+                storage_root_id: number;
+                /** @description '' = the library folder */
+                path?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revealFolder: {
+        parameters: {
+            query: {
+                storage_root_id: number;
+                path?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    searchFolders: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     getPlaybackState: {
         parameters: {
             query?: {
@@ -5427,6 +5628,10 @@ export interface operations {
                 /** @description File extension, e.g. CR3 */
                 format?: string | null;
                 storage_root_id?: number | null;
+                /** @description With storage_root_id: a folder in it (relative path, '' = the root) */
+                folder?: string | null;
+                /** @description With folder: its subfolders too */
+                subfolders?: boolean;
                 /** @description Assets having all these tags */
                 tag_id?: number[];
                 /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
@@ -5483,6 +5688,10 @@ export interface operations {
                 /** @description File extension, e.g. CR3 */
                 format?: string | null;
                 storage_root_id?: number | null;
+                /** @description With storage_root_id: a folder in it (relative path, '' = the root) */
+                folder?: string | null;
+                /** @description With folder: its subfolders too */
+                subfolders?: boolean;
                 /** @description Assets having all these tags */
                 tag_id?: number[];
                 /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
@@ -7842,6 +8051,10 @@ export interface operations {
                 /** @description File extension, e.g. CR3 */
                 format?: string | null;
                 storage_root_id?: number | null;
+                /** @description With storage_root_id: a folder in it (relative path, '' = the root) */
+                folder?: string | null;
+                /** @description With folder: its subfolders too */
+                subfolders?: boolean;
                 /** @description Assets having all these tags */
                 tag_id?: number[];
                 /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
@@ -7985,6 +8198,10 @@ export interface operations {
                 /** @description File extension, e.g. CR3 */
                 format?: string | null;
                 storage_root_id?: number | null;
+                /** @description With storage_root_id: a folder in it (relative path, '' = the root) */
+                folder?: string | null;
+                /** @description With folder: its subfolders too */
+                subfolders?: boolean;
                 /** @description Assets having all these tags */
                 tag_id?: number[];
                 /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */

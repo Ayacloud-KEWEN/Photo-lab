@@ -27,6 +27,7 @@ from lumen.develop.renditions import (
     touch,
 )
 from lumen.develop.video import grade_frame
+from lumen.library.common import path_key
 from lumen.library.live import CLIP_EXTENSION, CLIP_EXTENSIONS
 from lumen.library.search import like_pattern, search_terms
 from lumen.media import thumbnails
@@ -126,6 +127,15 @@ def _filters(query: AssetQuery) -> tuple[list[str], list[object]]:
     if query.storage_root_id is not None:
         clauses.append("c.storage_root_id = ?")
         params.append(query.storage_root_id)
+        # A folder of that library folder: its files' paths start with it.
+        key = folder_key(query.folder) if query.folder else ""  # "/" too: the top level
+        prefix = key + os.sep if key else ""
+        if prefix:
+            clauses.append("c.relative_path_key LIKE ? ESCAPE '!'")
+            params.append(like_prefix(prefix))
+        if query.folder is not None and not query.subfolders:
+            clauses.append("c.relative_path_key NOT LIKE ? ESCAPE '!'")
+            params.append(like_prefix(prefix) + like_prefix(os.sep))
     for tag_id in query.tag_id:
         clauses.append(
             "EXISTS (SELECT 1 FROM media_tags mt WHERE mt.asset_id = a.id AND mt.tag_id = ?)"
@@ -153,6 +163,17 @@ def _filters(query: AssetQuery) -> tuple[list[str], list[object]]:
         )
         params.append(query.place_id)
     return clauses, params
+
+
+def folder_key(folder: str) -> str:
+    """A folder as stored keys spell it (any separator, any case)."""
+    inner = folder.strip("/\\")
+    return path_key(inner.replace("/", os.sep).replace("\\", os.sep)) if inner else ""
+
+
+def like_prefix(text: str) -> str:
+    """``text`` then anything, for ``LIKE ? ESCAPE '!'``."""
+    return text.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
 
 
 def _names(row: sqlite3.Row, prefix: str) -> PlaceName:

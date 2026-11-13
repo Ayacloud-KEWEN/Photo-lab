@@ -651,6 +651,16 @@ const zhCN = {
     addAll_one: "加入作品集（{{count, number}} 张）",
     addAll_other: "加入作品集（{{count, number}} 张）",
   },
+  folders: {
+    title: "文件夹",
+    search: "搜索文件夹名",
+    noMatch: "没有名字匹配的文件夹。",
+    found: "找到的文件夹",
+    path: "当前文件夹",
+    subfolders: "包含子文件夹",
+    reveal: "在资源管理器中显示",
+    clear: "不按文件夹筛选",
+  },
   aiSearch: {
     loadingModel: "正在加载 AI 模型，第一次搜索约需 20 秒…",
     title: "AI 搜索",
