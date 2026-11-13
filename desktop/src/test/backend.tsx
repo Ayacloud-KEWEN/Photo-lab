@@ -531,7 +531,14 @@ export function stubBackend(options: StubOptions = {}) {
         examples: ids.slice(1).map((id) => ({ asset_id: id, from_asset_id: 99, latitude: 42.4, longitude: 18.7, gap_s: 600 })),
       }); // prettier-ignore
     }
-    if (path.startsWith("/api/v1/assets/location") || path.startsWith("/api/v1/assets/time-shift")) {
+    if (path === "/api/v1/assets/time-range") {
+      return json({ first: "2024-06-07T09:30:00", first_asset_id: 3, last: "2024-06-09T09:30:00" });
+    }
+    if (
+      path.startsWith("/api/v1/assets/location") ||
+      path.startsWith("/api/v1/assets/time-shift") ||
+      path === "/api/v1/assets/time-set"
+    ) {
       return json({ changed: (body as { asset_ids: number[] }).asset_ids.length });
     }
     if (path.startsWith("/api/v1/mapweb/")) {

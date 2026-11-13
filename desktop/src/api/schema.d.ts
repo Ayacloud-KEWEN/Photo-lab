@@ -1881,6 +1881,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assets/time-set": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Time
+         * @description Set capture times to a date and time (one photo's, keeping the others' spacing, or
+         *     all the same). Restoring the time in the files still works.
+         */
+        post: operations["setTime"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/time-range": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Time Range
+         * @description The earliest and latest capture times of these photos.
+         */
+        post: operations["timeRange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assets/time-shift/restore": {
         parameters: {
             query?: never;
@@ -4452,6 +4493,40 @@ export interface components {
         TaskList: {
             /** Items */
             items: components["schemas"]["Task"][];
+        };
+        /** TimeRange */
+        TimeRange: {
+            /**
+             * First
+             * @description Earliest capture time of the photos
+             */
+            first: string | null;
+            /** First Asset Id */
+            first_asset_id: number | null;
+            /** Last */
+            last: string | null;
+        };
+        /** TimeSetRequest */
+        TimeSetRequest: {
+            /** Asset Ids */
+            asset_ids: number[];
+            /**
+             * Time
+             * Format: date-time
+             * @description Local wall-clock time; any zone is ignored
+             */
+            time: string;
+            /**
+             * Keep Spacing
+             * @description One photo gets the time and the others move as much (else all get it)
+             * @default false
+             */
+            keep_spacing: boolean;
+            /**
+             * Reference Asset Id
+             * @description With keep_spacing: that photo (default: the earliest)
+             */
+            reference_asset_id?: number | null;
         };
         /** TimeShiftRequest */
         TimeShiftRequest: {
@@ -9082,6 +9157,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChangeCount"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    setTime: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimeSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeCount"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    timeRange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeRange"];
                 };
             };
             /** @description Validation Error */

@@ -235,6 +235,10 @@ def shift_time(conn: sqlite3.Connection, asset_ids: list[int], seconds: int) -> 
     """Move these assets' capture times by ``seconds`` (a camera clock set wrong)."""
     if abs(seconds) > MAX_SHIFT_S:
         raise LumenError("A shift of more than 400 days is not allowed")
+    return _shift(conn, asset_ids, seconds)
+
+
+def _shift(conn: sqlite3.Connection, asset_ids: list[int], seconds: int) -> int:
     if seconds == 0:
         return 0
     now = utc_now()
@@ -250,6 +254,75 @@ def shift_time(conn: sqlite3.Connection, asset_ids: list[int], seconds: int) -> 
                 WHERE capture_time IS NOT NULL AND id IN ({marks})
                 """,
                 (seconds, seconds, now, *chunk),
+            ).rowcount
+            reindex_assets(conn, chunk)
+    return changed
+
+
+def time_range(
+    conn: sqlite3.Connection, asset_ids: list[int]
+) -> tuple[str | None, int | None, str | None]:
+    """The earliest capture time of these photos (and which), and the latest."""
+    first: tuple[str, int] | None = None
+    last: str | None = None
+    for chunk in _chunks(asset_ids):
+        marks = ",".join("?" * len(chunk))
+        for row in conn.execute(
+            f"SELECT id, capture_time FROM media_assets "
+            f"WHERE capture_time IS NOT NULL AND id IN ({marks})",
+            chunk,
+        ):
+            time = str(row["capture_time"])[:19]
+            if first is None or (time, int(row["id"])) < first:
+                first = (time, int(row["id"]))
+            last = max(last or time, time)
+    return (first[0], first[1], last) if first else (None, None, None)
+
+
+def set_time(
+    conn: sqlite3.Connection,
+    asset_ids: list[int],
+    time: str,
+    reference_id: int | None,
+    *,
+    keep_spacing: bool = False,
+) -> int:
+    """Set capture times to ``time`` (local wall clock, ``YYYY-MM-DDTHH:MM:SS``).
+
+    With ``keep_spacing``, one photo (``reference_id``, else the earliest) gets the time
+    and the others move as much, keeping their order and spacing; without, every photo
+    gets it. Kept as shifts, so restoring the time in the files still works.
+    """
+    target = datetime.fromisoformat(time).replace(tzinfo=None, microsecond=0)
+    if not 1800 <= target.year <= 2200:
+        raise LumenError("The date is out of range")
+    if keep_spacing:
+        if reference_id is None:
+            reference_id = time_range(conn, asset_ids)[1]
+            if reference_id is None:
+                return 0
+        row = conn.execute(
+            "SELECT capture_time FROM media_assets WHERE id = ?", (reference_id,)
+        ).fetchone()
+        if row is None or not row["capture_time"] or reference_id not in asset_ids:
+            raise LumenError("The reference photo must be one of them, with a capture time")
+        current = datetime.fromisoformat(row["capture_time"][:19])
+        return _shift(conn, asset_ids, int((target - current).total_seconds()))
+    stamp = target.strftime("%Y-%m-%dT%H:%M:%S")
+    now = utc_now()
+    changed = 0
+    with transaction(conn):
+        for chunk in _chunks(asset_ids):
+            marks = ",".join("?" * len(chunk))
+            changed += conn.execute(
+                f"""
+                UPDATE media_assets
+                SET time_shift_s = time_shift_s
+                        + (unixepoch(?) - unixepoch(substr(capture_time, 1, 19))),
+                    capture_time = ?, updated_at = ?
+                WHERE capture_time IS NOT NULL AND id IN ({marks})
+                """,
+                (stamp, stamp, now, *chunk),
             ).rowcount
             reindex_assets(conn, chunk)
     return changed
@@ -308,4 +381,3 @@ def overrides_for(conn: sqlite3.Connection, asset_id: int) -> Overrides:
         except ValueError:
             taken = None
     return Overrides(location=location, capture_time=taken)
-

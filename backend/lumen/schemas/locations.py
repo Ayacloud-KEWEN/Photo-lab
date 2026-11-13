@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from lumen.schemas.assets import PlaceName
@@ -41,6 +43,23 @@ class NearbyResult(BaseModel):
 
 class TimeShiftRequest(_Assets):
     seconds: int = Field(ge=-400 * 86400, le=400 * 86400, description="Added to capture times")
+
+
+class TimeSetRequest(_Assets):
+    time: datetime = Field(description="Local wall-clock time; any zone is ignored")
+    keep_spacing: bool = Field(
+        default=False,
+        description="One photo gets the time and the others move as much (else all get it)",
+    )
+    reference_asset_id: int | None = Field(
+        default=None, description="With keep_spacing: that photo (default: the earliest)"
+    )
+
+
+class TimeRange(BaseModel):
+    first: str | None = Field(description="Earliest capture time of the photos")
+    first_asset_id: int | None
+    last: str | None
 
 
 class ChangeCount(BaseModel):

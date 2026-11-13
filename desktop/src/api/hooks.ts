@@ -444,6 +444,11 @@ export function useLocationActions() {
         api.shiftTime(requireConnection(conn), body.assetIds, body.seconds),
       onSuccess: refresh,
     }),
+    setTime: useMutation({
+      mutationFn: (body: { assetIds: number[]; time: string; keepSpacing: boolean }) =>
+        api.setTime(requireConnection(conn), body.assetIds, body.time, body.keepSpacing),
+      onSuccess: refresh,
+    }),
     restoreTime: useMutation({
       mutationFn: (assetIds: number[]) => api.restoreTime(requireConnection(conn), assetIds),
       onSuccess: refresh,

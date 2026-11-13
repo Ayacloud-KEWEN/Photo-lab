@@ -376,6 +376,26 @@ export const api = {
       seconds,
     }),
 
+  setTime: (
+    conn: BackendConnection,
+    assetIds: number[],
+    time: string,
+    keepSpacing: boolean,
+  ) =>
+    request<{ changed: number }>(conn, "POST", "/api/v1/assets/time-set", {
+      asset_ids: assetIds,
+      time,
+      keep_spacing: keepSpacing,
+    }),
+
+  timeRange: (conn: BackendConnection, assetIds: number[]) =>
+    request<{ first: string | null; first_asset_id: number | null; last: string | null }>(
+      conn,
+      "POST",
+      "/api/v1/assets/time-range",
+      { asset_ids: assetIds },
+    ),
+
   restoreTime: (conn: BackendConnection, assetIds: number[]) =>
     request<{ changed: number }>(conn, "POST", "/api/v1/assets/time-shift/restore", {
       asset_ids: assetIds,

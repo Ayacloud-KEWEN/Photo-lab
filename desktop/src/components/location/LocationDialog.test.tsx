@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -28,12 +28,20 @@ const assets = [1, 2, 3].map((id) => makeAsset(id));
 const body = (requests: Request[], path: string) =>
   requests.find((r) => r.url.pathname === path)?.body;
 
-function Open({ kind, ids }: { kind: "location" | "time"; ids: number[] }) {
+function Open({
+  kind,
+  ids,
+  sample = "2025-10-20T12:30:00",
+}: {
+  kind: "location" | "time";
+  ids: number[];
+  sample?: string | null;
+}) {
   const { openLocation, openTimeShift } = useLibraryState();
   useEffect(() => {
     if (kind === "location") openLocation(ids);
-    else openTimeShift(ids, "2025-10-20T12:30:00");
-  }, [kind, ids, openLocation, openTimeShift]);
+    else openTimeShift(ids, sample ?? undefined);
+  }, [kind, ids, sample, openLocation, openTimeShift]);
   return null;
 }
 
@@ -143,6 +151,7 @@ describe("TimeShiftDialog", () => {
     const dialog = await screen.findByRole("dialog", { name: "调整拍摄时间" });
     const apply = within(dialog).getByRole("button", { name: "调整 1 张" });
     expect(apply).toBeDisabled();
+    await userEvent.click(within(dialog).getByRole("tab", { name: "整体平移" }));
     await userEvent.selectOptions(within(dialog).getByRole("combobox", { name: "方向" }), "-1");
     const hours = within(dialog).getByRole("spinbutton", { name: "小时" });
     await userEvent.clear(hours);
@@ -153,6 +162,58 @@ describe("TimeShiftDialog", () => {
       expect(body(requests, "/api/v1/assets/time-shift")).toEqual({
         asset_ids: [1],
         seconds: -25200,
+      }),
+    );
+  });
+
+  it("sets a photo's date and time directly", async () => {
+    const { requests } = stubBackend({ assets });
+    render(
+      <Providers>
+        <Open kind="time" ids={[1]} />
+        <TimeShiftDialog />
+      </Providers>,
+    );
+    const dialog = await screen.findByRole("dialog", { name: "调整拍摄时间" });
+    // Filled in with the photo's time.
+    const date = within(dialog).getByLabelText("日期");
+    const time = within(dialog).getByLabelText("时间");
+    expect(date).toHaveValue("2025-10-20");
+    expect(time).toHaveValue("12:30:00");
+    expect(within(dialog).getByRole("button", { name: "调整 1 张" })).toBeDisabled();
+    fireEvent.change(date, { target: { value: "2019-03-04" } });
+    fireEvent.change(time, { target: { value: "08:15" } });
+    expect(within(dialog).getByRole("status")).toHaveTextContent("2019");
+    await userEvent.click(within(dialog).getByRole("button", { name: "调整 1 张" }));
+    await waitFor(() =>
+      expect(body(requests, "/api/v1/assets/time-set")).toEqual({
+        asset_ids: [1],
+        time: "2019-03-04T08:15:00",
+        keep_spacing: true,
+      }),
+    );
+  });
+
+  it("sets several photos from the earliest, or all to the same time", async () => {
+    const { requests } = stubBackend({ assets });
+    render(
+      <Providers>
+        <Open kind="time" ids={[1, 2, 3]} sample={null} />
+        <TimeShiftDialog />
+      </Providers>,
+    );
+    const dialog = await screen.findByRole("dialog", { name: "调整拍摄时间" });
+    // The earliest of the selection's times.
+    await waitFor(() => expect(within(dialog).getByLabelText("日期")).toHaveValue("2024-06-07"));
+    expect(within(dialog).getByRole("radio", { name: /保持相对间隔/ })).toBeChecked();
+    await userEvent.click(within(dialog).getByRole("radio", { name: /全部设为同一时间/ }));
+    fireEvent.change(within(dialog).getByLabelText("日期"), { target: { value: "1998-07-01" } });
+    await userEvent.click(within(dialog).getByRole("button", { name: "调整 3 张" }));
+    await waitFor(() =>
+      expect(body(requests, "/api/v1/assets/time-set")).toEqual({
+        asset_ids: [1, 2, 3],
+        time: "1998-07-01T09:30:00",
+        keep_spacing: false,
       }),
     );
   });

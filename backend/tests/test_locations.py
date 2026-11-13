@@ -126,6 +126,66 @@ def test_shift_capture_times(library: tuple[TestClient, Any, Path, dict[str, int
     assert (detail["capture_time"], detail["time_shift_s"]) == ("2025-10-20T12:30:00", 0)
 
 
+def test_set_capture_times(library: tuple[TestClient, Any, Path, dict[str, int]]) -> None:
+    client, (app, root_id), root, ids = library
+    camera, other = ids["DSC_1.JPG"], next(i for n, i in ids.items() if n != "DSC_1.JPG")
+    both = [camera, other]
+    before = {i: client.get(f"/api/v1/assets/{i}").json()["capture_time"] for i in both}
+    gap = _seconds(before[other]) - _seconds(before[camera])
+
+    # One photo set to a date and time years away; the other keeps its spacing.
+    kept = client.post(
+        "/api/v1/assets/time-set",
+        json={
+            "asset_ids": both, "time": "2019-03-04T05:06:07", "keep_spacing": True,
+            "reference_asset_id": camera,
+        },
+    )
+    assert kept.json() == {"changed": 2}
+    after = {i: client.get(f"/api/v1/assets/{i}").json() for i in both}
+    assert after[camera]["capture_time"] == "2019-03-04T05:06:07"
+    assert _seconds(after[other]["capture_time"]) - _seconds("2019-03-04T05:06:07") == gap
+
+    # All the same time; kept when the file is read again; restorable.
+    client.post("/api/v1/assets/time-set", json={"asset_ids": both, "time": "1998-07-01T12:00"})
+    assert {client.get(f"/api/v1/assets/{i}").json()["capture_time"] for i in both} == {
+        "1998-07-01T12:00:00"
+    }
+    _rescan(client, app, root_id, root / "DSC_1.JPG")
+    assert client.get(f"/api/v1/assets/{camera}").json()["capture_time"] == "1998-07-01T12:00:00"
+    client.post("/api/v1/assets/time-shift/restore", json={"asset_ids": both})
+    restored = {i: client.get(f"/api/v1/assets/{i}").json() for i in both}
+    assert {i: restored[i]["capture_time"] for i in both} == before
+    assert all(restored[i]["time_shift_s"] == 0 for i in both)
+
+    outside = client.post(
+        "/api/v1/assets/time-set",
+        json={
+            "asset_ids": [camera], "time": "2020-01-01T00:00:00", "keep_spacing": True,
+            "reference_asset_id": other,
+        },
+    )
+    assert outside.status_code == 400
+
+    # Several photos, by their earliest: it gets the time, the others keep their spacing.
+    span = client.post("/api/v1/assets/time-range", json={"asset_ids": both}).json()
+    assert (span["first"], span["last"]) == tuple(sorted(before.values()))
+    earliest = span["first_asset_id"]
+    client.post(
+        "/api/v1/assets/time-set",
+        json={"asset_ids": both, "time": "2021-05-05T10:00:00", "keep_spacing": True},
+    )
+    times = {i: client.get(f"/api/v1/assets/{i}").json()["capture_time"] for i in both}
+    assert times[earliest] == "2021-05-05T10:00:00"
+    assert abs(_seconds(times[other]) - _seconds(times[camera])) == abs(gap)
+
+
+def _seconds(time: str) -> float:
+    from datetime import datetime
+
+    return datetime.fromisoformat(time).timestamp()
+
+
 def test_exports_carry_the_corrections(
     library: tuple[TestClient, Any, Path, dict[str, int]], tmp_path: Path
 ) -> None:
