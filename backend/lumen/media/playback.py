@@ -27,7 +27,8 @@ class PlaybackError(Exception):
 
 def playback_path(cache_dir: Path, fingerprint: str) -> Path:
     digest = fingerprint_digest(fingerprint)
-    return cache_dir / "playback" / digest[:2] / f"{digest}_v{VERSION}.mp4"
+    # Beside the thumbnails, so it counts in the cache's size and moves with the cache.
+    return cache_dir / "renditions" / digest[:2] / f"{digest}_play{VERSION}.mp4"
 
 
 def command(ffmpeg: str, source: Path, target: Path) -> list[str]:
