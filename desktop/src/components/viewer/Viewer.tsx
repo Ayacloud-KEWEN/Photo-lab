@@ -52,6 +52,7 @@ import { StarRating } from "@/components/library/StarRating";
 import { CullFlagToggle } from "@/components/library/CullFlagToggle";
 import { IconButton } from "@/components/ui/icon-button";
 import { useLibraryState } from "@/library/state";
+import { usePlayback, type Playback } from "@/components/viewer/usePlayback";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -102,6 +103,7 @@ function ViewerOverlay({
   const asset = useAsset(id);
   const update = useUpdateAsset();
   const detail = asset.data;
+  const playback = usePlayback(detail);
   const aiStatus = useAiStatus();
   const { findSimilar, openExport, openCollect, openMapSend } = useLibraryState();
   const aiReady = !!aiStatus.data?.local.enabled && !!aiStatus.data?.local.model_downloaded;
@@ -316,7 +318,8 @@ function ViewerOverlay({
                   ? thumbnailUrl(conn, detail.id, detail.rendition_version, "preview")
                   : undefined
               }
-              originalSrc={originalUrl(conn, detail.id, detail.rendition_version ?? "")}
+              originalSrc={playback.src}
+              preparing={playback}
               motionSrc={
                 // A long exposure is a still picture: its clip is not played.
                 detail.motion_file_id && detail.live_effect !== "long_exposure"
@@ -376,6 +379,7 @@ function Stage({
   previewSrc,
   fullSrc,
   originalSrc,
+  preparing,
   motionSrc,
 }: {
   detail: AssetDetail;
@@ -383,12 +387,17 @@ function Stage({
   onZoomedChange: (zoomed: boolean) => void;
   previewSrc: string | undefined;
   fullSrc: string;
-  originalSrc: string;
+  originalSrc: string | null;
+  preparing: Playback;
   motionSrc: string | undefined;
 }) {
   const { t } = useTranslation();
   const [videoFailed, setVideoFailed] = useState(false);
   const [zoomed, setZoomed] = useState(false);
+
+  if (detail.media_type === "video" && originalSrc === null) {
+    return <VideoPreparing previewSrc={previewSrc} playback={preparing} />;
+  }
 
   if (detail.media_type === "video" && detail.is_edited) {
     return videoFailed ? (
@@ -397,7 +406,7 @@ function Stage({
       <EditedVideo
         key={detail.id}
         assetId={detail.id}
-        src={originalSrc}
+        src={originalSrc ?? ""}
         poster={previewSrc}
         onError={() => setVideoFailed(true)}
       />
@@ -409,7 +418,7 @@ function Stage({
     ) : (
       <video
         key={detail.id}
-        src={originalSrc}
+        src={originalSrc ?? ""}
         poster={previewSrc}
         controls
         autoPlay
@@ -567,6 +576,36 @@ function LiveLoop({
             {label}
           </span>
         </>
+      )}
+    </div>
+  );
+}
+
+/** A video the web view cannot play, while its copy is made (first play only). */
+function VideoPreparing({
+  previewSrc,
+  playback,
+}: {
+  previewSrc: string | undefined;
+  playback: Playback;
+}) {
+  const { t } = useTranslation();
+  const percent = Math.round((playback.progress ?? 0) * 100);
+  return (
+    <div className="flex size-full flex-col items-center justify-center gap-4 text-sm text-muted-foreground">
+      {previewSrc && <img src={previewSrc} alt="" className="max-h-[60%] max-w-[80%] opacity-60" />}
+      {playback.error ? (
+        <p role="alert" className="text-destructive">
+          {t("viewer.playbackFailed")} {playback.error}
+        </p>
+      ) : (
+        <div role="status" className="w-64 space-y-2 text-center">
+          <p>{t("viewer.preparingVideo", { percent })}</p>
+          <div className="h-1 overflow-hidden rounded bg-white/10">
+            <div className="h-full bg-highlight transition-all" style={{ width: `${percent}%` }} />
+          </div>
+          <p className="text-[11.5px] text-subtle-foreground">{t("viewer.preparingHint")}</p>
+        </div>
       )}
     </div>
   );

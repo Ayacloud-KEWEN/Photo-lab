@@ -198,6 +198,13 @@ export const api = {
   listTasks: (conn: BackendConnection, options: { active?: boolean; limit?: number } = {}) =>
     request<TaskList>(conn, "GET", `/api/v1/tasks${toSearchParams({ ...options })}`),
 
+  getPlaybackState: (conn: BackendConnection, assetId: number, start: boolean) =>
+    request<{ needed: boolean; ready: boolean; task_id: number | null }>(
+      conn,
+      "GET",
+      `/api/v1/assets/${assetId}/playback/state${toSearchParams({ start })}`,
+    ),
+
   getTask: (conn: BackendConnection, id: number) =>
     request<Task>(conn, "GET", `/api/v1/tasks/${id}`),
 
@@ -675,6 +682,14 @@ export function videoPreviewUrl(
 /** The Live Photo's frames side by side (the frame picker's background). */
 export function liveStripUrl(conn: BackendConnection, assetId: number, version: string): string {
   return `${conn.baseUrl}/api/v1/assets/${assetId}/live/strip${toSearchParams({
+    v: contentVersion(version),
+    token: conn.token,
+  })}`;
+}
+
+/** The converted copy of a video the web view cannot play (AVI, MTS...); supports Range. */
+export function playbackUrl(conn: BackendConnection, assetId: number, version: string): string {
+  return `${conn.baseUrl}/api/v1/assets/${assetId}/playback${toSearchParams({
     v: contentVersion(version),
     token: conn.token,
   })}`;

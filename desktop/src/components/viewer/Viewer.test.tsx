@@ -108,6 +108,24 @@ describe("Viewer", () => {
     expect(new URL(dialog.querySelector("video")!.src).pathname).toBe("/api/v1/assets/1/original");
   });
 
+  it("plays an AVI from its converted copy, made on first play", async () => {
+    const { requests } = stubBackend({
+      assets: [makeAsset(1, { media_type: "video", file_name: "old_dv.avi" })],
+    });
+    render(
+      <Providers>
+        <OpenOnMount ids={[1]} id={1} />
+        <Viewer />
+      </Providers>,
+    );
+    const dialog = await screen.findByRole("dialog", { name: "old_dv.avi" });
+    expect(await within(dialog).findByRole("status")).toHaveTextContent("正在准备播放");
+    await waitFor(() => expect(dialog.querySelector("video")).not.toBeNull(), { timeout: 4000 });
+    expect(new URL(dialog.querySelector("video")!.src).pathname).toBe("/api/v1/assets/1/playback");
+    const asked = requests.find((r) => r.url.pathname === "/api/v1/assets/1/playback/state");
+    expect(asked?.url.searchParams.get("start")).toBe("true");
+  });
+
   it("loops a Live Photo set to loop, and shows a long exposure as a still", async () => {
     stubBackend({
       assets: [

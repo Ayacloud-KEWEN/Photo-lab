@@ -79,8 +79,27 @@ FORMATS: dict[str, MediaFormat] = {
     "mov": MediaFormat("video", "video/quicktime"),
     "mts": MediaFormat("video", "video/mp2t"),
     "m2ts": MediaFormat("video", "video/mp2t"),
+    "avi": MediaFormat("video", "video/x-msvideo"),
+    "wmv": MediaFormat("video", "video/x-ms-wmv"),
+    "asf": MediaFormat("video", "video/x-ms-asf"),
+    "mpg": MediaFormat("video", "video/mpeg"),
+    "mpeg": MediaFormat("video", "video/mpeg"),
+    "3gp": MediaFormat("video", "video/3gpp"),
+    "mkv": MediaFormat("video", "video/x-matroska"),
+    "webm": MediaFormat("video", "video/webm"),
     "xmp": MediaFormat("sidecar", "application/rdf+xml"),
 }
+
+
+# Videos the app's web view plays as they are; the others are converted to H.264 MP4 for
+# playback (cached; the original is never touched).
+PLAYABLE_VIDEO = frozenset({"mp4", "m4v", "mov", "webm"})
+
+
+def needs_playback_copy(extension: str) -> bool:
+    ext = extension.lower().lstrip(".")
+    fmt = FORMATS.get(ext)
+    return fmt is not None and fmt.kind == "video" and ext not in PLAYABLE_VIDEO
 
 
 def format_for(extension: str) -> MediaFormat | None:

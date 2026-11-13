@@ -2,7 +2,8 @@ import { Camera, RotateCcw, RotateCw, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ApiError, api, originalUrl, videoPreviewUrl } from "@/api/client";
+import { ApiError, api, videoPreviewUrl } from "@/api/client";
+import { usePlayback } from "@/components/viewer/usePlayback";
 import {
   useConnection,
   useLuts,
@@ -55,6 +56,8 @@ export function VideoWorkspace({
   const { t } = useTranslation();
   const conn = useConnection();
   const edit = useVideoEdit(detail.id);
+  // AVI, MTS...: edited on the playable copy (the edit applies to the original on export).
+  const playback = usePlayback(detail);
   const saveEdit = useSaveVideoEdit();
   const refreshLists = useRefreshLibraryLists();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -165,9 +168,9 @@ export function VideoWorkspace({
   return (
     <div className="flex min-h-0 flex-1">
       <div className="relative min-w-0 flex-1">
-        {conn && (
+        {conn && playback.src && (
           <TrimmedVideo
-            src={originalUrl(conn, detail.id, detail.rendition_version ?? "")}
+            src={playback.src}
             poster={posterSrc}
             recipe={loaded ? recipe : DEFAULT_VIDEO_RECIPE}
             mode="edit"

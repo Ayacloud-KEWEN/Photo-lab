@@ -299,6 +299,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assets/{asset_id}/playback/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Playback State
+         * @description Whether the video plays from a converted copy, and whether it is ready; ``start``
+         *     queues the conversion (done once, then cached).
+         */
+        get: operations["getPlaybackState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{asset_id}/playback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Asset Playback
+         * @description The converted H.264 copy of a video the web view cannot play (Range supported).
+         *
+         *     Accepts ``?token=`` for use in ``<video>``.
+         */
+        get: operations["getAssetPlayback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assets/{asset_id}/motion": {
         parameters: {
             query?: never;
@@ -2261,6 +2304,12 @@ export interface components {
              */
             motion_file_id: number | null;
             /**
+             * Needs Playback Copy
+             * @description A video played from a converted copy (see /playback)
+             * @default false
+             */
+            needs_playback_copy: boolean;
+            /**
              * Live Effect
              * @description Live Photos: how the clip plays (or long exposure)
              */
@@ -3984,6 +4033,24 @@ export interface components {
             /** Fr */
             fr: string;
         };
+        /** PlaybackState */
+        PlaybackState: {
+            /**
+             * Needed
+             * @description The web view cannot play the original: use /playback
+             */
+            needed: boolean;
+            /**
+             * Ready
+             * @description It can be played now
+             */
+            ready: boolean;
+            /**
+             * Task Id
+             * @description The task making the copy, while it runs
+             */
+            task_id: number | null;
+        };
         /** RejectedFiles */
         RejectedFiles: {
             /** Asset Count */
@@ -5189,6 +5256,86 @@ export interface operations {
         };
     };
     getAssetOriginal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getPlaybackState: {
+        parameters: {
+            query?: {
+                start?: boolean;
+            };
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackState"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getAssetPlayback: {
         parameters: {
             query?: never;
             header?: never;

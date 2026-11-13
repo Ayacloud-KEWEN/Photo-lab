@@ -12,6 +12,7 @@ from lumen.services.cache import MOVE_CACHE_TASK, move_cache
 from lumen.services.duplicates import MERGE_ALL_TASK, merge_all_task
 from lumen.services.mapweb import SEND_TASK as MAPWEB_SEND_TASK
 from lumen.services.mapweb import send_task as mapweb_send
+from lumen.services.playback import PLAYBACK_TASK, make_copy
 from lumen.tasks.runner import Handler
 from lumen.vlm.ask import ASK_TASK, answer_question
 from lumen.vlm.captions import CAPTION_TASK, write_drafts
@@ -30,6 +31,7 @@ HANDLERS: dict[str, Handler] = {
     MERGE_ALL_TASK: merge_all_task,
     MOVE_CACHE_TASK: move_cache,
     MAPWEB_SEND_TASK: mapweb_send,
+    PLAYBACK_TASK: make_copy,
     LIVE_REPAIR_TASK: pair_live_photos,
     VLM_TASK: describe_assets,
     VLM_DOWNLOAD_TASK: download,

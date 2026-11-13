@@ -6,7 +6,7 @@ from fastapi import APIRouter, Path, Query, Request
 from fastapi.responses import FileResponse
 from starlette.concurrency import run_in_threadpool
 
-from lumen.api.deps import Connection
+from lumen.api.deps import Connection, wake_task_runner
 from lumen.core.config import Settings
 from lumen.core.errors import NotFoundError
 from lumen.core.reveal import open_in_browser
@@ -21,13 +21,14 @@ from lumen.schemas.assets import (
     AssetUpdate,
     BatchResult,
     MapPoints,
+    PlaybackState,
     RenditionVariant,
     Timeline,
 )
 from lumen.schemas.common import ErrorResponse
 from lumen.services import assets as service
 from lumen.services import develop as develop_service
-from lumen.services import edits
+from lumen.services import edits, playback
 
 router = APIRouter(tags=["assets"])
 
@@ -144,6 +145,39 @@ def get_asset_original(conn: Connection, asset_id: int = Path(ge=1)) -> FileResp
         filename=path.name,
         headers={"Cache-Control": "private, no-cache"},
     )
+
+
+@router.get(
+    "/assets/{asset_id}/playback/state", response_model=PlaybackState,
+    operation_id="getPlaybackState", responses=NOT_FOUND,
+)  # fmt: skip
+def get_playback_state(
+    conn: Connection, request: Request, asset_id: int = Path(ge=1), start: bool = False
+) -> PlaybackState:
+    """Whether the video plays from a converted copy, and whether it is ready; ``start``
+    queues the conversion (done once, then cached)."""
+    result = playback.state(conn, request.app.state.settings, asset_id, start=start)
+    if result.task_id is not None:
+        wake_task_runner(request)
+    return result
+
+
+@router.get(
+    "/assets/{asset_id}/playback", operation_id="getAssetPlayback",
+    response_class=FileResponse, responses=NOT_FOUND,
+)  # fmt: skip
+def get_asset_playback(
+    conn: Connection, request: Request, asset_id: int = Path(ge=1)
+) -> FileResponse:
+    """The converted H.264 copy of a video the web view cannot play (Range supported).
+
+    Accepts ``?token=`` for use in ``<video>``.
+    """
+    path = playback.copy_file(conn, request.app.state.settings, asset_id)
+    return FileResponse(
+        path, media_type="video/mp4", content_disposition_type="inline",
+        headers={"Cache-Control": "private, no-cache"},
+    )  # fmt: skip
 
 
 @router.get(

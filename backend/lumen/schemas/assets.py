@@ -241,6 +241,12 @@ class AssetPlace(BaseModel):
     distance_km: float = Field(description="From the town's centre")
 
 
+class PlaybackState(BaseModel):
+    needed: bool = Field(description="The web view cannot play the original: use /playback")
+    ready: bool = Field(description="It can be played now")
+    task_id: int | None = Field(description="The task making the copy, while it runs")
+
+
 class AssetDetail(BaseModel):
     id: int
     uuid: str
@@ -256,6 +262,9 @@ class AssetDetail(BaseModel):
     tags: list[AssetTag]
     cover_file_id: int | None = Field(description="File shown as thumbnail and by /original")
     motion_file_id: int | None = Field(description="Live Photo clip, served by /motion")
+    needs_playback_copy: bool = Field(
+        default=False, description="A video played from a converted copy (see /playback)"
+    )
     live_effect: LiveEffect | None = Field(
         default=None, description="Live Photos: how the clip plays (or long exposure)"
     )

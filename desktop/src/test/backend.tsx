@@ -60,6 +60,8 @@ export function makeDetail(summary: AssetSummary): AssetDetail {
   return {
     id: summary.id,
     uuid: `uuid-${summary.id}`,
+    needs_playback_copy:
+      summary.media_type === "video" && /\.(avi|mts|wmv)$/i.test(summary.file_name),
     media_type: summary.media_type,
     capture_time: summary.capture_time,
     time_shift_s: 0,
@@ -186,6 +188,7 @@ export function stubBackend(options: StubOptions = {}) {
   const stories: Record<string, unknown>[] = [];
   let draftRuns = 0;
   const diary = new Map<string, string>();
+  const playbackAsks = new Map<number, number>();
   const questions: (Record<string, unknown> & { id: number })[] = [];
   const collectionJson = (state: CollectionState) => {
     const items = state.items
@@ -417,7 +420,7 @@ export function stubBackend(options: StubOptions = {}) {
     requests.push({ method, url, body });
     const path = url.pathname;
 
-    if (/^\/api\/v1\/tasks\/[56]\d\d$/.test(path)) {
+    if (/^\/api\/v1\/tasks\/[5-8]\d\d$/.test(path)) {
       return json({
         id: Number(path.split("/").at(-1)), kind: "vlm_collection_story", status: "succeeded", storage_root_id: null,
         progress_current: 3, progress_total: 3, attempts: 1, max_attempts: 1,
@@ -848,6 +851,14 @@ export function stubBackend(options: StubOptions = {}) {
     if (path === "/api/v1/assets/ids") return json({ ids: assets.map((asset) => asset.id) });
     if (path === "/api/v1/assets/batch") return json({ updated: (body as { asset_ids: number[] }).asset_ids.length });
     if (path === "/api/v1/assets") return json({ items: assets, next_cursor: null });
+    const playbackState = /^\/api\/v1\/assets\/(\d+)\/playback\/state$/.exec(path);
+    if (playbackState) {
+      const id = Number(playbackState[1]);
+      const asked = (playbackAsks.get(id) ?? 0) + 1;
+      playbackAsks.set(id, asked);
+      const needed = /\.(avi|mts|wmv)$/i.test(assets.find((a) => a.id === id)?.file_name ?? "");
+      return json({ needed, ready: !needed || asked > 1, task_id: needed && asked === 1 ? 801 : null });
+    }
     const assetMatch = /^\/api\/v1\/assets\/(\d+)$/.exec(path);
     if (assetMatch) {
       const asset = assets.find((item) => item.id === Number(assetMatch[1]));

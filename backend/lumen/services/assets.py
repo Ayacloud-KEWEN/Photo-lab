@@ -494,7 +494,12 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
     motion = _motion(files)
     edit_hash = current_edit_hash(conn, asset_id)
 
+    from lumen.media.formats import needs_playback_copy
+
     return AssetDetail(
+        needs_playback_copy=asset["media_type"] == "video"
+        and cover is not None
+        and needs_playback_copy(cover["extension"] or ""),
         id=asset["id"],
         uuid=asset["uuid"],
         media_type=asset["media_type"],
