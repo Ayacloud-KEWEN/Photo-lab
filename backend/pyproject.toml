@@ -21,6 +21,7 @@ dependencies = [
     "numpy>=2.0",
     "opencv-python-headless>=4.10",
     "keyring>=25",
+    "comtypes>=1.4; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

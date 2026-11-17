@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import faulthandler
 import json
 import logging
 import os
@@ -88,6 +89,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     configure_logging(settings.log_level, settings.log_dir if settings.log_to_file else None)
+    if settings.log_to_file:
+        # A crash in native code (COM, ctypes, a C extension) ends the process without a
+        # Python traceback: write the threads' stacks to logs/crash.log instead.
+        settings.log_dir.mkdir(parents=True, exist_ok=True)
+        _crash_log = open(settings.log_dir / "crash.log", "a", encoding="utf-8")  # noqa: SIM115
+        faulthandler.enable(file=_crash_log, all_threads=True)
 
     # Running standalone (no shell-provided token): generate one and print it in the handshake.
     generated_token = None if settings.token else generate_token()

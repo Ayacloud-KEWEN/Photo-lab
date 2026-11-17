@@ -28,7 +28,10 @@ def update_settings(conn: sqlite3.Connection, data: AppSettingsUpdate) -> AppSet
         changes["mapweb_auto_since"] = now
     with transaction(conn):
         for key, value in changes.items():
-            if key in ("backup_folder", "mapweb_url", "vlm_folder") and value == "":  # default
+            if (
+                key in ("backup_folder", "mapweb_url", "vlm_folder", "phone_import_folder")
+                and value == ""
+            ):  # default
                 conn.execute("DELETE FROM app_settings WHERE key = ?", (key,))
                 continue
             conn.execute(

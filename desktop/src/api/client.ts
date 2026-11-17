@@ -50,6 +50,9 @@ import type {
   VlmStatus,
   Lut,
   LutImportResult,
+  PhoneImport,
+  PhoneList,
+  PhoneSummary,
   LutSpace,
   LutUpdate,
   MotionEffect,
@@ -620,6 +623,16 @@ export const api = {
   /** Live Photos whose scene (water, traffic at night...) suits a long exposure. */
   longExposureCandidates: (conn: BackendConnection, limit = 120) =>
     request<SemanticPage>(conn, "GET", `/api/v1/ai/long-exposure${toSearchParams({ limit })}`),
+
+  /** Phones connected by cable (iPhone). */
+  listPhones: (conn: BackendConnection) => request<PhoneList>(conn, "GET", "/api/v1/phones"),
+
+  /** What an import would copy (reads the phone's list of files: can take a while). */
+  getPhoneSummary: (conn: BackendConnection, id: string) =>
+    request<PhoneSummary>(conn, "GET", `/api/v1/phones/${id}/summary`),
+
+  importFromPhone: (conn: BackendConnection, id: string, body: PhoneImport) =>
+    request<Task>(conn, "POST", `/api/v1/phones/${id}/import`, body),
 
   listLuts: (conn: BackendConnection) =>
     request<{ items: Lut[] }>(conn, "GET", "/api/v1/luts"),

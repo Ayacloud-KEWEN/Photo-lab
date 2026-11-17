@@ -5,6 +5,7 @@ from lumen.library.exports import EXPORT_TASK, export_assets
 from lumen.library.ingest import ingest_storage_root
 from lumen.library.live import REPAIR_TASK as LIVE_REPAIR_TASK
 from lumen.library.live import repair_task as pair_live_photos
+from lumen.library.phone_import import PHONE_IMPORT_TASK, import_from_phone
 from lumen.library.quality import QUALITY_TASK, score_assets
 from lumen.library.scan import scan_storage_root
 from lumen.services.backups import BACKUP_TASK, backup_task
@@ -51,4 +52,5 @@ HANDLERS: dict[str, Handler] = {
     STORY_TASK: write_story,
     CAPTION_TASK: write_drafts,
     ASK_TASK: answer_question,
+    PHONE_IMPORT_TASK: import_from_phone,
 }

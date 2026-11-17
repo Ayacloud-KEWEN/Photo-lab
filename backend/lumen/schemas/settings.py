@@ -95,6 +95,14 @@ class AppSettings(BaseModel):
         default=None,
         description="Folder of the local model files and llama.cpp (default: data folder/vlm)",
     )
+    phone_import_folder: str | None = Field(
+        default=None,
+        description="Where Import from iPhone copies photos (default: D:/照片/iPhone when "
+        "D:/照片 exists, else Pictures/iPhone)",
+    )
+    phone_import_edited: bool = Field(
+        default=False, description="Also import the versions edited on the phone (IMG_E…)"
+    )
 
 
 class AppSettingsUpdate(BaseModel):
@@ -125,8 +133,12 @@ class AppSettingsUpdate(BaseModel):
     vlm_folder: str | None = Field(
         default=None, max_length=500, description="An empty string goes back to the default"
     )
+    phone_import_folder: str | None = Field(
+        default=None, max_length=500, description="An empty string goes back to the default"
+    )
+    phone_import_edited: bool | None = None
 
-    @field_validator("backup_folder", "vlm_folder")
+    @field_validator("backup_folder", "vlm_folder", "phone_import_folder")
     @classmethod
     def _valid_folder(cls, value: str | None) -> str | None:
         if value is None:

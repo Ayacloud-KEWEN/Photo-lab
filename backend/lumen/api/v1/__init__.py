@@ -15,6 +15,7 @@ from lumen.api.v1 import (
     locations,
     luts,
     mapweb,
+    phones,
     settings,
     storage_roots,
     tags,
@@ -41,4 +42,5 @@ router.include_router(ask.router)
 router.include_router(backups.router)
 router.include_router(cache.router)
 router.include_router(mapweb.router)
+router.include_router(phones.router)
 router.include_router(locations.router)

@@ -748,3 +748,41 @@ Blackmagic 的 LUT 不随程序发布，由用户从 iPhone 上的 App 导出后
 - **接口**：`GET /luts`、`POST /luts/import {paths, color_space}`、`PATCH /luts/{id}`、`DELETE /luts/{id}`；
   `lut-preview` 与 `video-preview` 接受 `?token=`。
 
+
+## 43. 从 iPhone 导入（ADR-040）
+
+- **为什么**：iPhone 接到 Windows 上没有盘符，现有的“来源文件夹”流程用不上。现在用数据线连接、解锁并信任电脑后，
+  在图库页点“从 iPhone 导入”，只拷贝还没导入过的照片和视频，然后照常扫描、导入。
+- **读取手机**（`media/phone.py`）：Windows Portable Devices（WPD），经 **`comtypes`**（新依赖，纯 Python，仅 Windows）调用
+  `PortableDeviceApi`。没有用资源管理器的 Shell 接口：拷贝是异步的、会弹窗，也拿不到可靠的进度。读各存储下的 `DCIM`；
+  **iPhone 没有 DCIM**，它把月份文件夹（`202605_a`、`202610_b`…）直接放在“Internal Storage”下，这时从存储根开始读。
+  名字要取 `WPD_OBJECT_ORIGINAL_FILE_NAME`（iPhone 的 `WPD_OBJECT_NAME` 是空的）。存储下什么都列不出来 → 状态 `locked`
+  （锁屏或还没信任这台电脑）。按扩展名取 HEIC/HEIF/JPG/PNG/DNG/MOV/MP4/M4V，跳过 `.AAE`。
+  COM 用多线程套间（`sys.coinit_flags = 0`）；一次会话（`PhoneSource.open`）只在打开它的线程里用。
+  **每个线程只初始化一次 COM，从不 `CoUninitialize`**；文件流在 `read()` 的 `finally` 里释放，任务里用 `contextlib.closing`。
+  原来每次调用后都注销 COM，导入中途停止（取消、iPhone 锁屏读取出错）时，异常还引用着文件流，它在注销之后才被释放，
+  于是在 `_ctypes.pyd` 里访问违规（0xC0000005），整个后端进程被结束，日志里没有任何记录（2026-11-17 用户遇到两次）。
+  后端启动时打开 `faulthandler`，原生代码崩溃时各线程的调用栈写入 `logs/crash.log`。
+  `IPortableDeviceManager.GetDevices` 要调用原始的 vtable 方法（comtypes 的包装处理不了 in/out 数组参数）。
+  测试用假手机（`phone_import.SOURCE`）。安卓手机在“文件传输”模式下也走同一条路。
+- **只读**：手机上的任何东西都不写、不删。电脑上只在选定的文件夹里新建文件：先写 `<名字>.part`，完整后改名；已存在的文件
+  从不覆盖。
+- **哪些已经导入过**（迁移 0021 `phone_imports`）：按 手机序列号 + 文件在手机上的持久 ID 记录。第一次导入时，图库里已有
+  **同名同大小**的文件（以前用别的办法导入的）不再拷贝，只记一笔（`path = ''`）。默认不导入手机上编辑过的版本（`IMG_E…`），
+  可在对话框里勾选（设置 `phone_import_edited`）。
+- **存放**：`<文件夹>/年/年-月/原文件名`。日期取同一组文件里最早的拍摄/创建日期，同一组即同一手机文件夹里文件名主干相同的文件
+  （实况照片的 HEIC 和 MOV），所以两者总在一起、名字一样，现有的实况配对能认出来。同名但大小不同时，整组加同一个后缀
+  （`IMG_1234_2.HEIC` / `IMG_1234_2.MOV`）。文件夹默认 `D:\照片\iPhone`（有 `D:\照片` 时），否则 `图片\iPhone`；对话框里改过会记住
+  （`phone_import_folder`）。
+- **之后**：目标文件夹在某个来源里 → 重扫那个来源；不在 → 自动加为新来源（会自动扫描）。
+- **中断**：拔线、锁屏导致读取失败 → 任务失败（不重试），删掉半个文件；再导入一次时，已拷完的会跳过，从中断处继续。
+  可以取消，已拷贝的保留。
+- **任务** `phone_import`（前台优先级），进度先是“读取文件列表”（无总数），然后按字节。结果
+  `{copied, bytes, already, folder, storage_root_id}`。
+- **接口**：`GET /phones`（设备、状态、目标文件夹，对话框打开时每 2 s 查一次）、`GET /phones/{id}/summary`（列出整部手机，
+  数一下新的有多少、多大）。**每次插上后的第一次列出很慢**（iPhone 16 Pro，6001 个文件：324 s），
+  之后同一次连接里只要 1.7 s，所以导入任务再列一遍不费时间、`POST /phones/{id}/import {folder?, include_edited?}`。
+- **前提**：Apple 的手机驱动（“Apple 设备”应用或 iTunes 自带）。手机上设置“照片 → 传输到 Mac 或 PC → 保留原片”，
+  否则 iPhone 会把 HEIC 转成 JPG。
+- **真机实测**（2026-11-17，用户的 iPhone 16 Pro）：6001 个文件 / 45 GB；对照用户图库副本，5480 个（43.2 GB）同名同大小已在图库，
+  107 个编辑版本跳过，第一次导入只拷本月的 414 个（2.0 GB）。拷贝约 35 MB/s；实况照片的 HEIC 和 MOV 拷下来 ContentIdentifier 一致。

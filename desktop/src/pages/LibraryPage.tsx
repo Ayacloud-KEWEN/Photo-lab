@@ -9,6 +9,7 @@ import {
   HardDrive,
   Info,
   RefreshCw,
+  Smartphone,
   Square,
   Trash2,
 } from "lucide-react";
@@ -32,6 +33,7 @@ import type { StorageRoot, Task } from "@/api/types";
 import { DateRail, fromMonth, groupByDay } from "@/components/library/DateRail";
 import { FilterBar } from "@/components/library/FilterBar";
 import { FolderCrumbs, FolderPanel } from "@/components/library/FolderPanel";
+import { PhoneImportDialog } from "@/components/library/PhoneImportDialog";
 import { PhotoWall } from "@/components/library/PhotoWall";
 import { SelectionBar } from "@/components/library/SelectionBar";
 import { Button } from "@/components/ui/button";
@@ -95,6 +97,7 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [mode, setMode] = useState<WallMode>(initialMode);
   const [showSources, setShowSources] = useState<boolean | null>(null);
+  const [phoneOpen, setPhoneOpen] = useState(false);
   const [foldersOpen, setFoldersOpenState] = useState(() => {
     try {
       return localStorage.getItem("lumen.library.folders") === "1";
@@ -281,6 +284,10 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
                 className={cn("size-3.5 transition-transform", sourcesOpen && "rotate-180")}
               />
             </Button>
+            <Button variant="ghost" size="sm" onClick={() => setPhoneOpen(true)}>
+              <Smartphone className="size-3.5" />
+              {t("phone.action")}
+            </Button>
             <Button variant="secondary" size="sm" onClick={() => void addFolder()} disabled={busy}>
               <FolderPlus className="size-3.5" />
               {t("library.addFolder")}
@@ -289,6 +296,7 @@ export function LibraryPage({ selection, onSelect }: LibraryPageProps) {
         </div>
 
         {error && <ErrorBanner message={error} />}
+        {phoneOpen && <PhoneImportDialog onClose={() => setPhoneOpen(false)} />}
 
         {sourcesOpen && (
           <ul className="max-h-52 divide-y overflow-y-auto rounded-lg border bg-card">

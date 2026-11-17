@@ -27,6 +27,7 @@ import type {
   DuplicateKind,
   DuplicateReport,
   MapWebSendRequest,
+  PhoneImport,
   MergeRequest,
   RestoreRequest,
   StorageRootCreate,
@@ -60,6 +61,8 @@ export const queryKeys = {
   longExposure: () => ["library", "long-exposure"] as const,
   vlm: ["vlm"] as const,
   luts: ["luts"] as const,
+  phones: ["phones"] as const,
+  phoneSummary: (id: string) => ["phones", "summary", id] as const,
   export: (taskId: number) => ["export", taskId] as const,
   videoEdit: (id: number) => ["library", "video-edit", id] as const,
   collections: ["library", "collections"] as const,
@@ -837,6 +840,41 @@ export function useLiveInfo(id: number | null, enabled = true) {
     enabled: conn !== null && id !== null && enabled,
     staleTime: Infinity, // the clip does not change
     retry: false,
+  });
+}
+
+/** Phones connected by cable, checked every 2 s while `enabled` (the import dialog is open). */
+export function usePhones(enabled: boolean) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.phones,
+    queryFn: () => api.listPhones(requireConnection(conn)),
+    enabled: enabled && conn !== null,
+    refetchInterval: 2000,
+  });
+}
+
+/** What an import from this phone would copy (null: none ready yet). */
+export function usePhoneSummary(id: string | null) {
+  const conn = useConnection();
+  return useQuery({
+    queryKey: queryKeys.phoneSummary(id ?? ""),
+    queryFn: () => api.getPhoneSummary(requireConnection(conn), id!),
+    enabled: conn !== null && id !== null,
+    retry: false,
+  });
+}
+
+export function useImportFromPhone() {
+  const conn = useConnection();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: PhoneImport }) =>
+      api.importFromPhone(requireConnection(conn), id, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.phones });
+    },
   });
 }
 

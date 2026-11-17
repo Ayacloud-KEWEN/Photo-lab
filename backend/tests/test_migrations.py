@@ -34,6 +34,7 @@ EXPECTED_TABLES = {
     "library_questions",
     "mapweb_photos",
     "mapweb_auto_done",
+    "phone_imports",
     "collection_items",
     "schema_migrations",
 }

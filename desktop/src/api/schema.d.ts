@@ -1844,6 +1844,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mapweb/open-point/{point_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Footprint
+         * @description Open a footprint in MapWeb, in the browser.
+         */
+        post: operations["openFootprint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mapweb/open/{asset_id}": {
         parameters: {
             query?: never;
@@ -1972,6 +1992,66 @@ export interface paths {
         get: operations["mapWebThumb"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/phones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Phones
+         * @description Phones connected by cable (iPhone).
+         */
+        get: operations["listPhones"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/phones/{phone_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Phone Summary
+         * @description How many photos and videos an import would copy (reads the phone's list of files).
+         */
+        get: operations["getPhoneSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/phones/{phone_id}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import From Phone
+         * @description Copy the photos and videos not imported yet, then scan the folder.
+         */
+        post: operations["importFromPhone"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2305,6 +2385,17 @@ export interface components {
              * @description Folder of the local model files and llama.cpp (default: data folder/vlm)
              */
             vlm_folder?: string | null;
+            /**
+             * Phone Import Folder
+             * @description Where Import from iPhone copies photos (default: D:/��Ƭ/iPhone when D:/��Ƭ exists, else Pictures/iPhone)
+             */
+            phone_import_folder?: string | null;
+            /**
+             * Phone Import Edited
+             * @description Also import the versions edited on the phone (IMG_E��)
+             * @default false
+             */
+            phone_import_edited: boolean;
         };
         /** AppSettingsUpdate */
         AppSettingsUpdate: {
@@ -2355,6 +2446,13 @@ export interface components {
              * @description An empty string goes back to the default
              */
             vlm_folder?: string | null;
+            /**
+             * Phone Import Folder
+             * @description An empty string goes back to the default
+             */
+            phone_import_folder?: string | null;
+            /** Phone Import Edited */
+            phone_import_edited?: boolean | null;
         };
         /** AskAnswer */
         AskAnswer: {
@@ -4504,6 +4602,63 @@ export interface components {
              * @description The first few, for a preview
              */
             examples: components["schemas"]["NearbyLocation"][];
+        };
+        /** Phone */
+        Phone: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @description locked: connected but its photos cannot be read (locked, or this computer not trusted yet)
+             * @enum {string}
+             */
+            status: "ready" | "locked";
+        };
+        /** PhoneImport */
+        PhoneImport: {
+            /** Folder */
+            folder?: string | null;
+            /** Include Edited */
+            include_edited?: boolean | null;
+        };
+        /** PhoneList */
+        PhoneList: {
+            /** Items */
+            items: components["schemas"]["Phone"][];
+            /**
+             * Folder
+             * @description Where the photos are copied
+             */
+            folder: string;
+            /** Include Edited */
+            include_edited: boolean;
+            /**
+             * Available
+             * @description False when phones cannot be read on this system
+             */
+            available: boolean;
+        };
+        /** PhoneSummary */
+        PhoneSummary: {
+            /**
+             * Total
+             * @description Photos and videos on the phone
+             */
+            total: number;
+            /**
+             * New Count
+             * @description Not imported yet: what an import copies
+             */
+            new_count: number;
+            /** New Bytes */
+            new_bytes: number;
+            /**
+             * Already
+             * @description Imported before or already in the library
+             */
+            already: number;
         };
         /** PlaceMatch */
         PlaceMatch: {
@@ -9524,6 +9679,53 @@ export interface operations {
             };
         };
     };
+    openFootprint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                point_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     openOnMapWeb: {
         parameters: {
             query?: never;
@@ -9830,6 +10032,128 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listPhones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhoneList"];
+                };
+            };
+        };
+    };
+    getPhoneSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                phone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhoneSummary"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    importFromPhone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                phone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhoneImport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

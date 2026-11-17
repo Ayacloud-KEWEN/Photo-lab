@@ -134,6 +134,9 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 
 ## 7. 踩过的坑（新会话很容易再踩）
 
+- **后端无声退出、日志突然中断**：多半是原生代码崩溃（ctypes/COM/C 扩展）。看 `logs/crash.log`（faulthandler）和
+  Windows 事件查看器“应用程序”里的事件 1000（`python.exe`、出错模块、`0xc0000005`）。COM 对象必须在 `CoUninitialize` 之前释放。
+
 - **PowerShell 5.1 按 GBK 读取无 BOM 的 .ps1**：`scripts/*.ps1` 必须保持纯 ASCII（中文写在 README 里）。
 - **用 Python 脚本改文件时务必 `encoding="utf-8"`**（系统默认 GBK）。Git Bash 里的 heredoc 遇到复杂引号、反斜杠、`\n`
   容易出错（`D:\Exports` 这类路径尤其），复杂编辑写成 scratch 目录下的 .py 文件，或直接用 Edit 工具。
@@ -258,6 +261,11 @@ desktop/src-tauri/src/  lib.rs、backend.rs（启动/监控/关闭 Python 后端
 - **3D LUT**（`luts`，迁移 0015，ADR-039）：设置页“LUT 库”导入 .cube（整文件夹、去重、按名字分出需要 Log 的），显影面板“LUT”组
   （照片小图网格、强度），视频剪辑面板选 LUT（导出用 ffmpeg lut3d，强制 H.264）。torch 在 GPU 上插值（预览约 10 ms）。
   用户的 `D:\LUT` 是第三方包（117 个可直接用）；Blackmagic Camera 的 LUT 要用户从 App 导出（照片选 P3 D65）。**用户的真实库里还没导入**。
+- **从 iPhone 导入**（`iphone-import`，迁移 0021，ADR-040）：图库页按钮 → 数据线连接的 iPhone（WPD，新依赖 `comtypes`），
+  只拷贝没导入过的照片和视频到 `D:\照片\iPhone\年\年-月\`（实况照片的 HEIC 和 MOV 放在一起），再扫描。只读手机。
+  假手机测试（`tests/test_phone_import.py`）+ 用户的 iPhone 16 Pro 实测：iPhone 没有 DCIM（月份文件夹直接在存储下），插上后第一次列文件约 5 分钟，
+  之后 2 s；按用户图库算第一次只拷 414 个新文件。用户第一次在应用里导入时后端两次崩溃（COM 对象在 CoUninitialize
+  之后才释放，见 ADR-040），已修复并用真机中途取消验证。**锁屏导致的读取中断还没在真机上验证**。
 
 **用户的图库（2026-11-04 晚）**：来源 `D:\照片`（SSD）、`G:\照片整理202507`、`G:\照片整理`（USB 机械硬盘，
 14.4 万个文件、678 GB，当时仍在导入）；约 19 万个文件。性能问题先在这个规模上验证（方法见 4.1，副本 + 关闭后台任务）。
