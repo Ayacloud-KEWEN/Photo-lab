@@ -702,6 +702,9 @@ export function useShellActions() {
     openMap: useMutation({
       mutationFn: (assetId: number) => api.openAssetMap(requireConnection(conn), assetId),
     }),
+    openOnMapWeb: useMutation({
+      mutationFn: (assetId: number) => api.openOnMapWeb(requireConnection(conn), assetId),
+    }),
     reveal: useMutation({
       mutationFn: (fileId: number) => api.revealFile(requireConnection(conn), fileId),
     }),

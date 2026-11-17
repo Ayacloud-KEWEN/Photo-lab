@@ -53,6 +53,18 @@ export function FilterBar({
       />
 
       <Select
+        label={t("filters.onMap")}
+        value={query.on_map ?? ""}
+        onChange={(value) => set({ on_map: (value || undefined) as AssetQuery["on_map"] })}
+        options={[
+          ["", t("filters.onMapAny")],
+          ["yes", t("filters.onMapYes")],
+          ["no", t("filters.onMapNo")],
+          ["outdated", t("filters.onMapOutdated")],
+        ]}
+      />
+
+      <Select
         label={t("inspector.rating")}
         value={query.min_rating?.toString() ?? ""}
         onChange={(value) => set({ min_rating: value ? Number(value) : undefined })}

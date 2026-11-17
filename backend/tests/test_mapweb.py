@@ -90,10 +90,39 @@ class FakeMapWeb:
              "visited_at": "2025-10-20T10:30:00.000Z", "photos": []},
         ]  # fmt: skip
         self.uploads: list[dict[str, Any]] = []
+        self.replaced: list[int] = []
+        # What this Periplus says it supports (an older one: none).
+        self.features: list[str] | None = ["photo-lookup", "photo-replace", "link-point"]
+
+    @staticmethod
+    def _fields(body: bytes, content_type: str) -> dict[str, bytes]:
+        boundary = content_type.split("boundary=")[1].encode()
+        fields: dict[str, bytes] = {}
+        for part in body.split(b"--" + boundary)[1:-1]:
+            head, _, content = part.partition(b"\r\n\r\n")
+            name = re.search(rb'name="([^"]+)"', head)
+            assert name is not None
+            fields[name.group(1).decode()] = content[:-2]  # the closing \r\n
+        return fields
 
     def handle(self, method: str, path: str, body: bytes, content_type: str) -> tuple[int, Any]:
         if method == "GET" and path == "/api/health":
-            return 200, {"ok": True}
+            return 200, {"ok": True, **({"features": self.features} if self.features else {})}
+        if method == "POST" and path == "/api/points/photo-lookup" and self.features:
+            keys = set(json.loads(body)["keys"])
+            return 200, [
+                {"key": u["source_key"], "point_id": u["point_id"], "photo_id": u["id"]}
+                for u in self.uploads
+                if u["source_key"] in keys
+            ]
+        replace = re.fullmatch(r"/api/points/(\d+)/photos/(\d+)", path)
+        if method == "PUT" and replace and self.features:
+            upload = next((u for u in self.uploads if u["id"] == int(replace.group(2))), None)
+            if upload is None or upload["point_id"] != int(replace.group(1)):
+                return 404, {"error": "photo not found"}
+            self.replaced.append(upload["id"])
+            Image.open(io.BytesIO(self._fields(body, content_type)["image"])).verify()
+            return 200, {"id": upload["point_id"]}
         if method == "GET" and path == "/api/points":
             return 200, self.points
         if method == "POST" and path == "/api/points/photo-keys":
@@ -108,16 +137,11 @@ class FakeMapWeb:
             return 201, created
         match = re.fullmatch(r"/api/points/(\d+)/photos", path)
         if method == "POST" and match:
-            boundary = content_type.split("boundary=")[1].encode()
-            fields: dict[str, bytes] = {}
-            for part in body.split(b"--" + boundary)[1:-1]:
-                head, _, content = part.partition(b"\r\n\r\n")
-                name = re.search(rb'name="([^"]+)"', head)
-                assert name is not None
-                fields[name.group(1).decode()] = content[:-2]  # the closing \r\n
+            fields = self._fields(body, content_type)
             point = next(p for p in self.points if p["id"] == int(match.group(1)))
             point["photos"].append({})
             self.uploads.append({
+                "id": len(self.uploads) + 100,
                 "point_id": point["id"], "source_key": fields["source_key"].decode(),
                 "size": Image.open(io.BytesIO(fields["image"])).size,
             })  # fmt: skip
@@ -143,7 +167,7 @@ def fake_mapweb() -> Iterator[tuple[str, FakeMapWeb]]:
             self.end_headers()
             self.wfile.write(data)
 
-        do_GET = do_POST = _answer
+        do_GET = do_POST = do_PUT = _answer
 
         def log_message(self, *args: object) -> None:
             pass
@@ -190,7 +214,9 @@ def test_send_to_mapweb(
     refused = client.post("/api/v1/mapweb/plan", json={"asset_ids": every})
     assert refused.json()["error"]["code"] == "mapweb_not_configured"
     status = client.post("/api/v1/mapweb/test", json={"url": f"{url}/"}).json()
-    assert status == {"url": url, "point_count": 1}
+    assert status == {
+        "url": url, "point_count": 1, "features": ["photo-lookup", "photo-replace", "link-point"],
+    }  # fmt: skip
     gone = client.post("/api/v1/mapweb/test", json={"url": "http://127.0.0.1:9"})
     assert gone.status_code == 502 and gone.json()["error"]["code"] == "mapweb_failed"
     client.patch("/api/v1/settings", json={"mapweb_url": url})
@@ -230,3 +256,104 @@ def test_send_to_mapweb(
     # Sending again finds everything already there.
     again = client.post("/api/v1/mapweb/plan", json={"asset_ids": every}).json()
     assert again["duplicate_count"] == 5 and again["groups"] == [] and again["attach"] == []
+
+
+@pytestmark_tools
+def test_photos_on_the_map_stay_in_step(
+    library: tuple[TestClient, Any, dict[str, int]],
+    fake_mapweb: tuple[str, FakeMapWeb],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lumen.api.v1 import mapweb as mapweb_api
+
+    client, app, ids = library
+    url, fake = fake_mapweb
+    client.patch("/api/v1/settings", json={"mapweb_url": url})
+    db = app.state.db
+    every = list(ids.values())
+    client.post("/api/v1/mapweb/send", json={"asset_ids": every})
+    wait_idle(db)
+
+    # Each photo sent is known to be on the map, on its footprint and as its photo there.
+    assert client.get("/api/v1/mapweb/sync").json() == {
+        "on_map": 5, "outdated": 0, "features": fake.features,
+    }  # fmt: skip
+    items = client.get("/api/v1/assets", params={"limit": 100}).json()["items"]
+    assert {item["on_map"] for item in items} == {"yes"}
+    first = ids["IMG_1.JPG"]
+    assert client.get(f"/api/v1/assets/{first}").json()["map_point_id"] == 1
+    opened: list[str] = []
+    monkeypatch.setattr(mapweb_api, "open_in_browser", lambda u, **_: opened.append(u))
+    assert client.post(f"/api/v1/mapweb/open/{first}").status_code == 204
+    assert opened == [f"{url}/?point=1"]
+
+    # Edited after sending: outdated, then replaced on the map in place.
+    client.put(f"/api/v1/assets/{first}/edit", json={"exposure": 1})
+    assert client.get("/api/v1/mapweb/sync").json()["outdated"] == 1
+    outdated = client.get("/api/v1/assets", params={"on_map": "outdated"}).json()["items"]
+    assert [item["id"] for item in outdated] == [first]
+    assert client.get("/api/v1/assets", params={"on_map": "no"}).json()["items"] == []
+    task = client.post("/api/v1/mapweb/update", json={}).json()
+    wait_idle(db)
+    assert client.get(f"/api/v1/tasks/{task['id']}").json()["result"] == {
+        "replaced": 1, "failed": [],
+    }  # fmt: skip
+    sent_first = next(u["id"] for u in fake.uploads if u["source_key"].endswith(
+        client.get(f"/api/v1/assets/{first}").json()["uuid"]
+    ))  # fmt: skip
+    assert fake.replaced == [sent_first]  # that photo, in place
+    assert client.get("/api/v1/mapweb/sync").json()["outdated"] == 0
+
+    # Taken off the map in MapWeb: forgotten after checking.
+    fake.uploads = [u for u in fake.uploads if u["source_key"] != fake.uploads[0]["source_key"]]
+    client.post("/api/v1/mapweb/sync")
+    wait_idle(db)
+    assert client.get("/api/v1/mapweb/sync").json()["on_map"] == 4
+    assert len(client.get("/api/v1/assets", params={"on_map": "no"}).json()["items"]) == 1
+
+    # An older MapWeb: sending only.
+    fake.features = None
+    assert client.get("/api/v1/mapweb/sync").json()["features"] == []
+    task = client.post("/api/v1/mapweb/update", json={}).json()
+    wait_idle(db)
+    assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == "failed"
+
+
+@pytestmark_tools
+def test_automatic_sending(
+    library: tuple[TestClient, Any, dict[str, int]],
+    fake_mapweb: tuple[str, FakeMapWeb],
+    tmp_path: Path,
+) -> None:
+    client, app, ids = library
+    url, fake = fake_mapweb
+    db = app.state.db
+    client.patch("/api/v1/settings", json={"mapweb_url": url})
+    # Photos already in the library are never sent automatically, even when rated.
+    on = client.patch("/api/v1/settings", json={"mapweb_auto_send": True}).json()
+    assert on["mapweb_auto_since"] and on["mapweb_auto_min_rating"] == 4
+    client.post("/api/v1/assets/batch", json={"asset_ids": list(ids.values()), "rating": 5})
+    wait_idle(db)
+    assert fake.uploads == []
+
+    # A photo imported since: sent once rated 4 stars.
+    make_jpeg(tmp_path / "Photos" / "IMG_6.JPG", taken="2025:10:20 12:45:00", gps=KOTOR)
+    root = client.get("/api/v1/storage-roots").json()["items"][0]["id"]
+    client.post(f"/api/v1/storage-roots/{root}/scan")
+    wait_idle(db)
+    new = next(
+        i["id"] for i in client.get("/api/v1/assets", params={"limit": 100}).json()["items"]
+        if i["file_name"] == "IMG_6.JPG"
+    )  # fmt: skip
+    assert fake.uploads == []  # not rated yet
+    client.patch(f"/api/v1/assets/{new}", json={"rating": 4})
+    wait_idle(db)
+    assert [u["point_id"] for u in fake.uploads] == [1]  # by the Kotor footprint
+    assert client.get(f"/api/v1/assets/{new}").json()["map_point_id"] == 1
+
+    # Taken off the map: not sent again.
+    fake.uploads = []
+    client.post("/api/v1/mapweb/sync")
+    client.patch(f"/api/v1/assets/{new}", json={"rating": 5})
+    wait_idle(db)
+    assert fake.uploads == []

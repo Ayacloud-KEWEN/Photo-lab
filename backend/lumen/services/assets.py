@@ -136,6 +136,17 @@ def _filters(query: AssetQuery) -> tuple[list[str], list[object]]:
         if query.folder is not None and not query.subfolders:
             clauses.append("c.relative_path_key NOT LIKE ? ESCAPE '!'")
             params.append(like_prefix(prefix) + like_prefix(os.sep))
+    if query.on_map == "no":
+        clauses.append("NOT EXISTS (SELECT 1 FROM mapweb_photos mp WHERE mp.asset_id = a.id)")
+    elif query.on_map:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM mapweb_photos mp WHERE mp.asset_id = a.id"
+            + (
+                " AND (mp.fingerprint IS NOT c.fingerprint OR mp.recipe_hash IS NOT e.recipe_hash))"
+                if query.on_map == "outdated"
+                else ")"
+            )
+        )
     for tag_id in query.tag_id:
         clauses.append(
             "EXISTS (SELECT 1 FROM media_tags mt WHERE mt.asset_id = a.id AND mt.tag_id = ?)"
@@ -206,7 +217,10 @@ _SUMMARY_COLUMNS = """
     (SELECT GROUP_CONCAT(ext, ',') FROM (
          SELECT DISTINCT UPPER(f.extension) AS ext FROM media_files f
          WHERE f.asset_id = a.id AND f.file_role != 'sidecar' ORDER BY ext
-    )) AS formats
+    )) AS formats,
+    (SELECT CASE WHEN mp.fingerprint IS NOT c.fingerprint
+                   OR mp.recipe_hash IS NOT e.recipe_hash THEN 2 ELSE 1 END
+     FROM mapweb_photos mp WHERE mp.asset_id = a.id) AS on_map
 """
 
 
@@ -228,6 +242,7 @@ def _summary(row: sqlite3.Row) -> AssetSummary:
         cover_extension=row["extension"],
         rendition_version=rendition_version(row["fingerprint"], row["edit_hash"]),
         cull_flag=row["cull_flag"],
+        on_map=("outdated" if row["on_map"] == 2 else "yes") if row["on_map"] else None,
     )
 
 
@@ -517,7 +532,11 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> AssetDetail:
 
     from lumen.media.formats import needs_playback_copy
 
+    on_map = conn.execute(
+        "SELECT point_id FROM mapweb_photos WHERE asset_id = ?", (asset_id,)
+    ).fetchone()
     return AssetDetail(
+        map_point_id=int(on_map[0]) if on_map else None,
         needs_playback_copy=asset["media_type"] == "video"
         and cover is not None
         and needs_playback_copy(cover["extension"] or ""),

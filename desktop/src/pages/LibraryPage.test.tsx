@@ -320,4 +320,21 @@ describe("LibraryPage", () => {
     await waitFor(() => expect(assetCalls().at(-1)!.url.searchParams.get("folder")).toBeNull());
     expect(screen.queryByRole("navigation", { name: "当前文件夹" })).not.toBeInTheDocument();
   });
+
+  it("marks photos on the map and filters by it", async () => {
+    const { requests } = stubBackend({
+      roots: [{ ...root, status: "ready" }],
+      assets: [makeAsset(1, { on_map: "yes" }), makeAsset(2, { on_map: "outdated" }), makeAsset(3)],
+    });
+    fakeViewport();
+    renderPage();
+    expect(await screen.findByRole("img", { name: "已在地图上" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "地图上是旧版本" })).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "地图" }), "outdated");
+    await waitFor(() =>
+      expect(
+        requests.filter((r) => r.url.pathname === "/api/v1/assets").at(-1)!.url.searchParams.get("on_map"),
+      ).toBe("outdated"),
+    );
+  });
 });

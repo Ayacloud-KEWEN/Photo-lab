@@ -22,8 +22,12 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
 
 def update_settings(conn: sqlite3.Connection, data: AppSettingsUpdate) -> AppSettings:
     now = utc_now()
+    changes = data.model_dump(exclude_none=True)
+    if changes.get("mapweb_auto_send") and not get_settings(conn).mapweb_auto_send:
+        # Turned on: only photos imported from now on are sent, not the whole library.
+        changes["mapweb_auto_since"] = now
     with transaction(conn):
-        for key, value in data.model_dump(exclude_none=True).items():
+        for key, value in changes.items():
             if key in ("backup_folder", "mapweb_url", "vlm_folder") and value == "":  # default
                 conn.execute("DELETE FROM app_settings WHERE key = ?", (key,))
                 continue

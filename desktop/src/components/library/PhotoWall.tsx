@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Ban, Check, Heart, Play, SlidersHorizontal, Star } from "lucide-react";
+import { Ban, Check, Heart, MapPin, Play, SlidersHorizontal, Star } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -364,6 +364,7 @@ const Tile = memo(function Tile({
           asset.media_type === "video" ||
           asset.is_live ||
           asset.is_edited ||
+          !!asset.on_map ||
           asset.cull_flag !== "none"
         }
       >
@@ -379,6 +380,16 @@ const Tile = memo(function Tile({
               role="img"
               aria-label={t("develop.edited")}
               className="size-3 text-white"
+            />
+          )}
+          {asset.on_map && (
+            <MapPin
+              role="img"
+              aria-label={t(asset.on_map === "outdated" ? "mapweb.badgeOutdated" : "mapweb.badge")}
+              className={cn(
+                "size-3",
+                asset.on_map === "outdated" ? "text-amber-300" : "text-white",
+              )}
             />
           )}
           {asset.is_favorite && <Heart className="size-3 fill-white text-white" />}

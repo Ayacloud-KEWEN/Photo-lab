@@ -32,6 +32,8 @@ EXPECTED_TABLES = {
     "collections",
     "collection_diary",
     "library_questions",
+    "mapweb_photos",
+    "mapweb_auto_done",
     "collection_items",
     "schema_migrations",
 }

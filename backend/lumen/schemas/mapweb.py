@@ -12,6 +12,23 @@ class MapWebTestRequest(BaseModel):
 class MapWebStatus(BaseModel):
     url: str
     point_count: int = Field(description="Footprints on the map")
+    features: list[str] = Field(
+        default_factory=list,
+        description="What this MapWeb supports beyond sending (photo-lookup, photo-replace, "
+        "link-point…); empty for versions before them",
+    )
+
+
+class MapWebSync(BaseModel):
+    on_map: int = Field(description="Photos of the library on the map")
+    outdated: int = Field(description="…of which edited since they were sent")
+    features: list[str]
+
+
+class MapWebAssets(BaseModel):
+    asset_ids: list[int] | None = Field(
+        default=None, max_length=MAX_ASSETS, description="null: every outdated photo"
+    )
 
 
 class MapWebAttach(BaseModel):

@@ -60,6 +60,7 @@ export function makeDetail(summary: AssetSummary): AssetDetail {
   return {
     id: summary.id,
     uuid: `uuid-${summary.id}`,
+    map_point_id: summary.on_map ? 7 : null,
     needs_playback_copy:
       summary.media_type === "video" && /\.(avi|mts|wmv)$/i.test(summary.file_name),
     media_type: summary.media_type,
@@ -145,7 +146,7 @@ export interface StubOptions {
   /** Collections: name, kind and their asset ids (in order). */
   collections?: { name: string; kind?: "album" | "trip"; assetIds?: number[] }[];
   /** MapWeb: its address (none: not set) and whether it answers. */
-  mapweb?: { url?: string; down?: boolean };
+  mapweb?: { url?: string; down?: boolean; old?: boolean };
   /** Where assets were taken (asset id: [lat, lon]); a collection's route has a stop for each. */
   located?: Record<number, [number, number]>;
   /** Cache folder: moved to a custom folder, its drive missing at startup, or a full target. */
@@ -444,6 +445,10 @@ export function stubBackend(options: StubOptions = {}) {
         backup_keep: 10,
         backup_folder: null,
         mapweb_url: options.mapweb?.url ?? null,
+        mapweb_auto_send: false,
+        mapweb_auto_min_rating: 4,
+        mapweb_auto_favorites: true,
+        mapweb_auto_since: null,
         vlm_enabled: options.vlm?.enabled ?? false,
         vlm_scope: "priority",
         vlm_folder: null,
@@ -552,6 +557,24 @@ export function stubBackend(options: StubOptions = {}) {
         return json({ error: { code: "mapweb_not_configured", message: "Set MapWeb's address", details: {} } }, 400);
       }
       if (options.mapweb.down) return down();
+      if (path === "/api/v1/mapweb/sync" && method === "GET") {
+        const on = assets.filter((a) => a.on_map);
+        return json({
+          on_map: on.length, outdated: on.filter((a) => a.on_map === "outdated").length,
+          features: options.mapweb.old ? [] : ["photo-lookup", "photo-replace", "link-point"],
+        }); // prettier-ignore
+      }
+      if (path === "/api/v1/mapweb/sync" || path === "/api/v1/mapweb/update") {
+        return json({
+          id: path.endsWith("sync") ? 802 : 803, kind: "mapweb_update", status: "pending",
+          storage_root_id: null, progress_current: 0, progress_total: null, attempts: 0,
+          max_attempts: 1, cancel_requested: false, error: null, result: null,
+          created_at: "", updated_at: "", started_at: null, finished_at: null,
+        }, 202); // prettier-ignore
+      }
+      if (path.startsWith("/api/v1/mapweb/open/")) {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
       if (path === "/api/v1/mapweb/plan") {
         const ids = (body as { asset_ids: number[] }).asset_ids;
         return json({

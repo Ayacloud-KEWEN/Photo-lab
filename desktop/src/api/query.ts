@@ -12,6 +12,8 @@ export interface AssetQuery {
   folder?: string;
   /** With folder: false to show only what is right in it. */
   subfolders?: boolean;
+  /** On the user's MapWeb, not on it, or edited since sent. */
+  on_map?: "yes" | "no" | "outdated";
   tag_id?: number[];
   date_from?: string;
   date_to?: string;

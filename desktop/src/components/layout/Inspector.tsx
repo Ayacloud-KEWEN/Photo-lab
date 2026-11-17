@@ -4,6 +4,7 @@ import {
   Cloud,
   FolderOpen,
   Heart,
+  Map as MapIcon,
   MapPinned,
   MapPinPlus,
   Pencil,
@@ -226,6 +227,15 @@ export function AssetDetails({ asset, editable = false }: { asset: AssetDetail; 
               >
                 <MapPinned />
               </LinkButton>
+              {asset.map_point_id && (
+                <LinkButton
+                  label={t("mapweb.openOnMap")}
+                  hint={t("mapweb.openOnMapHint")}
+                  onClick={() => shell.openOnMapWeb.mutate(asset.id)}
+                >
+                  <MapIcon />
+                </LinkButton>
+              )}
               {asset.media_type === "photo" && (
                 <LinkButton
                   label={t("mapweb.send")}

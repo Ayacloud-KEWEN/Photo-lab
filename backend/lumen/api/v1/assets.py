@@ -29,7 +29,7 @@ from lumen.schemas.assets import (
 from lumen.schemas.common import ErrorResponse
 from lumen.services import assets as service
 from lumen.services import develop as develop_service
-from lumen.services import edits, library_folders, playback
+from lumen.services import edits, library_folders, mapweb_sync, playback
 
 router = APIRouter(tags=["assets"])
 
@@ -61,9 +61,17 @@ def get_facets(conn: Connection) -> AssetFacets:
 
 
 @router.post("/assets/batch", response_model=BatchResult, operation_id="batchUpdateAssets")
-def batch_update(conn: Connection, body: AssetBatchUpdate) -> BatchResult:
+def batch_update(conn: Connection, request: Request, body: AssetBatchUpdate) -> BatchResult:
     """Apply a rating, favorite flag or tag changes to many assets at once."""
-    return BatchResult(updated=edits.batch_update(conn, body))
+    result = BatchResult(updated=edits.batch_update(conn, body))
+    _rated(conn, request, body.rating is not None or body.is_favorite is not None)
+    return result
+
+
+def _rated(conn: Connection, request: Request, changed: bool) -> None:
+    """A rating or favourite changed: photos may now match the automatic sending to MapWeb."""
+    if changed and mapweb_sync.queue_auto_send(conn) is not None:
+        wake_task_runner(request)
 
 
 @router.get(
@@ -93,8 +101,12 @@ def open_map(conn: Connection, asset_id: int = Path(ge=1)) -> None:
     "/assets/{asset_id}", response_model=AssetDetail, operation_id="updateAsset",
     responses=NOT_FOUND,
 )  # fmt: skip
-def update_asset(conn: Connection, body: AssetUpdate, asset_id: int = Path(ge=1)) -> AssetDetail:
-    return edits.update_asset(conn, asset_id, body)
+def update_asset(
+    conn: Connection, request: Request, body: AssetUpdate, asset_id: int = Path(ge=1)
+) -> AssetDetail:
+    detail = edits.update_asset(conn, asset_id, body)
+    _rated(conn, request, body.rating is not None or body.is_favorite is not None)
+    return detail
 
 
 @router.get(

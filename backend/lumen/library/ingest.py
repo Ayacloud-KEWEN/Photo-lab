@@ -135,6 +135,10 @@ def _ingest(ctx: TaskContext) -> None:
         ctx.enqueue(AI_INDEX_TASK)
     if done and get_settings(conn).vlm_enabled:
         ctx.enqueue(VLM_TASK)  # after the AI index (it ranks photos with text first)
+    if done:
+        from lumen.services.mapweb_sync import queue_auto_send
+
+        queue_auto_send(conn)  # when the user turned automatic sending on
 
 
 def _count_pending(conn: sqlite3.Connection, root_id: int) -> int:

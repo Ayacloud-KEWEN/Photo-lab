@@ -1800,6 +1800,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mapweb/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sync Status
+         * @description Photos on the map and edited since sent; what this MapWeb supports.
+         */
+        get: operations["mapWebSyncStatus"];
+        put?: never;
+        /**
+         * Sync
+         * @description Ask MapWeb which photos of the library it has (a task).
+         */
+        post: operations["syncMapWeb"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mapweb/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Update
+         * @description Replace on the map the photos edited since they were sent (a task).
+         */
+        post: operations["updateOnMapWeb"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mapweb/open/{asset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open On Map
+         * @description Open the photo's footprint in MapWeb, in the browser.
+         */
+        post: operations["openOnMapWeb"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assets/location": {
         parameters: {
             query?: never;
@@ -2087,6 +2151,29 @@ export interface components {
              */
             mapweb_url?: string | null;
             /**
+             * Mapweb Auto Send
+             * @description Send new photos matching the rule to MapWeb after each import
+             * @default false
+             */
+            mapweb_auto_send: boolean;
+            /**
+             * Mapweb Auto Min Rating
+             * @description Automatic sending: at least this many stars��
+             * @default 4
+             */
+            mapweb_auto_min_rating: number;
+            /**
+             * Mapweb Auto Favorites
+             * @description ��or a favourite
+             * @default true
+             */
+            mapweb_auto_favorites: boolean;
+            /**
+             * Mapweb Auto Since
+             * @description Automatic sending only considers photos imported since this time (set when it is turned on, so the library already there is not sent)
+             */
+            mapweb_auto_since?: string | null;
+            /**
              * Vlm Enabled
              * @description Describe photos and read their text with the local model
              * @default false
@@ -2139,6 +2226,12 @@ export interface components {
              * @description An empty string removes the address
              */
             mapweb_url?: string | null;
+            /** Mapweb Auto Send */
+            mapweb_auto_send?: boolean | null;
+            /** Mapweb Auto Min Rating */
+            mapweb_auto_min_rating?: number | null;
+            /** Mapweb Auto Favorites */
+            mapweb_auto_favorites?: boolean | null;
             /** Vlm Enabled */
             vlm_enabled?: boolean | null;
             /** Vlm Scope */
@@ -2405,6 +2498,11 @@ export interface components {
              */
             motion_file_id: number | null;
             /**
+             * Map Point Id
+             * @description The MapWeb footprint the photo is on (see /mapweb/open)
+             */
+            map_point_id?: number | null;
+            /**
              * Needs Playback Copy
              * @description A video played from a converted copy (see /playback)
              * @default false
@@ -2655,6 +2753,11 @@ export interface components {
              * @enum {string}
              */
             cull_flag: "none" | "pick" | "reject";
+            /**
+             * On Map
+             * @description On the user's MapWeb: as it is, or edited since it was sent
+             */
+            on_map?: ("yes" | "outdated") | null;
         };
         /** AssetTag */
         AssetTag: {
@@ -3916,6 +4019,14 @@ export interface components {
              */
             places: components["schemas"]["NamedPlace"][];
         };
+        /** MapWebAssets */
+        MapWebAssets: {
+            /**
+             * Asset Ids
+             * @description null: every outdated photo
+             */
+            asset_ids?: number[] | null;
+        };
         /** MapWebAttach */
         MapWebAttach: {
             /** Point Id */
@@ -4018,6 +4129,26 @@ export interface components {
              * @description Footprints on the map
              */
             point_count: number;
+            /**
+             * Features
+             * @description What this MapWeb supports beyond sending (photo-lookup, photo-replace, link-point��); empty for versions before them
+             */
+            features?: string[];
+        };
+        /** MapWebSync */
+        MapWebSync: {
+            /**
+             * On Map
+             * @description Photos of the library on the map
+             */
+            on_map: number;
+            /**
+             * Outdated
+             * @description ��of which edited since they were sent
+             */
+            outdated: number;
+            /** Features */
+            features: string[];
         };
         /** MapWebTestRequest */
         MapWebTestRequest: {
@@ -5108,6 +5239,8 @@ export interface operations {
                 folder?: string | null;
                 /** @description With folder: its subfolders too */
                 subfolders?: boolean;
+                /** @description On the user's MapWeb, not on it, or edited since sent */
+                on_map?: ("yes" | "no" | "outdated") | null;
                 /** @description Assets having all these tags */
                 tag_id?: number[];
                 /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
@@ -5169,6 +5302,8 @@ export interface operations {
                 folder?: string | null;
                 /** @description With folder: its subfolders too */
                 subfolders?: boolean;
+                /** @description On the user's MapWeb, not on it, or edited since sent */
+                on_map?: ("yes" | "no" | "outdated") | null;
                 /** @description Assets having all these tags */
                 tag_id?: number[];
                 /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
@@ -5707,6 +5842,8 @@ export interface operations {
                 folder?: string | null;
                 /** @description With folder: its subfolders too */
                 subfolders?: boolean;
+                /** @description On the user's MapWeb, not on it, or edited since sent */
+                on_map?: ("yes" | "no" | "outdated") | null;
                 /** @description Assets having all these tags */
                 tag_id?: number[];
                 /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
@@ -5767,6 +5904,8 @@ export interface operations {
                 folder?: string | null;
                 /** @description With folder: its subfolders too */
                 subfolders?: boolean;
+                /** @description On the user's MapWeb, not on it, or edited since sent */
+                on_map?: ("yes" | "no" | "outdated") | null;
                 /** @description Assets having all these tags */
                 tag_id?: number[];
                 /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
@@ -8130,6 +8269,8 @@ export interface operations {
                 folder?: string | null;
                 /** @description With folder: its subfolders too */
                 subfolders?: boolean;
+                /** @description On the user's MapWeb, not on it, or edited since sent */
+                on_map?: ("yes" | "no" | "outdated") | null;
                 /** @description Assets having all these tags */
                 tag_id?: number[];
                 /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
@@ -8277,6 +8418,8 @@ export interface operations {
                 folder?: string | null;
                 /** @description With folder: its subfolders too */
                 subfolders?: boolean;
+                /** @description On the user's MapWeb, not on it, or edited since sent */
+                on_map?: ("yes" | "no" | "outdated") | null;
                 /** @description Assets having all these tags */
                 tag_id?: number[];
                 /** @description Inclusive, YYYY-MM-DD[THH:MM:SS] */
@@ -9008,6 +9151,162 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Task"];
                 };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    mapWebSyncStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapWebSync"];
+                };
+            };
+        };
+    };
+    syncMapWeb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    updateOnMapWeb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapWebAssets"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    openOnMapWeb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Bad Request */
             400: {

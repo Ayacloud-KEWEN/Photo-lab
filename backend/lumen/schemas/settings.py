@@ -70,6 +70,19 @@ class AppSettings(BaseModel):
         description="Address of the user's MapWeb (e.g. http://kevin:8788); photos are sent "
         "there only when the user asks",
     )
+    mapweb_auto_send: bool = Field(
+        default=False,
+        description="Send new photos matching the rule to MapWeb after each import",
+    )
+    mapweb_auto_min_rating: int = Field(
+        default=4, ge=0, le=5, description="Automatic sending: at least this many stars…"
+    )
+    mapweb_auto_favorites: bool = Field(default=True, description="…or a favourite")
+    mapweb_auto_since: str | None = Field(
+        default=None,
+        description="Automatic sending only considers photos imported since this time (set "
+        "when it is turned on, so the library already there is not sent)",
+    )
     vlm_enabled: bool = Field(
         default=False, description="Describe photos and read their text with the local model"
     )
@@ -104,6 +117,9 @@ class AppSettingsUpdate(BaseModel):
     mapweb_url: str | None = Field(
         default=None, max_length=300, description="An empty string removes the address"
     )
+    mapweb_auto_send: bool | None = None
+    mapweb_auto_min_rating: int | None = Field(default=None, ge=0, le=5)
+    mapweb_auto_favorites: bool | None = None
     vlm_enabled: bool | None = None
     vlm_scope: VlmScope | None = None
     vlm_folder: str | None = Field(

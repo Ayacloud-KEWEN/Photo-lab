@@ -216,6 +216,21 @@ export const api = {
       `/api/v1/folders/reveal${toSearchParams({ storage_root_id: rootId, path })}`,
     ),
 
+  getMapWebSync: (conn: BackendConnection) =>
+    request<{ on_map: number; outdated: number; features: string[] }>(
+      conn,
+      "GET",
+      "/api/v1/mapweb/sync",
+    ),
+
+  syncMapWeb: (conn: BackendConnection) => request<Task>(conn, "POST", "/api/v1/mapweb/sync"),
+
+  updateOnMapWeb: (conn: BackendConnection, assetIds: number[] | null) =>
+    request<Task>(conn, "POST", "/api/v1/mapweb/update", { asset_ids: assetIds }),
+
+  openOnMapWeb: (conn: BackendConnection, assetId: number) =>
+    request<void>(conn, "POST", `/api/v1/mapweb/open/${assetId}`),
+
   getPlaybackState: (conn: BackendConnection, assetId: number, start: boolean) =>
     request<{ needed: boolean; ready: boolean; task_id: number | null }>(
       conn,

@@ -12,6 +12,16 @@ from lumen.services.cache import MOVE_CACHE_TASK, move_cache
 from lumen.services.duplicates import MERGE_ALL_TASK, merge_all_task
 from lumen.services.mapweb import SEND_TASK as MAPWEB_SEND_TASK
 from lumen.services.mapweb import send_task as mapweb_send
+from lumen.services.mapweb_sync import (
+    AUTO_TASK as MAPWEB_AUTO_TASK,
+)
+from lumen.services.mapweb_sync import (
+    SYNC_TASK as MAPWEB_SYNC_TASK,
+)
+from lumen.services.mapweb_sync import (
+    UPDATE_TASK as MAPWEB_UPDATE_TASK,
+)
+from lumen.services.mapweb_sync import auto_task, sync_task, update_task
 from lumen.services.playback import PLAYBACK_TASK, make_copy
 from lumen.tasks.runner import Handler
 from lumen.vlm.ask import ASK_TASK, answer_question
@@ -31,6 +41,9 @@ HANDLERS: dict[str, Handler] = {
     MERGE_ALL_TASK: merge_all_task,
     MOVE_CACHE_TASK: move_cache,
     MAPWEB_SEND_TASK: mapweb_send,
+    MAPWEB_SYNC_TASK: sync_task,
+    MAPWEB_UPDATE_TASK: update_task,
+    MAPWEB_AUTO_TASK: auto_task,
     PLAYBACK_TASK: make_copy,
     LIVE_REPAIR_TASK: pair_live_photos,
     VLM_TASK: describe_assets,

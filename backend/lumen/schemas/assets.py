@@ -35,6 +35,9 @@ class AssetQuery(BaseModel):
         description="With storage_root_id: a folder in it (relative path, '' = the root)",
     )
     subfolders: bool = Field(default=True, description="With folder: its subfolders too")
+    on_map: Literal["yes", "no", "outdated"] | None = Field(
+        default=None, description="On the user's MapWeb, not on it, or edited since sent"
+    )
     tag_id: list[int] = Field(default_factory=list, description="Assets having all these tags")
     date_from: str | None = Field(default=None, description="Inclusive, YYYY-MM-DD[THH:MM:SS]")
     date_to: str | None = Field(default=None, description="Exclusive, YYYY-MM-DD[THH:MM:SS]")
@@ -79,6 +82,10 @@ class AssetSummary(BaseModel):
         description="Changes whenever the cover's content changes; use as cache-buster"
     )
     cull_flag: CullFlag
+    on_map: Literal["yes", "outdated"] | None = Field(
+        default=None,
+        description="On the user's MapWeb: as it is, or edited since it was sent",
+    )
 
 
 class AssetPage(BaseModel):
@@ -268,6 +275,9 @@ class AssetDetail(BaseModel):
     tags: list[AssetTag]
     cover_file_id: int | None = Field(description="File shown as thumbnail and by /original")
     motion_file_id: int | None = Field(description="Live Photo clip, served by /motion")
+    map_point_id: int | None = Field(
+        default=None, description="The MapWeb footprint the photo is on (see /mapweb/open)"
+    )
     needs_playback_copy: bool = Field(
         default=False, description="A video played from a converted copy (see /playback)"
     )

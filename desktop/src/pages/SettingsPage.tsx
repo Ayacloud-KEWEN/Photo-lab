@@ -8,6 +8,7 @@ import { CloudSettings, LocalAiSettings } from "@/components/settings/AiSettings
 import { BackupSettings } from "@/components/settings/BackupSettings";
 import { CacheSettings } from "@/components/settings/CacheSettings";
 import { MapWebSettings } from "@/components/settings/MapWebSettings";
+import { MapWebSync } from "@/components/settings/MapWebSync";
 import { VlmSettings } from "@/components/settings/VlmSettings";
 import { LutSettings } from "@/components/settings/LutSettings";
 import { LANGUAGES, setLanguage, type LanguageCode } from "@/i18n";
@@ -104,6 +105,7 @@ export function SettingsPage() {
 
       <Section title={t("mapweb.title")}>
         <MapWebSettings />
+        <MapWebSync />
       </Section>
 
       <Section title={t("settings.cache")}>

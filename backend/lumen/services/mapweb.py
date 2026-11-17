@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from lumen.core.errors import LumenError, NotFoundError
+from lumen.db.connection import transaction, utc_now
 from lumen.develop import live
 from lumen.develop.engine import DevelopError
 from lumen.develop.exporter import ExportOptions, export_photo
@@ -118,12 +119,26 @@ class MapWebClient:
                 "This address does not answer like MapWeb", details={"url": self.base_url}
             ) from exc
 
-    def health(self) -> None:
+    def health(self) -> list[str]:
+        """Checks the address; returns what it supports beyond sending (empty: older)."""
         answer = self._request("GET", "/api/health")
         if not isinstance(answer, dict) or answer.get("ok") is not True:
             raise MapWebError(
                 "This address does not answer like MapWeb", details={"url": self.base_url}
             )
+        features = answer.get("features")
+        return [str(f) for f in features] if isinstance(features, list) else []
+
+    def lookup(self, keys: list[str]) -> dict[str, tuple[int, int]]:
+        """Where photos sent before are: key → (footprint, photo)."""
+        found: dict[str, tuple[int, int]] = {}
+        for start in range(0, len(keys), 5000):
+            answer = self._request(
+                "POST", "/api/points/photo-lookup", {"keys": keys[start : start + 5000]}
+            )
+            for item in answer or []:
+                found[str(item["key"])] = (int(item["point_id"]), int(item["photo_id"]))
+        return found
 
     def points(self) -> list[dict[str, Any]]:
         answer = self._request("GET", "/api/points")
@@ -147,23 +162,36 @@ class MapWebClient:
         return created
 
     def add_photo(self, point_id: int, jpeg: bytes, file_name: str, source_key: str) -> None:
-        boundary = f"lumen-{uuid.uuid4().hex}"
-        quoted = file_name.replace('"', "")
-        parts = [
-            f'--{boundary}\r\nContent-Disposition: form-data; name="source_key"\r\n\r\n'
-            f"{source_key}\r\n".encode(),
-            f'--{boundary}\r\nContent-Disposition: form-data; name="image"; '
-            f'filename="{quoted}"\r\nContent-Type: image/jpeg\r\n\r\n'.encode(),
-            jpeg,
-            f"\r\n--{boundary}--\r\n".encode(),
-        ]
+        data, content_type = _multipart(jpeg, file_name, {"source_key": source_key})
         self._request(
-            "POST",
-            f"/api/points/{point_id}/photos",
-            data=b"".join(parts),
-            content_type=f"multipart/form-data; boundary={boundary}",
+            "POST", f"/api/points/{point_id}/photos", data=data, content_type=content_type,
             timeout=UPLOAD_TIMEOUT_S,
-        )
+        )  # fmt: skip
+
+    def replace_photo(self, point_id: int, photo_id: int, jpeg: bytes, file_name: str) -> None:
+        """Replace a photo's file on the map; it keeps its place and number."""
+        data, content_type = _multipart(jpeg, file_name, {})
+        self._request(
+            "PUT", f"/api/points/{point_id}/photos/{photo_id}", data=data,
+            content_type=content_type, timeout=UPLOAD_TIMEOUT_S,
+        )  # fmt: skip
+
+
+def _multipart(jpeg: bytes, file_name: str, fields: dict[str, str]) -> tuple[bytes, str]:
+    boundary = f"lumen-{uuid.uuid4().hex}"
+    quoted = file_name.replace('"', "")
+    parts = [
+        f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n'
+        f"{value}\r\n".encode()
+        for name, value in fields.items()
+    ]
+    parts += [
+        f'--{boundary}\r\nContent-Disposition: form-data; name="image"; '
+        f'filename="{quoted}"\r\nContent-Type: image/jpeg\r\n\r\n'.encode(),
+        jpeg,
+        f"\r\n--{boundary}--\r\n".encode(),
+    ]
+    return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
 def client_for(conn: sqlite3.Connection) -> MapWebClient:
@@ -175,8 +203,8 @@ def client_for(conn: sqlite3.Connection) -> MapWebClient:
 
 def test_connection(url: str) -> MapWebStatus:
     client = MapWebClient(url)
-    client.health()
-    return MapWebStatus(url=client.base_url, point_count=len(client.points()))
+    features = client.health()
+    return MapWebStatus(url=client.base_url, point_count=len(client.points()), features=features)
 
 
 # -------------------------------------------------------------------------------- plan
@@ -539,24 +567,13 @@ def send_task(ctx: TaskContext) -> dict[str, Any]:
         tempfile.TemporaryDirectory(prefix="lumen-mapweb-") as folder,
         ExifToolSession(exiftool_path) if exiftool_path else _NoExifTool() as exiftool,
     ):
-        options = ExportOptions(
-            long_edge=LONG_EDGE, quality=QUALITY, include_metadata=exiftool is not None,
-            include_location=True,
-        )  # fmt: skip
+        options = export_options(exiftool)
         for index, (point_id, photo) in enumerate(jobs):
             ctx.check()
             try:
-                source = develop_source(ctx.conn, photo.asset_id)
-                corrected = overrides_for(ctx.conn, photo.asset_id)
-                path = export_photo(
-                    source.path, source.format, current_recipe(ctx.conn, photo.asset_id),
-                    Path(folder), options, exiftool, stem=f"{photo.asset_id}",
-                    location=corrected.location, capture_time=corrected.capture_time,
-                    motion=source.clip(live.Tools.of(ctx.settings)),
-                )  # fmt: skip
-                jpeg = path.read_bytes()
-                path.unlink(missing_ok=True)
+                jpeg = developed_jpeg(ctx, Path(folder), options, exiftool, photo.asset_id)
                 client.add_photo(point_id, jpeg, f"{Path(photo.name).stem}.jpg", photo.key)
+                record_sent(ctx.conn, photo.asset_id, point_id)
                 uploaded += 1
             except MapWebError as exc:
                 if exc.details.get("status") is None:  # unreachable: stop, resume later
@@ -569,6 +586,9 @@ def send_task(ctx: TaskContext) -> dict[str, Any]:
                 )
                 failed.append({"asset_id": photo.asset_id, "error": str(exc)})
             ctx.progress(index + 1, len(jobs))
+    from lumen.services.mapweb_sync import refresh_photo_ids
+
+    refresh_photo_ids(ctx.conn, client)  # which photo each one became on the map
     return {
         "uploaded": uploaded,
         "created_points": created,
@@ -576,6 +596,54 @@ def send_task(ctx: TaskContext) -> dict[str, Any]:
         "skipped": len(plan.duplicates) + len(plan.unplaced),
         "failed": failed[:50],
     }
+
+
+def developed_jpeg(
+    ctx: TaskContext, folder: Path, options: ExportOptions, exiftool: Any, asset_id: int
+) -> bytes:
+    """The photo as MapWeb gets it: developed with its edit, corrected time and place."""
+    source = develop_source(ctx.conn, asset_id)
+    corrected = overrides_for(ctx.conn, asset_id)
+    path = export_photo(
+        source.path, source.format, current_recipe(ctx.conn, asset_id),
+        folder, options, exiftool, stem=f"{asset_id}",
+        location=corrected.location, capture_time=corrected.capture_time,
+        motion=source.clip(live.Tools.of(ctx.settings)),
+    )  # fmt: skip
+    jpeg = path.read_bytes()
+    path.unlink(missing_ok=True)
+    return jpeg
+
+
+def export_options(exiftool: Any) -> ExportOptions:
+    return ExportOptions(
+        long_edge=LONG_EDGE, quality=QUALITY, include_metadata=exiftool is not None,
+        include_location=True,
+    )  # fmt: skip
+
+
+def record_sent(
+    conn: sqlite3.Connection, asset_id: int, point_id: int, photo_id: int | None = None
+) -> None:
+    """Remember the photo is on the map, and which version of it (cover and edit) went."""
+    with transaction(conn):
+        conn.execute(
+            """
+            INSERT INTO mapweb_photos (asset_id, point_id, photo_id, fingerprint, recipe_hash,
+                                       sent_at)
+            SELECT a.id, ?, ?, c.fingerprint, e.recipe_hash, ?
+            FROM media_assets a
+            JOIN media_files c ON c.id = a.cover_file_id
+            LEFT JOIN edit_history e ON e.id = a.current_edit_id
+            WHERE a.id = ?
+            ON CONFLICT (asset_id) DO UPDATE SET
+                point_id = excluded.point_id,
+                photo_id = COALESCE(excluded.photo_id, mapweb_photos.photo_id),
+                fingerprint = excluded.fingerprint, recipe_hash = excluded.recipe_hash,
+                sent_at = excluded.sent_at
+            """,
+            (point_id, photo_id, utc_now(), asset_id),
+        )
 
 
 class _NoExifTool:
