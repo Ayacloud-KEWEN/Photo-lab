@@ -1864,6 +1864,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mapweb/layers/footprints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Footprints
+         * @description MapWeb's footprints (kept a couple of minutes).
+         */
+        get: operations["mapWebFootprints"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mapweb/layers/footprints/{point_id}/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Footprint Photos
+         * @description The library's photos MapWeb's import would put on this footprint.
+         */
+        get: operations["mapWebFootprintPhotos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mapweb/layers/tracks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tracks */
+        get: operations["mapWebTracks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mapweb/layers/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plans */
+        get: operations["mapWebPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mapweb/layers/plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plan
+         * @description A plan's days and stops, each stop with the photos taken there that day.
+         */
+        get: operations["mapWebPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mapweb/layers/thumb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Thumb
+         * @description A footprint's thumbnail, from MapWeb. Accepts ``?token=`` (for ``<img>``).
+         */
+        get: operations["mapWebThumb"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assets/location": {
         parameters: {
             query?: never;
@@ -3784,6 +3898,26 @@ export interface components {
             /** Items */
             items: components["schemas"]["Folder"][];
         };
+        /** FootprintPhotos */
+        FootprintPhotos: {
+            /** Point Id */
+            point_id: number;
+            /**
+             * Items
+             * @description LUMEN photos MapWeb's import would put here
+             */
+            items: components["schemas"]["AssetSummary"][];
+            /**
+             * Here
+             * @description ��of which already on this footprint
+             */
+            here: number[];
+            /**
+             * Elsewhere
+             * @description ��of which on another footprint
+             */
+            elsewhere: number[];
+        };
         /** FrameExport */
         FrameExport: {
             /**
@@ -3826,6 +3960,101 @@ export interface components {
             /** Uptime Seconds */
             uptime_seconds: number;
             database: components["schemas"]["DatabaseHealth"];
+        };
+        /** LayerFootprint */
+        LayerFootprint: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Emoji */
+            emoji: string;
+            /** Lat */
+            lat: number;
+            /** Lng */
+            lng: number;
+            /** Visited At */
+            visited_at: string | null;
+            /** Photo Count */
+            photo_count: number;
+            /**
+             * Thumb
+             * @description MapWeb path of its cover thumbnail (see /layers/thumb)
+             */
+            thumb: string | null;
+            /** Plan Id */
+            plan_id: number | null;
+        };
+        /** LayerPlan */
+        LayerPlan: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Days */
+            days: components["schemas"]["LayerPlanDay"][];
+        };
+        /** LayerPlanDay */
+        LayerPlanDay: {
+            /** Number */
+            number: number;
+            /** Date */
+            date: string | null;
+            /** Title */
+            title: string;
+            /** Stops */
+            stops: components["schemas"]["LayerPlanStop"][];
+        };
+        /** LayerPlanStop */
+        LayerPlanStop: {
+            /** Name */
+            name: string;
+            /** Lat */
+            lat: number;
+            /** Lng */
+            lng: number;
+            /**
+             * Asset Ids
+             * @description LUMEN photos taken that day within 3 km
+             */
+            asset_ids: number[];
+        };
+        /** LayerPlanSummary */
+        LayerPlanSummary: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Start Date */
+            start_date: string | null;
+            /** End Date */
+            end_date: string | null;
+        };
+        /** LayerTrack */
+        LayerTrack: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Sport */
+            sport: string;
+            /** Started At */
+            started_at: string | null;
+            /** Ended At */
+            ended_at: string | null;
+            /** Distance M */
+            distance_m: number;
+            /** Ascent M */
+            ascent_m: number;
+            /**
+             * Geometry
+             * @description GeoJSON LineString or MultiLineString
+             */
+            geometry: {
+                [key: string]: unknown;
+            };
         };
         /** LiveFrame */
         LiveFrame: {
@@ -4119,6 +4348,11 @@ export interface components {
              * @description Text for new footprints (e.g. the portfolio)
              */
             description?: string | null;
+            /**
+             * Point Id
+             * @description Send every photo to this footprint (the user picked it on the map) instead of placing them by MapWeb's rules
+             */
+            point_id?: number | null;
         };
         /** MapWebStatus */
         MapWebStatus: {
@@ -9307,6 +9541,269 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    mapWebFootprints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LayerFootprint"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    mapWebFootprintPhotos: {
+        parameters: {
+            query?: {
+                language?: string;
+            };
+            header?: never;
+            path: {
+                point_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FootprintPhotos"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    mapWebTracks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LayerTrack"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    mapWebPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LayerPlanSummary"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    mapWebPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LayerPlan"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    mapWebThumb: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Bad Request */
             400: {

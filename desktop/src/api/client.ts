@@ -4,6 +4,11 @@ import type {
   AnalysisResult,
   AskAnswer,
   Diary,
+  FootprintPhotos,
+  LayerFootprint,
+  LayerPlan,
+  LayerPlanSummary,
+  LayerTrack,
   FolderList,
   StoryWriter,
   AppSettings,
@@ -216,6 +221,25 @@ export const api = {
       `/api/v1/folders/reveal${toSearchParams({ storage_root_id: rootId, path })}`,
     ),
 
+  mapWebFootprints: (conn: BackendConnection) =>
+    request<LayerFootprint[]>(conn, "GET", "/api/v1/mapweb/layers/footprints"),
+
+  mapWebFootprintPhotos: (conn: BackendConnection, pointId: number, language: string) =>
+    request<FootprintPhotos>(
+      conn,
+      "GET",
+      `/api/v1/mapweb/layers/footprints/${pointId}/photos${toSearchParams({ language })}`,
+    ),
+
+  mapWebTracks: (conn: BackendConnection) =>
+    request<LayerTrack[]>(conn, "GET", "/api/v1/mapweb/layers/tracks"),
+
+  mapWebPlans: (conn: BackendConnection) =>
+    request<LayerPlanSummary[]>(conn, "GET", "/api/v1/mapweb/layers/plans"),
+
+  mapWebPlan: (conn: BackendConnection, planId: number) =>
+    request<LayerPlan>(conn, "GET", `/api/v1/mapweb/layers/plans/${planId}`),
+
   getMapWebSync: (conn: BackendConnection) =>
     request<{ on_map: number; outdated: number; features: string[] }>(
       conn,
@@ -227,6 +251,9 @@ export const api = {
 
   updateOnMapWeb: (conn: BackendConnection, assetIds: number[] | null) =>
     request<Task>(conn, "POST", "/api/v1/mapweb/update", { asset_ids: assetIds }),
+
+  openFootprint: (conn: BackendConnection, pointId: number) =>
+    request<void>(conn, "POST", `/api/v1/mapweb/open-point/${pointId}`),
 
   openOnMapWeb: (conn: BackendConnection, assetId: number) =>
     request<void>(conn, "POST", `/api/v1/mapweb/open/${assetId}`),
@@ -738,6 +765,11 @@ export function liveStripUrl(conn: BackendConnection, assetId: number, version: 
     v: contentVersion(version),
     token: conn.token,
   })}`;
+}
+
+/** A MapWeb footprint's thumbnail, through LUMEN (MapWeb itself is not reachable from here). */
+export function mapWebThumbUrl(conn: BackendConnection, path: string): string {
+  return `${conn.baseUrl}/api/v1/mapweb/layers/thumb${toSearchParams({ path, token: conn.token })}`;
 }
 
 /** The converted copy of a video the web view cannot play (AVI, MTS...); supports Range. */

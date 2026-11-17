@@ -87,7 +87,8 @@ class FakeMapWeb:
     def __init__(self) -> None:
         self.points: list[dict[str, Any]] = [
             {"id": 1, "lat": 42.4247, "lng": 18.7712, "title": "Kotor 老城",
-             "visited_at": "2025-10-20T10:30:00.000Z", "photos": []},
+             "visited_at": "2025-10-20T10:30:00.000Z", "photos": [],
+             "thumb_url": "/thumbs/2025/10/1-a.jpg", "emoji": "🏰", "plan_id": 1},
         ]  # fmt: skip
         self.uploads: list[dict[str, Any]] = []
         self.replaced: list[int] = []
@@ -125,6 +126,28 @@ class FakeMapWeb:
             return 200, {"id": upload["point_id"]}
         if method == "GET" and path == "/api/points":
             return 200, self.points
+        if method == "GET" and path == "/api/tracks":
+            return 200, [{
+                "id": 5, "name": "城墙徒步", "sport": "hiking",
+                "started_at": "2025-10-20T09:00:00Z", "ended_at": "2025-10-20T10:00:00Z",
+                "distance_m": 4200, "ascent_m": 260,
+                "geometry": {"type": "LineString", "coordinates": [[18.77, 42.42], [18.78, 42.43]]},
+            }]  # fmt: skip
+        if method == "GET" and path == "/api/plans":
+            return 200, [{"id": 1, "title": "巴尔干", "start_date": "2025-10-20",
+                          "end_date": "2025-10-21"}]  # fmt: skip
+        if method == "GET" and path == "/api/plans/1":
+            return 200, {"id": 1, "title": "巴尔干", "days": [
+                {"day_date": "2025-10-20", "title": "科托尔", "stops": [
+                    {"name": "Kotor", "lat": 42.4247, "lng": 18.7712},
+                    {"name": "没坐标的", "lat": None, "lng": None},
+                ]},
+                {"day_date": "2025-10-21", "title": "布德瓦", "stops": [
+                    {"name": "Budva", "lat": 42.29, "lng": 18.84},
+                ]},
+            ]}  # fmt: skip
+        if method == "GET" and path.startswith("/thumbs/"):
+            return 200, "IMAGE"
         if method == "POST" and path == "/api/points/photo-keys":
             keys = set(json.loads(body)["keys"])
             return 200, [u["source_key"] for u in self.uploads if u["source_key"] in keys]
@@ -160,9 +183,10 @@ def fake_mapweb() -> Iterator[tuple[str, FakeMapWeb]]:
             status, answer = fake.handle(
                 self.command, self.path, body, self.headers.get("Content-Type") or ""
             )
-            data = json.dumps(answer).encode()
+            image = answer == "IMAGE"
+            data = b"\xff\xd8\xff\xe0fake-jpeg" if image else json.dumps(answer).encode()
             self.send_response(status)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", "image/jpeg" if image else "application/json")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
@@ -357,3 +381,55 @@ def test_automatic_sending(
     client.patch(f"/api/v1/assets/{new}", json={"rating": 5})
     wait_idle(db)
     assert fake.uploads == []
+
+
+@pytestmark_tools
+def test_mapweb_layers_on_the_map(
+    library: tuple[TestClient, Any, dict[str, int]], fake_mapweb: tuple[str, FakeMapWeb]
+) -> None:
+    client, app, ids = library
+    url, fake = fake_mapweb
+    client.patch("/api/v1/settings", json={"mapweb_url": url})
+    base = "/api/v1/mapweb/layers"
+
+    [footprint] = client.get(f"{base}/footprints").json()
+    assert (footprint["id"], footprint["emoji"], footprint["thumb"]) == (
+        1, "🏰", "/thumbs/2025/10/1-a.jpg",
+    )  # fmt: skip
+    # The photos MapWeb's import would put on it: the two by it (not the ones 4 km away,
+    # nor the one without a location 6 hours later).
+    here = client.get(f"{base}/footprints/1/photos").json()
+    assert sorted(i["file_name"] for i in here["items"]) == ["IMG_1.JPG", "IMG_2.JPG"]
+    assert here["here"] == [] and here["elsewhere"] == []
+
+    [track] = client.get(f"{base}/tracks").json()
+    assert track["sport"] == "hiking" and track["geometry"]["type"] == "LineString"
+    assert client.get(f"{base}/plans").json()[0]["title"] == "巴尔干"
+    plan = client.get(f"{base}/plans/1").json()
+    first, second = plan["days"]
+    assert [s["name"] for s in first["stops"]] == ["Kotor"]  # the stop without a place: skipped
+    assert sorted(first["stops"][0]["asset_ids"]) == sorted([ids["IMG_1.JPG"], ids["IMG_2.JPG"]])
+    assert second["stops"][0]["asset_ids"] == []  # nothing taken there that day
+
+    # The thumbnail through LUMEN, as <img> asks for it (token in the address).
+    thumb = client.get(
+        f"{base}/thumb", params={"path": "/thumbs/2025/10/1-a.jpg", "token": TOKEN},
+        headers={"Authorization": ""},
+    )  # fmt: skip
+    assert thumb.status_code == 200 and thumb.headers["content-type"] == "image/jpeg"
+    for bad in ("/api/points", "/thumbs/../../.env", "/uploads/2025/a.jpg"):
+        assert client.get(f"{base}/thumb", params={"path": bad}).status_code == 400
+
+    # Photos sent to the footprint the user picked, whatever the placing rules say.
+    far = ids["IMG_3.JPG"]
+    client.post("/api/v1/mapweb/send", json={"asset_ids": [far], "point_id": 1})
+    wait_idle(app.state.db)
+    assert [u["point_id"] for u in fake.uploads] == [1]
+    assert client.get(f"/api/v1/assets/{far}").json()["map_point_id"] == 1
+
+    # Unreachable: the layers say so; LUMEN's own map is not concerned.
+    client.patch("/api/v1/settings", json={"mapweb_url": "http://127.0.0.1:9"})
+    from lumen.services.mapweb_layers import forget
+
+    forget()
+    assert client.get(f"{base}/footprints").json()["error"]["code"] == "mapweb_failed"

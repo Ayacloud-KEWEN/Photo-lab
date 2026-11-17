@@ -1,5 +1,6 @@
 import { Loader2, MapPinOff } from "lucide-react";
-import { lazy, Suspense } from "react";
+import type { Map as MaplibreMap } from "maplibre-gl";
+import { lazy, Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useMapPoints, useSettings } from "@/api/hooks";
@@ -8,12 +9,16 @@ import { useLibraryState } from "@/library/state";
 
 // MapLibre is large: load it with the first map.
 const PhotoMap = lazy(() => import("@/components/map/PhotoMap"));
+const PeriplusLayers = lazy(() =>
+  import("@/components/map/PeriplusLayers").then((m) => ({ default: m.PeriplusLayers })),
+);
 
 export function MapPage() {
   const { t } = useTranslation();
   const { query, setQuery } = useLibraryState();
   const settings = useSettings();
   const points = useMapPoints(query);
+  const [map, setMap] = useState<MaplibreMap | null>(null);
   const online = settings.data?.map_online_tiles ?? false;
   const empty = points.data && points.data.points.length === 0;
 
@@ -31,7 +36,12 @@ export function MapPage() {
       </div>
       <div className="relative min-h-0 flex-1 border-t">
         <Suspense fallback={<MapLoading />}>
-          <PhotoMap points={points.data?.points ?? []} places={points.data?.places ?? []}>
+          <PhotoMap
+            points={points.data?.points ?? []}
+            places={points.data?.places ?? []}
+            onMap={setMap}
+          >
+            <PeriplusLayers map={map} points={points.data?.points ?? []} />
             {empty && (
               <div className="pointer-events-none absolute inset-x-0 top-8 flex justify-center">
                 <span className="flex items-center gap-2 rounded-md bg-background/80 px-3 py-2 text-xs text-muted-foreground">

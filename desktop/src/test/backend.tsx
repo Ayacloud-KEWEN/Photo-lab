@@ -572,6 +572,23 @@ export function stubBackend(options: StubOptions = {}) {
           created_at: "", updated_at: "", started_at: null, finished_at: null,
         }, 202); // prettier-ignore
       }
+      if (path === "/api/v1/mapweb/layers/footprints") {
+        return json([{ id: 7, title: "Kotor 老城", description: "城墙", emoji: "🏰", lat: 42.42,
+          lng: 18.77, visited_at: "2025-10-20T10:30:00Z", photo_count: 3, thumb: null, plan_id: null }]);
+      } // prettier-ignore
+      if (path === "/api/v1/mapweb/layers/footprints/7/photos") {
+        return json({ point_id: 7, items: assets.slice(0, 2), here: [], elsewhere: assets.filter((a) => a.on_map).map((a) => a.id) });
+      } // prettier-ignore
+      if (path === "/api/v1/mapweb/layers/tracks") return json([]);
+      if (path === "/api/v1/mapweb/layers/plans") {
+        return json([{ id: 1, title: "巴尔干", start_date: "2025-10-20", end_date: "2025-10-21" }]);
+      }
+      if (path === "/api/v1/mapweb/layers/plans/1") {
+        return json({ id: 1, title: "巴尔干", days: [
+          { number: 1, date: "2025-10-20", title: "科托尔", stops: [{ name: "Kotor", lat: 42.42, lng: 18.77, asset_ids: [1] }] },
+          { number: 2, date: "2025-10-21", title: "布德瓦", stops: [{ name: "Budva", lat: 42.29, lng: 18.84, asset_ids: [] }] },
+        ] });
+      } // prettier-ignore
       if (path.startsWith("/api/v1/mapweb/open/")) {
         return Promise.resolve(new Response(null, { status: 204 }));
       }

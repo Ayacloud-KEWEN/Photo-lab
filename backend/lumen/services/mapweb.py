@@ -537,6 +537,12 @@ def send_task(ctx: TaskContext) -> dict[str, Any]:
         raise PermanentTaskError(exc.message) from exc
 
     jobs: list[tuple[int, Photo]] = [(int(t.pin["id"]), p) for t in plan.attach for p in t.photos]
+    if request.point_id is not None:
+        # The user picked the footprint: every photo not sent before goes there.
+        sent = {p.asset_id for p in plan.duplicates}
+        chosen = collect(ctx.conn, request.asset_ids, request.language).photos
+        jobs = [(request.point_id, p) for p in chosen if p.asset_id not in sent]
+        plan = Plan(attach=[], groups=[], duplicates=plan.duplicates, unplaced=[])
     created = 0
     if plan.groups:
         try:
@@ -586,9 +592,11 @@ def send_task(ctx: TaskContext) -> dict[str, Any]:
                 )
                 failed.append({"asset_id": photo.asset_id, "error": str(exc)})
             ctx.progress(index + 1, len(jobs))
+    from lumen.services.mapweb_layers import forget
     from lumen.services.mapweb_sync import refresh_photo_ids
 
     refresh_photo_ids(ctx.conn, client)  # which photo each one became on the map
+    forget()  # the footprints changed
     return {
         "uploaded": uploaded,
         "created_points": created,

@@ -46,6 +46,8 @@ export interface PhotoMapProps {
   /** Draw a route through these stops (in order) instead of clustering the photos. */
   stops?: RouteStop[] | undefined;
   focus?: MapFocus | null | undefined;
+  /** The map once it is ready (null when it goes): other layers draw on it. */
+  onMap?: ((map: maplibregl.Map | null) => void) | undefined;
   children?: ReactNode;
 }
 
@@ -72,7 +74,14 @@ function routeLines(stops: RouteStop[]): FeatureCollection<LineString> {
  * A map of photos: thumbnails clustered by place, or (with `stops`) a numbered route.
  * Clicking a group lists its photos on the right; the basemap follows the settings.
  */
-export default function PhotoMap({ points, places, stops, focus, children }: PhotoMapProps) {
+export default function PhotoMap({
+  points,
+  places,
+  stops,
+  focus,
+  onMap,
+  children,
+}: PhotoMapProps) {
   const { t, i18n } = useTranslation();
   const conn = useConnection();
   const { openViewer } = useLibraryState();
@@ -168,6 +177,12 @@ export default function PhotoMap({ points, places, stops, focus, children }: Pho
       cancelled = true;
     };
   }, [basemap, online, settings.isPending, t]);
+
+  useEffect(() => {
+    if (!onMap) return;
+    onMap(ready ? mapRef.current : null);
+    return () => onMap(null);
+  }, [ready, onMap]);
 
   // Fit the view to the photos the first time they arrive.
   useEffect(() => {

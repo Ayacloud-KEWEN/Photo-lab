@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
+
+from lumen.schemas.assets import AssetSummary
 
 MAX_ASSETS = 5000
 
@@ -65,3 +69,69 @@ class MapWebSendRequest(MapWebPlanRequest):
     description: str | None = Field(
         default=None, max_length=500, description="Text for new footprints (e.g. the portfolio)"
     )
+    point_id: int | None = Field(
+        default=None,
+        description="Send every photo to this footprint (the user picked it on the map) "
+        "instead of placing them by MapWeb's rules",
+    )
+
+
+# --- Layers on LUMEN's map ------------------------------------------------------------------
+
+
+class LayerFootprint(BaseModel):
+    id: int
+    title: str
+    description: str
+    emoji: str
+    lat: float
+    lng: float
+    visited_at: str | None
+    photo_count: int
+    thumb: str | None = Field(description="MapWeb path of its cover thumbnail (see /layers/thumb)")
+    plan_id: int | None
+
+
+class FootprintPhotos(BaseModel):
+    point_id: int
+    items: list[AssetSummary] = Field(description="LUMEN photos MapWeb's import would put here")
+    here: list[int] = Field(description="…of which already on this footprint")
+    elsewhere: list[int] = Field(description="…of which on another footprint")
+
+
+class LayerTrack(BaseModel):
+    id: int
+    name: str
+    sport: str
+    started_at: str | None
+    ended_at: str | None
+    distance_m: float
+    ascent_m: float
+    geometry: dict[str, Any] = Field(description="GeoJSON LineString or MultiLineString")
+
+
+class LayerPlanSummary(BaseModel):
+    id: int
+    title: str
+    start_date: str | None
+    end_date: str | None
+
+
+class LayerPlanStop(BaseModel):
+    name: str
+    lat: float
+    lng: float
+    asset_ids: list[int] = Field(description="LUMEN photos taken that day within 3 km")
+
+
+class LayerPlanDay(BaseModel):
+    number: int
+    date: str | None
+    title: str
+    stops: list[LayerPlanStop]
+
+
+class LayerPlan(BaseModel):
+    id: int
+    title: str
+    days: list[LayerPlanDay]
