@@ -4,6 +4,7 @@ import type { GeoJSONSource, LayerSpecification, MapLayerMouseEvent } from "mapl
 import { BoxSelect, ExternalLink, Footprints, Layers, Loader2, Route, Send, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useTranslation } from "react-i18next";
+import Supercluster from "supercluster";
 
 import { api, mapWebThumbUrl, thumbnailUrl } from "@/api/client";
 import { useConnection, useSettings, useTask } from "@/api/hooks";
@@ -25,6 +26,45 @@ const SPORT_COLORS: Record<string, string> = {
   other: "#7a6a5c",
 };
 const FOOTPRINT = "#e0a03a";
+const MAX_FOOTPRINT_MARKERS = 400;
+/** Above the photo thumbnails (MapLibre markers without a z-index, in insertion order). */
+const OVER_PHOTOS = "5";
+
+function footprintPin(emoji: string, label: string): HTMLElement {
+  const element = document.createElement("button");
+  element.type = "button";
+  element.setAttribute("aria-label", label);
+  element.style.zIndex = OVER_PHOTOS;
+  element.className =
+    "flex size-8 cursor-pointer items-center justify-center rounded-full border-[2.5px] border-white text-[15px] shadow-[0_2px_6px_rgba(0,0,0,0.55)] transition-transform hover:scale-110";
+  element.style.backgroundColor = FOOTPRINT;
+  element.textContent = emoji;
+  return element;
+}
+
+function footprintCluster(count: number, label: string): HTMLElement {
+  const element = footprintPin("", label);
+  element.className += " text-[12px] font-semibold text-black/80";
+  const size = count >= 50 ? 42 : count >= 10 ? 36 : 32;
+  element.style.width = element.style.height = `${size}px`;
+  element.textContent = count > 999 ? "999+" : String(count);
+  return element;
+}
+
+/** A plan stop: filled when photos were taken near it that day, a ring otherwise. */
+function stopPin(color: string, withPhotos: boolean, number: string, label: string): HTMLElement {
+  const element = document.createElement("button");
+  element.type = "button";
+  element.setAttribute("aria-label", label);
+  element.style.zIndex = OVER_PHOTOS;
+  element.className =
+    "flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-full border-[3px] px-1 text-[10.5px] font-bold shadow-[0_2px_6px_rgba(0,0,0,0.55)] transition-transform hover:scale-110";
+  element.style.borderColor = color;
+  element.style.backgroundColor = withPhotos ? color : "#ffffff";
+  element.style.color = withPhotos ? "#ffffff" : color;
+  element.textContent = number;
+  return element;
+}
 /** Photos taken during an activity: from half an hour before to half an hour after. */
 const TRACK_MARGIN_MS = 30 * 60 * 1000;
 
@@ -148,69 +188,59 @@ export function PeriplusLayers({ map, points }: { map: maplibregl.Map | null; po
   });
   const failed = footprints.error ?? tracks.error ?? plans.error ?? plan.error;
 
-  const footprintData = useMemo<FeatureCollection<Point> | null>(
-    () =>
-      show.footprints && footprints.data
-        ? {
-            type: "FeatureCollection",
-            features: footprints.data.map((f) => ({
-              type: "Feature",
-              properties: { id: f.id },
-              geometry: { type: "Point", coordinates: [f.lng, f.lat] },
-            })),
-          }
-        : null,
-    [show.footprints, footprints.data],
-  );
-  useGeoLayer(
-    map,
-    "periplus-footprints",
-    footprintData,
-    [
-      {
-        id: "periplus-footprint-clusters",
-        type: "circle",
-        source: "periplus-footprints",
-        filter: ["has", "point_count"],
-        paint: {
-          "circle-color": FOOTPRINT,
-          "circle-opacity": 0.85,
-          "circle-radius": ["step", ["get", "point_count"], 9, 10, 12, 50, 16],
-          "circle-stroke-color": "#ffffff",
-          "circle-stroke-width": 1.5,
-        },
-      },
-      {
-        id: "periplus-footprint-points",
-        type: "circle",
-        source: "periplus-footprints",
-        filter: ["!", ["has", "point_count"]],
-        paint: {
-          "circle-color": FOOTPRINT,
-          "circle-radius": 6,
-          "circle-stroke-color": "#ffffff",
-          "circle-stroke-width": 2,
-        },
-      },
-    ],
-    { cluster: true, clusterRadius: 36, clusterMaxZoom: 14 },
-    (event) => {
-      const feature = event.features?.[0];
-      if (!feature || !map) return;
-      const props = feature.properties as { id?: number; cluster_id?: number };
-      if (props.cluster_id !== undefined) {
-        const source = map.getSource<GeoJSONSource>("periplus-footprints");
-        void source?.getClusterExpansionZoom(props.cluster_id).then((zoom) =>
-          map.easeTo({
-            center: (feature.geometry as Point).coordinates as [number, number],
-            zoom: Math.min(zoom, 18),
-          }),
-        );
-        return;
-      }
-      if (props.id !== undefined) setSelected({ kind: "footprint", id: Number(props.id) });
-    },
-  );
+  // Footprints and plan stops are HTML markers, like the photo thumbnails: a layer drawn
+  // in the map canvas always stays under them, however high in the layer order.
+  const footprintIndex = useMemo(() => {
+    if (!show.footprints || !footprints.data) return null;
+    const index = new Supercluster<{ id: number; emoji: string }>({ radius: 40, maxZoom: 16 });
+    index.load(
+      footprints.data.map((f) => ({
+        type: "Feature",
+        properties: { id: f.id, emoji: f.emoji },
+        geometry: { type: "Point", coordinates: [f.lng, f.lat] },
+      })),
+    );
+    return index;
+  }, [show.footprints, footprints.data]);
+  useEffect(() => {
+    if (!map || !footprintIndex) return;
+    let markers: maplibregl.Marker[] = [];
+    const render = () => {
+      markers.forEach((marker) => marker.remove());
+      const bounds = map.getBounds();
+      const box: [number, number, number, number] = [
+        bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth(),
+      ]; // prettier-ignore
+      markers = footprintIndex
+        .getClusters(box, Math.round(map.getZoom()))
+        .slice(0, MAX_FOOTPRINT_MARKERS)
+        .map((item) => {
+          const [lng, lat] = (item.geometry as Point).coordinates as [number, number];
+          const props = item.properties as {
+            id?: number; emoji?: string; cluster?: boolean; cluster_id?: number; point_count?: number;
+          }; // prettier-ignore
+          const element = props.cluster
+            ? footprintCluster(props.point_count ?? 0, t("mapLayers.footprintGroup", { count: props.point_count ?? 0 }))
+            : footprintPin(props.emoji ?? "📍", t("mapLayers.footprint"));
+          element.addEventListener("click", (event) => {
+            event.stopPropagation();
+            if (props.cluster) {
+              const zoom = footprintIndex.getClusterExpansionZoom(props.cluster_id!);
+              map.easeTo({ center: [lng, lat], zoom: Math.min(zoom, 18) });
+            } else if (props.id !== undefined) {
+              setSelected({ kind: "footprint", id: props.id });
+            }
+          });
+          return new maplibregl.Marker({ element }).setLngLat([lng, lat]).addTo(map);
+        });
+    };
+    render();
+    map.on("moveend", render);
+    return () => {
+      map.off("moveend", render);
+      markers.forEach((marker) => marker.remove());
+    };
+  }, [map, footprintIndex, t]);
 
   const trackData = useMemo<FeatureCollection | null>(
     () =>
@@ -260,13 +290,6 @@ export function PeriplusLayers({ map, points }: { map: maplibregl.Map | null; po
           geometry: { type: "LineString", coordinates: day.stops.map((s) => [s.lng, s.lat]) } as LineString,
         });
       }
-      day.stops.forEach((stop, index) =>
-        features.push({
-          type: "Feature",
-          properties: { color, day: day.number, index, photos: stop.asset_ids.length > 0 ? 1 : 0 },
-          geometry: { type: "Point", coordinates: [stop.lng, stop.lat] },
-        }),
-      );
     }
     return { type: "FeatureCollection", features };
   }, [plan.data]);
@@ -283,28 +306,27 @@ export function PeriplusLayers({ map, points }: { map: maplibregl.Map | null; po
         layout: line,
         paint: { "line-color": ["get", "color"], "line-width": 2.5, "line-dasharray": [2, 1.5] },
       },
-      {
-        id: "periplus-plan-stops",
-        type: "circle",
-        source: "periplus-plan",
-        filter: ["==", ["geometry-type"], "Point"],
-        paint: {
-          // A stop with photos that day is filled; one without is a ring.
-          "circle-color": ["case", ["==", ["get", "photos"], 1], ["get", "color"], "#ffffff"],
-          "circle-radius": 7,
-          "circle-stroke-color": ["get", "color"],
-          "circle-stroke-width": 3,
-        },
-      },
     ],
-    {},
-    (event) => {
-      const props = event.features?.[0]?.properties as { day?: number; index?: number } | undefined;
-      const day = plan.data?.days.find((d) => d.number === Number(props?.day));
-      const stop = day?.stops[Number(props?.index)];
-      if (day && stop) setSelected({ kind: "stop", day, stop });
-    },
   );
+  useEffect(() => {
+    if (!map || !plan.data) return;
+    const markers = plan.data.days.flatMap((day) =>
+      day.stops.map((stop, index) => {
+        const element = stopPin(
+          dayColor(day.number),
+          stop.asset_ids.length > 0,
+          `${day.number}.${index + 1}`,
+          t("mapLayers.stop", { name: stop.name }),
+        );
+        element.addEventListener("click", (event) => {
+          event.stopPropagation();
+          setSelected({ kind: "stop", day, stop });
+        });
+        return new maplibregl.Marker({ element }).setLngLat([stop.lng, stop.lat]).addTo(map);
+      }),
+    );
+    return () => markers.forEach((marker) => marker.remove());
+  }, [map, plan.data, t]);
 
   // A plan picked: show all of it.
   useEffect(() => {

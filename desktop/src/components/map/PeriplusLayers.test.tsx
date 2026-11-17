@@ -32,7 +32,24 @@ vi.mock("@/components/map/maplibre", () => {
       return lng >= this.west && lng <= this.east && lat >= this.south && lat <= this.north;
     }
   }
-  return { maplibregl: { LngLatBounds } };
+  // Markers go into the page, where the test can click them (and check what is on top).
+  class Marker {
+    element: HTMLElement;
+    constructor({ element }: { element: HTMLElement }) {
+      this.element = element;
+    }
+    setLngLat() {
+      return this;
+    }
+    addTo() {
+      document.body.append(this.element);
+      return this;
+    }
+    remove() {
+      this.element.remove();
+    }
+  }
+  return { maplibregl: { LngLatBounds, Marker } };
 });
 
 type Handler = (event: unknown) => void;
@@ -74,6 +91,13 @@ function fakeMap() {
       this.fitted.push(bounds);
     },
     easeTo() {},
+    getZoom: () => 5,
+    getBounds: () => ({
+      getWest: () => -180,
+      getSouth: () => -85,
+      getEast: () => 180,
+      getNorth: () => 85,
+    }),
     unproject: ([x, y]: [number, number]) => ({ lng: x / 10, lat: y / 10 }),
   };
 }
@@ -81,6 +105,7 @@ function fakeMap() {
 afterEach(() => {
   vi.unstubAllGlobals();
   localStorage.clear();
+  document.querySelectorAll("body > button").forEach((element) => element.remove());
 });
 
 describe("PeriplusLayers", () => {
@@ -98,10 +123,11 @@ describe("PeriplusLayers", () => {
     await userEvent.click(await screen.findByRole("button", { name: /Periplus/ }));
     const panel = screen.getByRole("group", { name: "Periplus 图层" });
     await userEvent.click(within(panel).getByRole("checkbox", { name: /足迹/ }));
-    await waitFor(() => expect(map.layers.has("periplus-footprint-points")).toBe(true));
-    expect((map.sources.get("periplus-footprints")!.data as { features: unknown[] }).features).toHaveLength(1);
-
-    map.click("periplus-footprint-points", { id: 7 });
+    // A pin above the photo thumbnails (markers too: a canvas layer would stay under them).
+    const pin = await screen.findByRole("button", { name: "Periplus 足迹" });
+    expect(pin).toHaveTextContent("🏰");
+    expect(Number(pin.style.zIndex)).toBeGreaterThan(0);
+    await userEvent.click(pin);
     const card = await screen.findByRole("complementary", { name: "详情" });
     expect(within(card).getByText(/Kotor 老城/)).toBeInTheDocument();
     // IMG_2 is on the map already; IMG_1 is picked to be sent.
@@ -134,9 +160,14 @@ describe("PeriplusLayers", () => {
     const select = await screen.findByRole("combobox", { name: "行程" });
     await waitFor(() => expect(within(select).getByRole("option", { name: /巴尔干/ })).toBeInTheDocument());
     await userEvent.selectOptions(select, "1");
-    await waitFor(() => expect(map.layers.has("periplus-plan-stops")).toBe(true));
+    await waitFor(() => expect(map.layers.has("periplus-plan-lines")).toBe(true));
     expect(map.fitted).toHaveLength(1);
-    map.click("periplus-plan-stops", { day: 1, index: 0 });
+    // Day 1's stop has a photo (filled), day 2's none (a ring).
+    const kotor = await screen.findByRole("button", { name: "行程站点：Kotor" });
+    const budva = screen.getByRole("button", { name: "行程站点：Budva" });
+    expect(kotor).toHaveTextContent("1.1");
+    expect(budva.style.backgroundColor).toBe("rgb(255, 255, 255)");
+    await userEvent.click(kotor);
     const card = await screen.findByRole("complementary", { name: "详情" });
     expect(within(card).getByText("当天在附近拍了 1 张")).toBeInTheDocument();
 

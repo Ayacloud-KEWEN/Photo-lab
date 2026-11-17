@@ -579,6 +579,9 @@ const en: LocaleResource = {
     note: "Only LUMEN’s time changes; originals are not changed. It stays after rescans and is written into exported files.",
   },
   mapLayers: {
+    footprint: "Periplus footprint",
+    footprintGroup: "{{count, number}} footprints",
+    stop: "Plan stop: {{name}}",
     title: "Periplus layers",
     footprints: "Footprints",
     tracks: "Tracks",

@@ -579,6 +579,9 @@ const fr: LocaleResource = {
     note: "Seule l’heure dans LUMEN change ; les originaux ne changent pas. Elle reste après une nouvelle analyse et est écrite dans les fichiers exportés.",
   },
   mapLayers: {
+    footprint: "Empreinte Periplus",
+    footprintGroup: "{{count, number}} empreintes",
+    stop: "Étape : {{name}}",
     title: "Calques Periplus",
     footprints: "Empreintes",
     tracks: "Traces",

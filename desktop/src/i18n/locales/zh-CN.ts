@@ -577,6 +577,9 @@ const zhCN = {
     note: "只改 LUMEN 里的时间，原图不会被修改；重新扫描后仍然保留，导出时写进新文件。",
   },
   mapLayers: {
+    footprint: "Periplus 足迹",
+    footprintGroup: "{{count, number}} 个足迹",
+    stop: "行程站点：{{name}}",
     title: "Periplus 图层",
     footprints: "足迹",
     tracks: "运动轨迹",
